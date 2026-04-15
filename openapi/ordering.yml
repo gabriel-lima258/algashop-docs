@@ -151,95 +151,6 @@ paths:
           $ref: "#/components/responses/NotFound"
 
   /api/v1/orders:
-    get:
-      description: List orders
-      tags:
-        - Orders
-      parameters:
-        - schema:
-            $ref: "#/components/schemas/OrderStatus"
-          in: query
-          name: status
-          required: false
-        - schema:
-            type: string
-            format: date
-            example: "2024-04-25"
-          in: query
-          name: orderedDateFrom
-          required: false
-        - schema:
-            type: string
-            format: date
-            example: "2024-04-01"
-          in: query
-          name: orderedDateTo
-          required: false
-        - schema:
-            type: number
-            example: 1211.98
-          in: query
-          name: totalAmountFrom
-          required: false
-        - schema:
-            type: number
-            example: 3211.98
-          in: query
-          name: totalAmountTo
-          required: false
-        - schema:
-            type: string
-            example: "01226N0640J7Q"
-          in: query
-          name: orderId
-          required: false
-        - schema:
-            type: string
-            example: "6e148bd5-47f6-4022-b9da-07cfaa294f7a"
-          in: query
-          name: customerId
-          required: false
-        - $ref: "#/components/parameters/page"
-        - $ref: "#/components/parameters/size"
-        - $ref: "#/components/parameters/sort"
-        - $ref: "#/components/parameters/direction"
-      responses:
-        200:
-          description: Ok
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Page"
-                  - type: object
-                properties:
-                  content:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/OrderSummary"
-
-  /api/v1/orders/{orderId}:
-    get:
-      parameters:
-        - schema:
-            type: string
-          name: orderId
-          in: path
-          required: true
-          example: '01226N0693HDE'
-      description: Order detail
-      tags:
-        - Orders
-      responses:
-        200:
-          description: Ok
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Order"
-        404:
-          $ref: "#/components/responses/NotFound"
-
     post:
       tags:
         - Orders
@@ -274,6 +185,93 @@ paths:
           $ref: "#/components/responses/UnprocessableEntity"
         500:
           $ref: "#/components/responses/InternalError"
+    get:
+      description: List orders
+      tags:
+        - Orders
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/OrderStatus"
+          in: query
+          name: status
+          required: false
+        - schema:
+            type: string
+            format: date
+            example: "2024-04-25"
+          in: query
+          name: placedAtFrom
+          required: false
+        - schema:
+            type: string
+            format: date
+            example: "2024-04-01"
+          in: query
+          name: placedAtTo
+          required: false
+        - schema:
+            type: number
+            example: 1211.98
+          in: query
+          name: totalAmountFrom
+          required: false
+        - schema:
+            type: number
+            example: 2341.98
+          in: query
+          name: totalAmountTo
+          required: false
+        - schema:
+            type: string
+            example: "01226N0640J7Q"
+          in: query
+          name: orderId
+          required: false
+        - schema:
+            type: string
+            example: "380d7e70-7942-4b8d-a0e9-b93d79aa6745"
+          in: query
+          name: customerId
+          required: false
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - $ref: "#/components/parameters/direction"
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OrderSummary"
+  /api/v1/orders/{orderId}:
+    get:
+      tags:
+        - Orders
+      description: Order detail
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: orderId
+          in: path
+          example: "01226N0693HDG"
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        404:
+          $ref: "#/components/responses/NotFound"
 
   /api/v1/shopping-carts:
     post:
@@ -297,7 +295,6 @@ paths:
           $ref: "#/components/responses/BadRequest"
         500:
           $ref: "#/components/responses/InternalError"
-
   /api/v1/shopping-carts/{shoppingCartId}:
     get:
       parameters:
@@ -306,20 +303,19 @@ paths:
           name: shoppingCartId
           in: path
           required: true
-          example: '6e148bd5-47f6-4022-b9da-07cfaa294f7a'
-      description: Get shopping cart detail
+          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
       tags:
         - Shopping Cart
+      description: Find shopping cart
       responses:
         200:
-          description: Ok
+          description: OK
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ShoppingCart"
         404:
           $ref: "#/components/responses/NotFound"
-
     delete:
       parameters:
         - schema:
@@ -327,44 +323,16 @@ paths:
           name: shoppingCartId
           in: path
           required: true
-          example: '6e148bd5-47f6-4022-b9da-07cfaa294f7a'
-      description: Delete a shopping cart
+          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
       tags:
         - Shopping Cart
+      description: Delete shopping cart
       responses:
         204:
-          description: No content
+          description: OK
         404:
           $ref: "#/components/responses/NotFound"
-
   /api/v1/shopping-carts/{shoppingCartId}/items:
-    get:
-      description: List shopping cart items
-      tags:
-        - Shopping Cart
-      parameters:
-        - schema:
-            type: string
-          name: shoppingCartId
-          in: path
-          required: true
-          example: '6e148bd5-47f6-4022-b9da-07cfaa294f7a'
-      responses:
-        200:
-          description: Ok
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Page"
-                  - type: object
-                properties:
-                  content:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/ShoppingCartItemList"
-        404:
-          $ref: "#/components/responses/NotFound"
     post:
       parameters:
         - schema:
@@ -372,10 +340,10 @@ paths:
           name: shoppingCartId
           in: path
           required: true
-          example: '6e148bd5-47f6-4022-b9da-07cfaa294f7a'
+          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
       tags:
         - Shopping Cart
-      description: Add or update shopping cart
+      description: Add or update cart item
       requestBody:
         required: true
         content:
@@ -384,31 +352,33 @@ paths:
               $ref: "#/components/schemas/ShoppingCartItemInput"
       responses:
         204:
-          description: No content
+          description: OK
+        404:
+          $ref: "#/components/responses/NotFound"
         400:
           $ref: "#/components/responses/BadRequest"
-        404:
-          $ref: "#/components/responses/NotFound"
         500:
           $ref: "#/components/responses/InternalError"
-    delete:
+    get:
       parameters:
         - schema:
             type: string
           name: shoppingCartId
           in: path
           required: true
-          example: '6e148bd5-47f6-4022-b9da-07cfaa294f7a'
-      description: Empty shopping cart
+          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
       tags:
         - Shopping Cart
+      description: List shopping cart items
       responses:
-        204:
-          description: No content
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShoppingCartItemList"
         404:
           $ref: "#/components/responses/NotFound"
-
-  /api/v1/shopping-carts/{shoppingCartId}/items/{itemId}:
     delete:
       parameters:
         - schema:
@@ -416,20 +386,36 @@ paths:
           name: shoppingCartId
           in: path
           required: true
-          example: '6e148bd5-47f6-4022-b9da-07cfaa294f7a'
+          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
+      tags:
+        - Shopping Cart
+      description: Empty shopping cart
+      responses:
+        204:
+          description: OK
+        404:
+          $ref: "#/components/responses/NotFound"
+  /api/v1/shopping-carts/{shoppingCartId}/items/{itemId}:
+    delete:
+      tags:
+        - Shopping Cart
+      description: Remove cart item
+      parameters:
+        - schema:
+            type: string
+          name: shoppingCartId
+          in: path
+          required: true
+          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
         - schema:
             type: string
           name: itemId
           in: path
           required: true
-          example: '6e148bd5-47f6-4022-b9da-07cfaa294f7a'
-      description: Remove an item from shopping cart
-      tags:
-        - Shopping Cart
+          example: "28fcd9fb-4ce7-44d6-9583-14d8b3dc5aff"
       responses:
         204:
-          description: No content
-
+          description: OK
 
 components:
   parameters:
@@ -774,6 +760,10 @@ components:
           type: string
           example: "GATEWAY_BALANCE"
           nullable: false
+        creditCardId:
+          type: string
+          example: "28fcd9fb-4ce7-44d6-9583-14d8b3dc5aff"
+          nullable: true
         shipping:
           $ref: "#/components/schemas/ShippingInput"
         billing:
@@ -793,6 +783,10 @@ components:
           type: string
           example: "GATEWAY_BALANCE"
           nullable: false
+        creditCardId:
+          type: string
+          example: "28fcd9fb-4ce7-44d6-9583-14d8b3dc5aff"
+          nullable: true
         shipping:
           $ref: "#/components/schemas/ShippingInput"
         billing:
@@ -812,6 +806,7 @@ components:
         - items
         - shipping
         - billing
+        - creditCardId
       properties:
         id:
           type: string
@@ -844,6 +839,9 @@ components:
           $ref: "#/components/schemas/OrderStatus"
         paymentMethod:
           $ref: "#/components/schemas/PaymentMethod"
+        creditCardId:
+          type: string
+          example: "28fcd9fb-4ce7-44d6-9583-14d8b3dc5aff"
         shipping:
           $ref: "#/components/schemas/Shipping"
         billing:
@@ -926,6 +924,7 @@ components:
         - lastName
         - document
         - phone
+        - email
         - address
       properties:
         firstName:
@@ -943,6 +942,10 @@ components:
         phone:
           type: string
           example: "5511912341234"
+          nullable: false
+        email:
+          type: string
+          example: "johndoe@email.com"
           nullable: false
         address:
           $ref: "#/components/schemas/Address"
@@ -993,9 +996,6 @@ components:
         phone:
           type: string
           example: "1191234564"
-        archived:
-          type: boolean
-          example: false
     OrderStatus:
       type: string
       example: "PLACED"
