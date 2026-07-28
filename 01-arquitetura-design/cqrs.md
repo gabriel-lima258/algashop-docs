@@ -1,8 +1,6 @@
-# algashop-docs
+# CQS e CQRS
 
-## CQS e CQRS
-
-### CQS — Command Query Separation
+## CQS — Command Query Separation
 
 CQS é um **princípio de design** criado por Bertrand Meyer que estabelece que todo método de um objeto deve ser classificado em uma de duas categorias:
 
@@ -11,7 +9,7 @@ CQS é um **princípio de design** criado por Bertrand Meyer que estabelece que 
 
 Em resumo: **"Fazer uma pergunta não deve mudar a resposta."**
 
-#### Exemplo em código
+### Exemplo em código
 
 ```java
 // Command — altera estado, não retorna nada
@@ -26,14 +24,14 @@ BigDecimal debitAndReturnBalance(BigDecimal amount);
 
 ---
 
-### CQRS — Command Query Responsibility Segregation
+## CQRS — Command Query Responsibility Segregation
 
 CQRS é um **padrão arquitetural** que aplica a ideia do CQS em nível de **arquitetura da aplicação**, separando os modelos de leitura e escrita em responsabilidades distintas.
 
 - **Command Model (Write Model)**: responsável por receber comandos, validar regras de negócio e persistir mudanças de estado. Usa o modelo de domínio rico (entidades, agregados, value objects).
 - **Query Model (Read Model)**: responsável por consultas otimizadas para leitura. Pode usar projeções desnormalizadas, views materializadas ou até bancos de dados diferentes.
 
-#### Abordagens de CQRS
+### Abordagens de CQRS
 
 | Abordagem | Descrição |
 |-----------|-----------|
@@ -43,7 +41,7 @@ CQRS é um **padrão arquitetural** que aplica a ideia do CQS em nível de **arq
 
 ---
 
-### O que NÃO confundir
+## O que NÃO confundir
 
 | | CQS | CQRS |
 |---|-----|------|

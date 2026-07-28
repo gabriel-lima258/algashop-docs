@@ -1,14 +1,12 @@
-# algashop-docs
+# Specification Pattern (DDD)
 
-## Specification Pattern (DDD)
-
-### O que é?
+## O que é?
 
 O **Specification Pattern** é um padrão de design do Domain-Driven Design (DDD) que **encapsula regras de negócio em objetos independentes, reutilizáveis e combináveis**.
 
 Em vez de espalhar condições `if/else` complexas dentro de serviços de domínio, cada regra de negócio se torna um objeto com um único método: `isSatisfiedBy(T)`.
 
-### O problema que resolve
+## O problema que resolve
 
 Imagine uma regra de negócio: *"O cliente tem frete grátis se tiver pelo menos 200 pontos de fidelidade E pelo menos 2 compras no ano, OU se tiver 2000+ pontos."*
 
@@ -36,7 +34,7 @@ Problemas desta abordagem:
 
 ---
 
-### A interface Specification
+## A interface Specification
 
 A base do padrão é uma interface genérica com métodos de composição:
 
@@ -74,9 +72,9 @@ Os métodos `and()`, `or()`, `not()` e `andNot()` retornam **novas Specification
 
 ---
 
-### Como foi aplicado no projeto AlgaShop
+## Como foi aplicado no projeto AlgaShop
 
-#### 1. Specifications atômicas (regras individuais)
+### 1. Specifications atômicas (regras individuais)
 
 Cada sub-regra de negócio se tornou uma classe independente:
 
@@ -117,7 +115,7 @@ public class CustomerHasOrderedEnoughAtYearSpecification
 
 > Observe que cada Specification é **parametrizável** via construtor. A mesma classe `CustomerHasEnoughLoyaltyPointsSpecification` pode ser instanciada com 200 pontos (básico) ou 2000 pontos (premium), gerando comportamentos diferentes sem duplicar código.
 
-#### 2. Specification composta (combinação de regras)
+### 2. Specification composta (combinação de regras)
 
 A `CustomerHaveFreeShippingSpecification` **compõe** as Specifications atômicas usando os operadores `and()` e `or()`:
 
@@ -148,7 +146,7 @@ public class CustomerHaveFreeShippingSpecification implements Specification<Cust
 | `loyaltyPoints >= 200 && salesQty >= 2 \|\| loyaltyPoints >= 2000` | `pontosBasicos.and(comprasSuficientes).or(pontosPremium)` |
 | Exige interpretar `compareTo`, `&&`, `||` e precedência | Lê-se como linguagem natural |
 
-#### 3. Configuração via Spring Bean
+### 3. Configuração via Spring Bean
 
 Os limiares de negócio são definidos na configuração, não no código de domínio:
 
@@ -173,7 +171,7 @@ Isso permite alterar os limiares de negócio sem modificar código de domínio �
 
 > **Localização:** `infrastructure/beans/SpecificationsBeansConfig.java`
 
-#### 4. Uso nos Domain Services
+### 4. Uso nos Domain Services
 
 Tanto `BuyNowService` quanto `CheckoutService` reutilizam a **mesma** Specification injetada pelo Spring:
 
@@ -203,7 +201,7 @@ A mesma Specification é reutilizada no `CheckoutService` — a regra de frete g
 
 ---
 
-### Diagrama da arquitetura
+## Diagrama da arquitetura
 
 ```
 ┌─────────────────────────────────────────┐
@@ -232,7 +230,7 @@ Regra: (BasicPoints AND OrderedEnough) OR PremiumPoints
 
 ---
 
-### Vantagens do padrão
+## Vantagens do padrão
 
 | Vantagem | Descrição |
 |----------|-----------|
@@ -246,14 +244,14 @@ Regra: (BasicPoints AND OrderedEnough) OR PremiumPoints
 
 ---
 
-### Quando usar
+## Quando usar
 
 - Regras de negócio que aparecem em **múltiplos contextos** (como frete grátis no BuyNow e Checkout)
 - Condições **compostas** com múltiplas sub-regras (AND, OR, NOT)
 - Regras que precisam ser **testadas isoladamente**
 - Limiares que podem **variar** entre ambientes ou configurações
 
-### Quando NÃO usar
+## Quando NÃO usar
 
 - Condições simples e pontuais (`if (order.isEmpty())`)
 - Regras que aparecem em um **único lugar** e são triviais

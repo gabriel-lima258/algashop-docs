@@ -1,12 +1,10 @@
-# algashop-docs
-
-## Ports & Adapters — Portas de Entrada (in) e Saída (out)
+# Ports & Adapters — Portas de Entrada (in) e Saída (out)
 
 Este documento explica de forma didática o conceito de **Ports** (portas) na Arquitetura Hexagonal, como ele é aplicado no projeto `algashop-ordering`, e por que separamos as portas em dois grupos: `ports/in` e `ports/out`.
 
 ---
 
-### 1. O problema que a Arquitetura Hexagonal resolve
+## 1. O problema que a Arquitetura Hexagonal resolve
 
 Antes de falar de portas, vale lembrar o que a arquitetura hexagonal (também chamada de **Ports & Adapters**, proposta por Alistair Cockburn em 2005) tenta resolver:
 
@@ -47,7 +45,7 @@ A regra de ouro: **as setas sempre apontam para dentro do hexágono**. O núcleo
 
 ---
 
-### 2. O que é uma Porta (Port)?
+## 2. O que é uma Porta (Port)?
 
 Uma **porta** é simplesmente uma **interface Java** que descreve uma capacidade — sem dizer nada sobre como ela é implementada.
 
@@ -65,7 +63,7 @@ A diferença está em **quem dirige a conversa**:
 
 ---
 
-### 3. Ports IN — "O que a aplicação OFERECE"
+## 3. Ports IN — "O que a aplicação OFERECE"
 
 São o **vocabulário do caso de uso**. Cada porta de entrada descreve uma capacidade que a aplicação expõe para o mundo.
 
@@ -81,7 +79,7 @@ public interface ForQueryShoppingCarts {
 
 Lê-se: **"para consultar carrinhos de compra"**. Esta é a API pública do caso de uso.
 
-#### Quem implementa
+### Quem implementa
 
 A camada de **aplicação**, normalmente um `*ApplicationService` ou `*QueryService`:
 
@@ -100,7 +98,7 @@ public class ShoppingCartQueryService implements ForQueryShoppingCarts {
 }
 ```
 
-#### Quem consome
+### Quem consome
 
 Os **adaptadores primários** — qualquer coisa que "entra" na aplicação:
 
@@ -130,7 +128,7 @@ Nenhum deles precisa saber como o carrinho é buscado.
 
 ---
 
-### 4. Ports OUT — "O que a aplicação PRECISA"
+## 4. Ports OUT — "O que a aplicação PRECISA"
 
 São o **vocabulário das dependências externas**. Cada porta de saída descreve algo que o caso de uso exige da infraestrutura para funcionar.
 
@@ -144,7 +142,7 @@ public interface ForObtainingShoppingCarts {
 
 Lê-se: **"para obter carrinhos de compra (de algum lugar)"**. O "algum lugar" é responsabilidade do adaptador.
 
-#### Quem implementa
+### Quem implementa
 
 Os **adaptadores secundários**, vivendo em `infrastructure/`:
 
@@ -168,17 +166,17 @@ public class ShoppingCartQueryServiceImpl implements ForObtainingShoppingCarts {
 
 O núcleo **não importa** `JpaRepository`, `ShoppingCartPersistenceEntity` ou qualquer coisa de Spring Data. Tudo isso vive atrás da interface.
 
-#### Quem consome
+### Quem consome
 
 A própria **camada de aplicação**, que recebe a porta via injeção e a invoca.
 
 ---
 
-### 5. "Mas IN e OUT têm os mesmos métodos. Por que não usar só um?"
+## 5. "Mas IN e OUT têm os mesmos métodos. Por que não usar só um?"
 
 Essa é a dúvida natural quando o caso de uso é trivial. A resposta tem três camadas:
 
-#### 5.1 Conceitos opostos, ainda que código parecido
+### 5.1 Conceitos opostos, ainda que código parecido
 
 | Pergunta | Resposta |
 |----------|----------|
@@ -187,7 +185,7 @@ Essa é a dúvida natural quando o caso de uso é trivial. A resposta tem três 
 
 São duas direções diferentes — apenas coincide hoje que ambas mencionam "buscar carrinho", porque o caso de uso é uma consulta direta. Em um caso de uso de **escrita** (ex.: `ForCheckingOut`), o `in` recebe um `CheckoutInput` e dispara várias portas `out` (cobrança, estoque, persistência). Aí a diferença explode.
 
-#### 5.2 Evolução natural do caso de uso
+### 5.2 Evolução natural do caso de uso
 
 Hoje a implementação é um pass-through. Mas o dia em que aparecer:
 
@@ -209,7 +207,7 @@ public ShoppingCartOutput findById(UUID cartId) {
 
 Se o Controller chamasse `ports/out` direto, seria preciso refatorar **todos os Controllers** para introduzir essa camada. Mantendo a porta IN desde o início, a evolução é interna ao caso de uso e **transparente** para quem consome.
 
-#### 5.3 Inversão de dependência
+### 5.3 Inversão de dependência
 
 A regra: **o núcleo não conhece a infraestrutura**.
 
@@ -217,7 +215,7 @@ Se o Controller chamasse `ForObtainingShoppingCarts` diretamente, a borda de ent
 
 ---
 
-### 6. Estrutura de pacotes no projeto
+## 6. Estrutura de pacotes no projeto
 
 ```
 com.gtech.algashop.core
@@ -250,7 +248,7 @@ Olhando os imports de qualquer classe você consegue dizer em que camada ela viv
 
 ---
 
-### 7. Fluxo completo de uma requisição
+## 7. Fluxo completo de uma requisição
 
 Acompanhe um `GET /api/v1/shopping-carts/{id}`:
 
@@ -279,7 +277,7 @@ O Controller só conhece `ports/in`. O `QueryService` só conhece `ports/out`. C
 
 ---
 
-### 8. Convenções de nomenclatura adotadas
+## 8. Convenções de nomenclatura adotadas
 
 | Convenção | Exemplo | Propósito |
 |-----------|---------|-----------|
@@ -291,7 +289,7 @@ O Controller só conhece `ports/in`. O `QueryService` só conhece `ports/out`. C
 
 ---
 
-### 9. Benefícios concretos no dia a dia
+## 9. Benefícios concretos no dia a dia
 
 | Benefício | Exemplo prático |
 |-----------|-----------------|
@@ -303,7 +301,7 @@ O Controller só conhece `ports/in`. O `QueryService` só conhece `ports/out`. C
 
 ---
 
-### 10. O que NÃO confundir
+## 10. O que NÃO confundir
 
 | | Port IN | Port OUT |
 |---|---------|----------|
@@ -321,7 +319,7 @@ O Controller só conhece `ports/in`. O `QueryService` só conhece `ports/out`. C
 
 ---
 
-### Referências
+## Referências
 
 - Alistair Cockburn — *Hexagonal Architecture* (2005)
 - Vaughn Vernon — *Implementing Domain-Driven Design*, capítulo 4 ("Architecture")
