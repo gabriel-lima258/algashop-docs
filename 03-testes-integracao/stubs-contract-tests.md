@@ -406,6 +406,89 @@ algashop-meta/
 
 ---
 
+## Separando unidade, contrato e integração no Gradle
+
+Com três tipos de teste convivendo no `product-catalog`, deixar tudo em `./gradlew test` cria um problema prático: o desenvolvedor que só quer validar uma regra de negócio precisa de MongoDB de pé.
+
+A separação por **suíte**:
+
+| Task | Roda o quê | Precisa de infra? |
+|---|---|---|
+| `test` | unitários e testes de fatia | não |
+| `contractTest` | gerados pelo Spring Cloud Contract a partir dos `.groovy` | não (o provider é mockado) |
+| `integrationTest` | classes com sufixo `*IT` | **sim** (Mongo) |
+
+```groovy
+// build.gradle
+tasks.named('check') {
+    dependsOn(test, contractTest, integrationTest)
+}
+
+test {
+    filter {
+        excludeTestsMatching("*IT")   // o dia a dia roda sem container nenhum
+    }
+}
+
+tasks.register('integrationTest', Test) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    shouldRunAfter test
+
+    filter {
+        includeTestsMatching "*IT"
+        excludeTestsMatching "*Test"
+    }
+}
+```
+
+Três decisões dentro desse trecho:
+
+1. **Sem source set próprio.** `src/integrationTest/java` seria a alternativa "oficial", mas exigiria configurar dependências e classpath separados. Aqui o mesmo `src/test` serve às duas tasks, e o filtro por sufixo faz a divisão. Menos cerimônia; a convenção de nome (`*IT` vs. `*Test`) vira parte do contrato do projeto.
+2. **`shouldRunAfter`, não `dependsOn`.** É ordem, não dependência: se as duas rodarem, os unitários vêm primeiro — falha barata aparece antes de gastar tempo com a suíte lenta. Mas `integrationTest` continua podendo rodar sozinho.
+3. **`check` amarra as três.** Rodar solto é opcional; `./gradlew check` (e por consequência `build`) valida tudo.
+
+### O javaagent do Mockito
+
+```groovy
+configurations {
+    mockitoAgent { transitive = false }
+}
+dependencies {
+    mockitoAgent 'org.mockito:mockito-core'
+}
+test {
+    jvmArgs += "-javaagent:${configurations.mockitoAgent.asPath}"
+}
+```
+
+O Mockito instrumenta bytecode em tempo de execução, e até o JDK 20 fazia isso se auto-anexando à JVM. A partir do JDK 21 esse *self-attach* passa a emitir aviso, e o plano é falhar em versões seguintes. Passar o JAR explicitamente como `-javaagent` é o caminho suportado.
+
+O `transitive = false` é porque a configuração existe só para **resolver o caminho de um arquivo** — não se quer a árvore de dependências junto, só o JAR do `mockito-core`.
+
+### Fatia de contexto: `@DataMongoTest`
+
+O `ProductRepositoryIT` é o exemplo mais simples de teste de integração no serviço:
+
+```java
+@DataMongoTest              // sobe só a camada de persistência — sem controllers, sem services
+@Import(MongoConfig.class)  // a fatia NÃO carrega @Configuration da aplicação
+class ProductRepositoryIT {
+
+    @Autowired
+    private ProductRepository productRepository;
+}
+```
+
+O `@Import` não é opcional. As anotações de fatia (`@DataMongoTest`, `@WebMvcTest`, `@DataJpaTest`) carregam apenas as autoconfigurações relevantes — as `@Configuration` da aplicação ficam de fora de propósito, para o contexto ser pequeno. Sem importar o `MongoConfig`, faltariam o `UuidRepresentation.STANDARD` e os conversores de `OffsetDateTime`, e o teste quebraria na leitura dos documentos.
+
+Comparar com o `@WebMvcTest` que o `ProductBase` usa para os contract tests: mesma ideia, camada oposta — lá sobe só a web e o service é mockado.
+
+> Os dados que esse teste lê vêm do `DataLoader` — ver [`carga-de-dados-mongo.md`](../04-infraestrutura/carga-de-dados-mongo.md).
+
+---
+
 ## Resumo mental
 
 > **Contrato** = acordo escrito em `.groovy` que vive no **provider**.

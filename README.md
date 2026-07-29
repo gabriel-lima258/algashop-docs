@@ -42,6 +42,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 |---|---|
 | [NoSQL — conceitos](./02-persistencia/nosql-conceitos.md) | Resiliência, escalabilidade, teorema CAP e as famílias de banco NoSQL |
 | [MongoDB no product-catalog](./02-persistencia/product-catalog-mongo.md) | Modelagem documental, embutir vs. referenciar, UUID como `_id`, auditoria e lock otimista |
+| [Consultas dinâmicas com Criteria](./02-persistencia/consultas-mongo-criteria.md) | Filtro com N parâmetros opcionais, `$expr`, busca por regex e paginação manual no Mongo |
 | [Paginação](./02-persistencia/paginacao.md) | Paginação com Criteria API, projeção com `builder.construct()` e consulta de contagem |
 | [Flyway](./02-persistencia/flyway.md) | Versionar o schema como código; por que `ddl-auto` não serve para produção |
 
@@ -57,6 +58,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Ambiente local](./04-infraestrutura/ambiente-local.md) | Do clone aos serviços rodando: submódulos, Docker Compose, portas, bancos e problemas comuns |
+| [Carga de dados no MongoDB](./04-infraestrutura/carga-de-dados-mongo.md) | `ApplicationRunner`, Extended JSON e por que isso **não** substitui o Flyway |
 | [Docker](./04-infraestrutura/docker.md) | Build de imagem, multi-arquitetura com Buildx e publicação em registry |
 | [Jobs agendados](./04-infraestrutura/scheduled-jobs.md) | `@Scheduled`, execução em ambiente distribuído e controle de concorrência |
 
@@ -79,14 +81,14 @@ Para revisar o conteúdo do zero, nesta ordem:
 **2. Como o domínio é organizado**
 [Ports & Adapters](./01-arquitetura-design/ports-hexagonal.md) → [Specification](./01-arquitetura-design/specification.md) → [CQS e CQRS](./01-arquitetura-design/cqrs.md)
 
-**3. Como os dados são guardados**
-[Flyway](./02-persistencia/flyway.md) → [Paginação](./02-persistencia/paginacao.md) → [NoSQL conceitos](./02-persistencia/nosql-conceitos.md) → [MongoDB na prática](./02-persistencia/product-catalog-mongo.md)
+**3. Como os dados são guardados e consultados**
+[Flyway](./02-persistencia/flyway.md) → [Paginação](./02-persistencia/paginacao.md) → [NoSQL conceitos](./02-persistencia/nosql-conceitos.md) → [MongoDB na prática](./02-persistencia/product-catalog-mongo.md) → [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md)
 
 **4. Como os serviços conversam e falham**
 [Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md)
 
 **5. Como tudo roda**
-[Docker](./04-infraestrutura/docker.md) → [Jobs agendados](./04-infraestrutura/scheduled-jobs.md)
+[Carga de dados](./04-infraestrutura/carga-de-dados-mongo.md) → [Docker](./04-infraestrutura/docker.md) → [Jobs agendados](./04-infraestrutura/scheduled-jobs.md)
 
 ---
 
@@ -98,9 +100,13 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Onde colocar uma regra de negócio nova | [Ports & Adapters](./01-arquitetura-design/ports-hexagonal.md), [Specification](./01-arquitetura-design/specification.md) |
 | Por que a listagem não devolve o objeto completo | [CQRS](./01-arquitetura-design/cqrs.md), [MongoDB](./02-persistencia/product-catalog-mongo.md) |
 | Embutir ou referenciar no Mongo | [MongoDB](./02-persistencia/product-catalog-mongo.md) |
+| Montar um filtro com N parâmetros opcionais | [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) |
+| Comparar dois campos do mesmo documento | [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) |
+| Popular o Mongo com dados de teste | [Carga de dados](./04-infraestrutura/carga-de-dados-mongo.md) |
 | Devolver 404 ou 422 | [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) |
 | Criar uma migration | [Flyway](./02-persistencia/flyway.md) |
 | Testar sem subir o outro serviço | [Contract tests](./03-testes-integracao/stubs-contract-tests.md) |
+| Separar teste rápido de teste que precisa de banco | [Contract tests](./03-testes-integracao/stubs-contract-tests.md) |
 | Em que porta roda cada coisa | [Ambiente local](./04-infraestrutura/ambiente-local.md) |
 | Comandos de submódulo Git | [Ambiente local](./04-infraestrutura/ambiente-local.md) |
 

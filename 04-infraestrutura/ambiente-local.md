@@ -170,7 +170,12 @@ O `--authenticationDatabase admin` (equivalente ao `?authSource=admin` da URI) �
 
 Diferente do Postgres, **não há script de criação** — o Mongo cria o banco e as coleções no primeiro insert.
 
+Quem popula as coleções é a própria aplicação: o `DataLoader` do `product-catalog` lê os JSONs de `db/testdata/` a cada inicialização.
+
+> ⚠️ Com `algashop.data-load.auto-drop: true` (o valor atual no `application.yml`), as coleções `products` e `categories` são **apagadas e recriadas toda vez que o serviço sobe**. Alterou um documento pelo `mongosh` e reiniciou? A alteração se foi.
+
 > Detalhes de modelagem: [`product-catalog-mongo.md`](../02-persistencia/product-catalog-mongo.md).
+> Como a carga funciona: [`carga-de-dados-mongo.md`](./carga-de-dados-mongo.md).
 
 ---
 
@@ -249,6 +254,9 @@ Rodando os testes (exigem o Postgres de pé — usam os bancos `*_test`):
 | Serviço não acha o `product-catalog` | Nada respondendo na URL configurada | Suba o WireMock ou o Stub Runner |
 | Pastas de submódulo vazias | Clone sem `--recurse-submodules` | `git submodule update --init --recursive` |
 | Alterações de um serviço somem | `git submodule update` sem `--remote` | Sempre cheque o status antes |
+| Dados do Mongo somem a cada restart | `data-load.auto-drop: true` | Desligue em `application.yml` — [detalhes](./carga-de-dados-mongo.md) |
+| Console cheio de log do driver Mongo | `logging.level.org.mongodb.driver...: DEBUG` | Comente o bloco no `application.yml` do `product-catalog` |
+| `./gradlew test` falha por falta de banco | Teste `*IT` rodando na suíte errada | `*IT` sai em `integrationTest`; confira o sufixo da classe |
 | Container reiniciando sem parar | Falta memória | Os limites do compose são apertados (256M–512M) |
 
 ---

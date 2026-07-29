@@ -276,7 +276,7 @@ Antes existia um único `ProductDetailOutput` servindo tanto a listagem quanto o
 // A assinatura da listagem mudou de Detail para Summary
 public interface ProductQueryService {
     ProductDetailOutput findById(UUID productId);
-    PageModel<ProductSummaryOutput> filter(Integer size, Integer number);   // <-- Summary
+    PageModel<ProductSummaryOutput> filter(ProductFilter filter);   // <-- Summary
 }
 ```
 
@@ -286,6 +286,26 @@ public interface ProductQueryService {
 | Uso | grid/listagem de produtos | página do produto |
 
 Por que separar: uma listagem de 20 produtos não deve trafegar 20 descrições completas. O payload cresce sem que ninguém leia aquilo na tela. É a mesma ideia de projeção já usada no `ordering` — ver [`paginacao.md`](./paginacao.md) e [`cqrs.md`](../01-arquitetura-design/cqrs.md).
+
+### Um terceiro tipo: projeção no servidor
+
+Os dois DTOs acima recortam o dado **na aplicação** — o documento inteiro sai do banco e o ModelMapper descarta o que sobra. Dá para recortar antes, no próprio Mongo:
+
+```java
+// domain/product/ProductRepository.java
+@Query(value = "{'enabled': ?0}", fields = "{'name': 1}")
+Page<ProductNameProjection> findAllByEnabled(Boolean enabled, Pageable pageable);
+```
+
+```java
+public record ProductNameProjection(UUID id, String name) { }
+```
+
+O `fields` diz quais campos devolver — só `_id` e `name` trafegam pela rede. Para um autocomplete, é a diferença entre trazer 2 campos e trazer 15.
+
+> Quando usar cada um e o resto da mecânica de consulta: [`consultas-mongo-criteria.md`](./consultas-mongo-criteria.md).
+
+> ℹ️ O `PageModel` mudou de pacote nesta etapa: `application` → `application.util`, junto com o `PageFilter` e o `SortablePageFilter` que nasceram com o filtro dinâmico.
 
 ---
 
@@ -370,11 +390,11 @@ Para subir o Mongo local: [`../04-infraestrutura/ambiente-local.md`](../04-infra
 
 Coisas que ficaram conscientemente pela metade nesta etapa:
 
-- [ ] `ProductQueryServiceImpl.filter()` ainda retorna `null` — falta implementar a paginação com `Pageable` do Spring Data MongoDB.
-- [ ] Não há testes cobrindo o agregado `Product` (nem os invariantes de preço, nem a persistência). Um `@DataMongoTest` com Testcontainers seria o caminho — o `billing` já faz isso com Postgres.
+- ✅ ~~`ProductQueryServiceImpl.filter()` ainda retorna `null`~~ — **implementado** com `Query` + `Criteria` e paginação manual; ver [`consultas-mongo-criteria.md`](./consultas-mongo-criteria.md).
+- [ ] Não há testes cobrindo o agregado `Product` (nem os invariantes de preço, nem a persistência). O `ProductRepositoryIT` que surgiu depois exercita só a projeção do repositório, e sem asserção — apenas loga o resultado.
 - [ ] `auditorProvider()` devolve `UUID.randomUUID()` até existir autenticação.
-- [ ] `quantityInStock` tem `setQuantityInStock` **privado** e nenhum método público de entrada/saída de estoque — na prática o valor fica travado em `0`, e `isInStock()` sempre retorna `false`.
-- [ ] N+1 latente no `@DocumentReference` quando a listagem for implementada.
+- [ ] `quantityInStock` tem `setQuantityInStock` **privado** e nenhum método público de entrada/saída de estoque. Produto criado **pela API** fica travado em `0`, e `isInStock()` sempre retorna `false`. Os documentos carregados pelo [`DataLoader`](../04-infraestrutura/carga-de-dados-mongo.md) escapam disso porque são inseridos crus, direto na coleção — por isso o filtro `?inStock=true` funciona nos dados de teste e não funcionaria num produto cadastrado pelo endpoint.
+- [ ] N+1 latente no `@DocumentReference`: a listagem já está implementada, e cada `ProductSummaryOutput` que exponha o nome da categoria dispara uma leitura extra.
 
 ---
 
@@ -397,3 +417,5 @@ Coisas que ficaram conscientemente pela metade nesta etapa:
 - [Spring Data MongoDB — Reference](https://docs.spring.io/spring-data/mongodb/reference/)
 - [MongoDB — Data Model Design (embed vs. reference)](https://www.mongodb.com/docs/manual/core/data-model-design/)
 - [RFC 9562 — UUID v7](https://www.rfc-editor.org/rfc/rfc9562)
+- [`consultas-mongo-criteria.md`](./consultas-mongo-criteria.md) — como consultar esse modelo
+- [`carga-de-dados-mongo.md`](../04-infraestrutura/carga-de-dados-mongo.md) — como popular a coleção

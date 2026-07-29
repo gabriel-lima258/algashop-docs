@@ -108,7 +108,7 @@ Só depois de o domínio estar de pé é que a infraestrutura entra.
 
 ---
 
-## Fase 8 — NoSQL no `product-catalog` (jul/2026) ← etapa atual
+## Fase 8 — NoSQL no `product-catalog` (jul/2026)
 
 | Data | Marco | O que se aprende |
 |---|---|---|
@@ -125,6 +125,28 @@ Só depois de o domínio estar de pé é que a infraestrutura entra.
 
 ---
 
+## Fase 9 — Consultas dinâmicas e carga de dados (jul/2026) ← etapa atual
+
+Com o agregado persistindo, o problema vira **ler**: uma listagem com nove filtros opcionais, e um banco de desenvolvimento que nasce vazio.
+
+| Marco | O que se aprende |
+|---|---|
+| `Query` + `Criteria` no `ProductQueryServiceImpl` | Montar a consulta em tempo de execução, em vez de um método de repositório por combinação |
+| Hierarquia `PageFilter` → `SortablePageFilter<T>` → `ProductFilter` | Genérico amarrado a enum torna a ordenação type-safe |
+| `ProductFilter` como command object | O Spring binda a query string inteira num objeto — filtro novo não muda assinatura nenhuma |
+| `$expr` no filtro `hasDiscount` | Comparar dois campos do **mesmo** documento; e por que isso não usa índice |
+| Busca textual por regex com `$or` | Uma alternativa ao índice de texto, com os trade-offs explícitos |
+| `count` antes de `skip`/`limit` | A ordem que faz o `totalPages` sair certo |
+| `ProductNameProjection` + `fields` | Projeção no servidor, não na aplicação |
+| `DataLoader` + Extended JSON | Substituto do Flyway num banco sem migration |
+| Tasks `test` / `contractTest` / `integrationTest` | Teste rápido não pode depender de container de pé |
+
+**A lição da fase:** o filtro dinâmico é o mesmo padrão da Criteria API do `ordering` — muda a sintaxe, não a ideia. E surgiu de novo a pergunta de sempre: calcular na consulta (`$expr`, flexível, sem índice) ou gravar o campo já calculado na escrita (rápido, mas duplica estado). O agregado já tinha escolhido o segundo caminho para o `discountPercentageRounded`; o filtro escolheu o primeiro para o `hasDiscount`. Vale saber que a incoerência existe.
+
+> [`consultas-mongo-criteria.md`](../02-persistencia/consultas-mongo-criteria.md) · [`carga-de-dados-mongo.md`](../04-infraestrutura/carga-de-dados-mongo.md)
+
+---
+
 ## Onde o projeto está
 
 **Consolidado:**
@@ -134,11 +156,13 @@ Só depois de o domínio estar de pé é que a infraestrutura entra.
 - Flyway, Docker, perfis por ambiente
 - Arquitetura hexagonal no `ordering`
 - Modelagem documental no `product-catalog`
+- Consulta dinâmica paginada no `product-catalog`
 
 **Próximos passos naturais:**
 - Mensageria real entre serviços (hoje os eventos são internos ao processo)
-- Paginação do `product-catalog` (`filter()` ainda retorna `null`)
-- Testes do agregado `Product`
+- Ordenação do `product-catalog` (o filtro aceita `sortByProperty`, mas o valor é ignorado)
+- Índices no MongoDB para os campos filtrados
+- Testes do agregado `Product` e do `queryWith`
 - Autenticação (a auditoria usa um `UUID` aleatório como placeholder)
 - Observabilidade — tracing distribuído, métricas, log estruturado
 - Resiliência — circuit breaker e retry nas chamadas entre serviços
