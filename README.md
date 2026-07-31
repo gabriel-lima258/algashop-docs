@@ -26,7 +26,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 10 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 11 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -44,6 +44,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [MongoDB no product-catalog](./02-persistencia/product-catalog-mongo.md) | Modelagem documental, embutir vs. referenciar, UUID como `_id`, auditoria e lock otimista |
 | [Consultas dinâmicas com Criteria](./02-persistencia/consultas-mongo-criteria.md) | Filtro com N parâmetros opcionais, `$expr`, busca textual e paginação manual no Mongo |
 | [Índices no MongoDB](./02-persistencia/indices-mongo.md) | `explain`, regra ESR, índice composto, índice parcial, índice de texto e ordenação por relevância |
+| [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) | O outro jeito de consultar: `$lookup` contra o N+1, campos derivados no `$project` e por que a ordem dos estágios é o custo |
 | [Paginação](./02-persistencia/paginacao.md) | Paginação com Criteria API, projeção com `builder.construct()` e consulta de contagem |
 | [Flyway](./02-persistencia/flyway.md) | Versionar o schema como código; por que `ddl-auto` não serve para produção |
 
@@ -83,7 +84,7 @@ Para revisar o conteúdo do zero, nesta ordem:
 [Ports & Adapters](./01-arquitetura-design/ports-hexagonal.md) → [Specification](./01-arquitetura-design/specification.md) → [CQS e CQRS](./01-arquitetura-design/cqrs.md)
 
 **3. Como os dados são guardados e consultados**
-[Flyway](./02-persistencia/flyway.md) → [Paginação](./02-persistencia/paginacao.md) → [NoSQL conceitos](./02-persistencia/nosql-conceitos.md) → [MongoDB na prática](./02-persistencia/product-catalog-mongo.md) → [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) → [Índices](./02-persistencia/indices-mongo.md)
+[Flyway](./02-persistencia/flyway.md) → [Paginação](./02-persistencia/paginacao.md) → [NoSQL conceitos](./02-persistencia/nosql-conceitos.md) → [MongoDB na prática](./02-persistencia/product-catalog-mongo.md) → [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) → [Índices](./02-persistencia/indices-mongo.md) → [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md)
 
 **4. Como os serviços conversam e falham**
 [Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md)
@@ -103,6 +104,9 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Embutir ou referenciar no Mongo | [MongoDB](./02-persistencia/product-catalog-mongo.md) |
 | Montar um filtro com N parâmetros opcionais | [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) |
 | Comparar dois campos do mesmo documento | [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) |
+| Juntar duas coleções no Mongo | [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) |
+| Resolver N+1 no Mongo | [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) |
+| Calcular campo derivado no banco em vez de em Java | [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) |
 | Saber se minha consulta usa índice | [Índices no MongoDB](./02-persistencia/indices-mongo.md) |
 | Por que meu índice existe e não foi usado | [Índices no MongoDB](./02-persistencia/indices-mongo.md) |
 | Ordenar resultado de busca por relevância | [Índices no MongoDB](./02-persistencia/indices-mongo.md) |

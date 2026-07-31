@@ -241,6 +241,26 @@ O teste que fecha a lição é rodar o `explain` **duas vezes**: com `enabled: t
 
 ---
 
+## Índice dentro de um aggregation pipeline
+
+A listagem de produtos migrou para um [aggregation pipeline](./agregacoes-mongo.md), e isso muda uma regra importante:
+
+> **Só o primeiro `$match` do pipeline aproveita índice da coleção.**
+
+O motivo é direto: o índice descreve os documentos **como estão gravados**. Depois do primeiro estágio, o Mongo já não trabalha sobre a coleção, e sim sobre um resultado intermediário em memória — que não tem índice nenhum.
+
+Consequências práticas:
+
+- Um `$match` colocado depois de um `$lookup` ou de um `$project` **não usa índice**, mesmo que exista um perfeito para ele.
+- Um `$sort` depois de um `$lookup` perde a chance de ser servido pelo índice composto criado justamente para ordenar. Vira ordenação em memória, com o teto de 32 MB de volta ao jogo.
+- Por isso a regra de ouro de pipeline é **filtrar e ordenar o mais cedo possível**, e só então enriquecer e projetar.
+
+O `explain` continua valendo — `db.products.aggregate([...]).explain()` mostra o plano do primeiro estágio e revela se ele foi `IXSCAN` ou `COLLSCAN`.
+
+> A ordem de estágios do pipeline atual do projeto **não** segue essa regra, e isso está registrado como pendência em [`agregacoes-mongo.md`](./agregacoes-mongo.md#-a-ordem-dos-estágios-é-o-custo).
+
+---
+
 ## Índice não é de graça
 
 Índice é troca, não melhoria pura:
@@ -288,6 +308,7 @@ Por isso não se indexa "tudo por via das dúvidas". Indexa-se o que a consulta 
 - [ ] Sei que só existe um índice de texto por coleção
 - [ ] Sei por que `Sort.by("score")` funciona, e o que o `@TextScore` tem a ver com isso
 - [ ] Sei por que `drop()` foi trocado por `deleteMany({})`
+- [ ] Sei que só o primeiro `$match` de um pipeline usa índice
 - [ ] Sei o que se paga por cada índice criado
 
 ---
@@ -301,5 +322,6 @@ Por isso não se indexa "tudo por via das dúvidas". Indexa-se o que a consulta 
 - [MongoDB — `explain` results](https://www.mongodb.com/docs/manual/reference/explain-results/)
 - [Spring Data MongoDB — Index Creation](https://docs.spring.io/spring-data/mongodb/reference/mongodb/mapping/mapping-index-management.html)
 - [`consultas-mongo-criteria.md`](./consultas-mongo-criteria.md) — as consultas que estes índices servem
+- [`agregacoes-mongo.md`](./agregacoes-mongo.md) — por que a ordem dos estágios é questão de índice
 - [`product-catalog-mongo.md`](./product-catalog-mongo.md) — o agregado onde os índices são declarados
 - [`carga-de-dados-mongo.md`](../04-infraestrutura/carga-de-dados-mongo.md) — a massa de teste e o `deleteMany`

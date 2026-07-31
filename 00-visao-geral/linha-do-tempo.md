@@ -147,7 +147,7 @@ Com o agregado persistindo, o problema vira **ler**: uma listagem com nove filtr
 
 ---
 
-## Fase 10 — Índices e busca textual (jul/2026) ← etapa atual
+## Fase 10 — Índices e busca textual (jul/2026)
 
 A fase anterior terminou com uma pendência escrita em letras grandes: *nenhum índice foi criado para os campos filtrados*. Esta fase é a resposta — e começa por um problema de método: **com dezenas de documentos não há o que medir**.
 
@@ -169,6 +169,30 @@ A fase anterior terminou com uma pendência escrita em letras grandes: *nenhum �
 
 ---
 
+## Fase 11 — Aggregation pipeline (jul/2026) ← etapa atual
+
+A listagem estava rápida, mas ainda mentia sobre o custo: para mostrar o nome da categoria, cada produto disparava uma leitura extra. Era o **N+1** registrado como pendência desde a Fase 8 — e resolvê-lo exigiu trocar a ferramenta de consulta.
+
+| Marco | O que se aprende |
+|---|---|
+| `find()` → `aggregate()` na listagem | Pipeline como esteira de estágios, cada um alimentando o próximo |
+| `$lookup` + `$unwind` | O join que acaba com o N+1 — e que `unwind` sem flag é **inner join** |
+| `$project` com `andExpression` | `hasDiscount`, `inStock` e `shortDescription` calculados no banco, não no ModelMapper |
+| DTO como destino do `aggregate` | O `$project` devolve no formato do DTO, e o `TypeMap` do ModelMapper some |
+| `$addFields` com `$meta: textScore` | `@TextScore` **não** funciona em pipeline; o campo tem que ser criado à mão |
+| `AggregationOperation` como lambda | Escapatória para qualquer estágio que o Spring Data não embrulhou |
+| `Criteria` acumulado em lista + `andOperator` | Um `$match` recebe **um** criteria, não uma coleção deles |
+| `$expr` escrito como criteria comum | `AggregationExpressionCriteria` é `CriteriaDefinition`, mas não `Criteria` |
+| A ordem dos estágios | Só o primeiro `$match` usa índice; tudo depois é memória |
+
+**A lição da fase:** a mesma pergunta das fases anteriores voltou de outro jeito — **calcular onde?** Antes era "no banco ou na escrita"; aqui é "no banco ou na aplicação". A resposta acabou sendo *depende do campo*: `hasDiscount` e `inStock` foram para o `$project` porque são comparações triviais que o Mongo faz de graça; o `slug` ficou em Java porque tirar acento com operador do Mongo custaria uma cadeia de `$replaceAll`. Poder empurrar tudo para o banco não é motivo para empurrar.
+
+A segunda lição é sobre controle: no `find()` o Mongo decide como executar; num pipeline **a ordem escrita é a ordem executada**, sem otimizador reescrevendo nada. Ganha-se precisão e herda-se a responsabilidade — o pipeline atual junta e projeta antes de paginar, e isso está documentado como o que ainda falta arrumar.
+
+> [`agregacoes-mongo.md`](../02-persistencia/agregacoes-mongo.md)
+
+---
+
 ## Onde o projeto está
 
 **Consolidado:**
@@ -180,12 +204,14 @@ A fase anterior terminou com uma pendência escrita em letras grandes: *nenhum �
 - Modelagem documental no `product-catalog`
 - Consulta dinâmica paginada no `product-catalog`
 - Índices e busca textual no `product-catalog`
+- Aggregation pipeline na listagem — join, campos derivados no servidor, fim do N+1
 
 **Próximos passos naturais:**
 - Mensageria real entre serviços (hoje os eventos são internos ao processo)
+- Reordenar os estágios do pipeline: paginar **antes** de `$lookup` e `$project`
 - Índices na coleção `categories` (hoje a busca por nome é varredura com regex)
 - Devolver `brand` à busca por termo (`@TextIndexed`) e tirar o índice que ficou órfão
-- Testes do agregado `Product`, do `queryWith` e um que afirme `IXSCAN` no `explain`
+- Testes do agregado `Product`, do pipeline e um que afirme `IXSCAN` no `explain`
 - Autenticação (a auditoria usa um `UUID` aleatório como placeholder)
 - Observabilidade — tracing distribuído, métricas, log estruturado
 - Resiliência — circuit breaker e retry nas chamadas entre serviços
@@ -194,7 +220,7 @@ A fase anterior terminou com uma pendência escrita em letras grandes: *nenhum �
 
 ## O padrão que se repete
 
-Olhando as dez fases em conjunto, a ordem foi sempre a mesma:
+Olhando as onze fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

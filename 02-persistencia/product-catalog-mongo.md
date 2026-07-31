@@ -88,7 +88,11 @@ O documento guarda só o id; o Spring Data resolve o objeto `Category` quando vo
 
 **Por que referência aqui:** categoria é uma entidade com ciclo de vida próprio (é criada, renomeada e desabilitada pela API de categorias, independente de produto). Duplicar o nome dela em milhares de produtos criaria um problema de consistência a cada rename. Categoria muda pouco, mas quando muda, muda para todo mundo.
 
-**O custo:** cada leitura de produto que toca `getCategory()` dispara uma consulta extra na coleção `categories`. Em uma listagem de 20 produtos isso pode virar 20 consultas (o clássico **N+1**). Ponto de atenção real para quando a listagem for implementada.
+**O custo:** cada leitura de produto que toca `getCategory()` dispara uma consulta extra na coleção `categories`. Em uma listagem de 20 produtos isso vira 20 consultas — o clássico **N+1**.
+
+> ✅ **Resolvido na listagem.** Ela deixou de usar `find()` e passou a montar um aggregation pipeline com `$lookup`, que traz a categoria de todos os produtos da página numa ida só. Ver [`agregacoes-mongo.md`](./agregacoes-mongo.md#lookup--unwind-o-fim-do-n1).
+>
+> O N+1 continua existindo para quem carregar `Product` pelo repositório e tocar `getCategory()` — o que muda é que o caminho crítico não faz mais isso.
 
 > Regra prática: **embuta o que é lido junto e muda junto; referencie o que tem vida própria.**
 
@@ -344,10 +348,23 @@ private void configuration(ModelMapper modelMapper) {
 
 **`MatchingStrategies.STRICT`** é a decisão que evita a maior armadilha do ModelMapper: nas estratégias `STANDARD` e `LOOSE` a biblioteca tenta adivinhar correspondências por similaridade de nome, e mapeia campos errados sem avisar. `STRICT` exige nome igual — o que não casar precisa de mapeamento explícito, como os dois acima.
 
-E o slug em si:
+### O `TypeMap` do `ProductSummaryOutput` foi removido depois
+
+O bloco acima registra o estado desta etapa. Quando a listagem virou aggregation, o `$project` passou a devolver os documentos **já no formato do DTO** — não havia mais nada para o mapper converter, e o `TypeMap` do `ProductSummaryOutput` saiu.
+
+Restou só o do `ProductDetailOutput`, e a diferença é instrutiva: os dois DTOs são preenchidos por caminhos opostos, de propósito.
+
+| DTO | Caminho | Quem deriva os campos |
+|---|---|---|
+| `ProductDetailOutput` | `findById` → `find()` → mapper | Java, com `Converter` |
+| `ProductSummaryOutput` | `filter` → `aggregate()` | MongoDB, no `$project` |
+
+O único derivado que **não** migrou foi o `slug`, que continua em Java — agora num getter do próprio DTO, porque tirar acento com operador do Mongo custaria uma cadeia de `$replaceAll`. Ver [`agregacoes-mongo.md`](./agregacoes-mongo.md#project-derivar-no-servidor).
+
+E o slug em si (o `Slugfier` mudou de `infrastructure/util` para `application/util`, já que é função pura de `String` e passou a ser usado por um DTO de `application`):
 
 ```java
-// infrastructure/util/Slugfier.java
+// application/util/Slugfier.java
 public static String slugify(String text) {
     if (text == null) return null;
     String nowhitespace = WHITESPACE.matcher(text).replaceAll("-");
@@ -439,7 +456,7 @@ Coisas que ficaram conscientemente pela metade nesta etapa:
 - [ ] Não há testes cobrindo o agregado `Product` (nem os invariantes de preço, nem a persistência). O `ProductRepositoryIT` que surgiu depois exercita só a projeção do repositório, e sem asserção — apenas loga o resultado.
 - [ ] `auditorProvider()` devolve `UUID.randomUUID()` até existir autenticação.
 - [ ] `quantityInStock` tem `setQuantityInStock` **privado** e nenhum método público de entrada/saída de estoque. Produto criado **pela API** fica travado em `0`, e `isInStock()` sempre retorna `false`. Os documentos carregados pelo [`DataLoader`](../04-infraestrutura/carga-de-dados-mongo.md) escapam disso porque são inseridos crus, direto na coleção — por isso o filtro `?inStock=true` funciona nos dados de teste e não funcionaria num produto cadastrado pelo endpoint.
-- [ ] N+1 latente no `@DocumentReference`: a listagem já está implementada, e cada `ProductSummaryOutput` que exponha o nome da categoria dispara uma leitura extra.
+- [x] ~~N+1 latente no `@DocumentReference`.~~ Resolvido na listagem pelo `$lookup` do aggregation — ver [`agregacoes-mongo.md`](./agregacoes-mongo.md). Continua valendo para quem carregar `Product` pelo repositório e tocar `getCategory()`.
 - [ ] `brand` tem `@Indexed` e nenhuma consulta filtra por marca — índice que só custa escrita. Detalhe em [`indices-mongo.md`](./indices-mongo.md).
 
 ---
@@ -465,5 +482,6 @@ Coisas que ficaram conscientemente pela metade nesta etapa:
 - [MongoDB — Data Model Design (embed vs. reference)](https://www.mongodb.com/docs/manual/core/data-model-design/)
 - [RFC 9562 — UUID v7](https://www.rfc-editor.org/rfc/rfc9562)
 - [`consultas-mongo-criteria.md`](./consultas-mongo-criteria.md) — como consultar esse modelo
+- [`agregacoes-mongo.md`](./agregacoes-mongo.md) — o pipeline que resolveu o N+1 do `@DocumentReference`
 - [`indices-mongo.md`](./indices-mongo.md) — os índices declarados neste agregado
 - [`carga-de-dados-mongo.md`](../04-infraestrutura/carga-de-dados-mongo.md) — como popular a coleção

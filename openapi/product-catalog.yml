@@ -503,16 +503,24 @@ components:
     sort:
       schema:
         type: string
-        example: "name"
+        enum:
+          - addedAt
+          - salePrice
+        example: "salePrice"
       name: sortByProperty
-      description: Order by property
+      description: >-
+        Order by property. Accepts the property name (addedAt, salePrice) or the
+        enum constant name (ADDED_AT, SALE_PRICE); case insensitive.
       in: query
     direction:
       schema:
         type: string
+        enum:
+          - asc
+          - desc
         example: "desc"
       name: sortDirection
-      description: Direction
+      description: Direction. Case insensitive.
       in: query
   schemas:
     Product:
