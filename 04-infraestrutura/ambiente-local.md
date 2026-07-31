@@ -174,8 +174,17 @@ Quem popula as coleções é a própria aplicação: o `DataLoader` do `product-
 
 > ⚠️ Com `algashop.data-load.auto-drop: true` (o valor atual no `application.yml`), as coleções `products` e `categories` são **apagadas e recriadas toda vez que o serviço sobe**. Alterou um documento pelo `mongosh` e reiniciou? A alteração se foi.
 
+Os **índices** também são criados pela aplicação, a partir das anotações do agregado (`auto-index-creation`). Para conferir depois de subir:
+
+```bash
+db.products.getIndexes()
+```
+
+Devem aparecer cinco: o `_id_` automático, o `idx_product_by_brand`, o índice de texto e dois `pidx_*` compostos.
+
 > Detalhes de modelagem: [`product-catalog-mongo.md`](../02-persistencia/product-catalog-mongo.md).
 > Como a carga funciona: [`carga-de-dados-mongo.md`](./carga-de-dados-mongo.md).
+> Índices e `explain`: [`indices-mongo.md`](../02-persistencia/indices-mongo.md).
 
 ---
 
@@ -256,6 +265,9 @@ Rodando os testes (exigem o Postgres de pé — usam os bancos `*_test`):
 | Alterações de um serviço somem | `git submodule update` sem `--remote` | Sempre cheque o status antes |
 | Dados do Mongo somem a cada restart | `data-load.auto-drop: true` | Desligue em `application.yml` — [detalhes](./carga-de-dados-mongo.md) |
 | Console cheio de log do driver Mongo | `logging.level.org.mongodb.driver...: DEBUG` | Comente o bloco no `application.yml` do `product-catalog` |
+| `?term=` não acha nada | Índice de texto não foi criado | Confira `spring.data.mongodb.auto-index-creation: true` e rode `db.products.getIndexes()` — [detalhes](../02-persistencia/indices-mongo.md) |
+| Busca por termo não acha por marca | `$text` cobre só `name` e `description` | Comportamento atual, registrado como pendência em [`indices-mongo.md`](../02-persistencia/indices-mongo.md) |
+| Listagem lenta mesmo com índice criado | Índice parcial ignorado sem `enabled: true` | Rode `.explain("executionStats")` e compare `IXSCAN`/`COLLSCAN` — [detalhes](../02-persistencia/indices-mongo.md) |
 | `./gradlew test` falha por falta de banco | Teste `*IT` rodando na suíte errada | `*IT` sai em `integrationTest`; confira o sufixo da classe |
 | Container reiniciando sem parar | Falta memória | Os limites do compose são apertados (256M–512M) |
 

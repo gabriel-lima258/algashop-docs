@@ -147,12 +147,12 @@ Sem ele, gravar funciona e ler quebra: o Spring Data não sabe em qual classe ma
 
 ```java
 if (Boolean.TRUE.equals(properties.getAutoDrop())) {
-    mongoOperations.getCollection(collectionName).drop();
+    mongoOperations.getCollection(collectionName).deleteMany(new BsonDocument());
 }
 return mongoOperations.insert(mongoDocs, collectionName).size();
 ```
 
-`auto-drop: true` **apaga a coleção inteira** antes de inserir.
+`auto-drop: true` **esvazia a coleção inteira** antes de inserir.
 
 Para estudar, é exatamente o que se quer: toda inicialização parte do mesmo estado conhecido, o teste manual de ontem não contamina o de hoje, e não existe erro de chave duplicada.
 
@@ -175,6 +175,43 @@ algashop:
     enabled: true
     auto-drop: true
 ```
+
+### `deleteMany({})` e não `drop()`
+
+Essa linha já foi `collection.drop()`, e a troca tem um motivo que só aparece quando os índices entram em cena.
+
+A ordem dos eventos na subida é:
+
+```
+contexto Spring sobe
+   └─ mapping context lê as anotações → cria os índices no Mongo
+      └─ ApplicationRunner (DataLoader) roda → limpa e insere a massa
+```
+
+Com `spring.data.mongodb.auto-index-creation: true`, os índices do `Product` já existem quando o `DataLoader` começa. E `drop()` derruba a coleção **com os índices dentro** — a aplicação criaria os índices e, um instante depois, os destruiria sozinha. Nenhum erro apareceria; só toda consulta seguinte viraria varredura de coleção.
+
+`deleteMany({})` remove os documentos e **preserva as definições de índice**. É mais lento numa coleção enorme (apaga documento a documento, mantendo os índices coerentes) e é o preço certo aqui.
+
+> Detalhe de índice, `explain` e ESR: [`../02-persistencia/indices-mongo.md`](../02-persistencia/indices-mongo.md).
+
+---
+
+## Massa grande, para medir índice
+
+Além do `products.json` (algumas dezenas de produtos), existe um `db/testdata/products-large.json` com **560 mil documentos**, ~11 MB.
+
+Ele não serve para desenvolver, e sim para **medir**: com poucas dezenas de documentos, varredura de coleção e busca por índice levam o mesmo tempo, e qualquer conclusão sobre desempenho é palpite. É só com volume que o `explain` mostra diferença.
+
+Por isso a entrada dele fica **comentada** no `sources`:
+
+```yaml
+      - location: db/testdata/products.json
+        collection: products
+      # - location: db/testdata/products-large.json
+      #   collection: products
+```
+
+Trocar uma pela outra faz a inicialização passar de instantânea para dezenas de segundos — aceitável para uma sessão de medição, insuportável como padrão de todo dia.
 
 ---
 
@@ -243,7 +280,8 @@ A última linha é a consulta que o filtro `hasDiscount` gera — ver [`consulta
 - [ ] **`enabled: true` e `auto-drop: true` estão no `application.yml` default.** Deveriam viver num perfil de desenvolvimento; do jeito que está, qualquer ambiente apaga as coleções ao subir.
 - [ ] **Log do driver Mongo em `DEBUG` no perfil default** (`org.mongodb.driver.protocol.command`). Útil para ver a query gerada pelos `Criteria`, barulhento demais para ficar ligado sempre.
 - [ ] **A carga não valida o que insere.** Documentos vão crus para a coleção, sem passar pelas invariantes do agregado — um produto com `salePrice > regularPrice` no JSON entra sem reclamar, mesmo sendo estado que o `Product` proíbe.
-- [ ] **Nenhum índice é criado.** Seria o lugar natural para `createIndex` nos campos filtrados.
+- [x] ~~**Nenhum índice é criado.**~~ Resolvido por fora daqui: os índices são declarados por anotação no agregado e criados pelo `auto-index-creation` — ver [`../02-persistencia/indices-mongo.md`](../02-persistencia/indices-mongo.md). Foi por causa disso que o `drop()` virou `deleteMany({})`.
+- [ ] **A massa grande não está referenciada.** `products-large.json` está no repositório, mas a entrada no `sources` está comentada — quem clonar e rodar o `explain` vai medir sobre dezenas de documentos e não ver diferença.
 - [ ] **Sem teste.** `parseJsonToDocuments` é uma função pura sobre `String` — daria um teste unitário barato, sem Mongo de pé.
 
 ---
@@ -255,6 +293,7 @@ A última linha é a consulta que o filtro `hasDiscount` gera — ver [`consulta
 - [ ] Sei por que os JSONs usam `$uuid`, `$date` e `$numberDecimal`
 - [ ] Sei por que o `_class` precisa estar escrito no arquivo
 - [ ] Entendo o risco do `auto-drop` no `application.yml` default
+- [ ] Sei por que `deleteMany({})` e não `drop()` quando existem índices
 - [ ] Sei explicar por que este mecanismo **não** substitui o Flyway
 
 ---
@@ -267,3 +306,4 @@ A última linha é a consulta que o filtro `hasDiscount` gera — ver [`consulta
 - [`flyway.md`](../02-persistencia/flyway.md) — o equivalente relacional
 - [`ambiente-local.md`](./ambiente-local.md) — subir o Mongo e conectar nele
 - [`consultas-mongo-criteria.md`](../02-persistencia/consultas-mongo-criteria.md) — o que consultar esses dados
+- [`indices-mongo.md`](../02-persistencia/indices-mongo.md) — por que a massa grande existe e por que o `drop()` saiu

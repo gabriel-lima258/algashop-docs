@@ -190,7 +190,7 @@ Nos filtros booleanos isso dá três estados úteis com um só parâmetro:
 | `inStock` | `where("quantityInStock").gt(0)` | `{ quantityInStock: { $gt: 0 } }` |
 | `categoriesId` | `where("categoryId").in(ids)` | `{ categoryId: { $in: [...] } }` |
 | `hasDiscount` | `AggregationExpressionCriteria.whereExpr(...)` | `{ $expr: { $lt: ["$salePrice", "$regularPrice"] } }` |
-| `term` | `new Criteria().orOperator(...)` | `{ $or: [ {name: /x/i}, {brand: /x/i}, {description: /x/i} ] }` |
+| `term` | `TextCriteria.forDefaultLanguage().matching(x)` | `{ $text: { $search: "x" } }` |
 
 ### Intervalos: por que o `if/else` em vez de dois `if`
 
@@ -251,47 +251,75 @@ query.addCriteria(AggregationExpressionCriteria.whereExpr(
 O `$` antes do nome não é sintaxe do Java — é como o Mongo diz "o valor deste campo", em vez do texto literal.
 
 > ⚠️ **Custo:** `$expr` roda para cada documento e **não usa índice**. Numa coleção grande, esse filtro sozinho força varredura completa. A alternativa é o `Product` já gravar um campo `hasDiscount` calculado na escrita — mais espaço em disco, consulta indexável. O agregado, aliás, já mantém `discountPercentageRounded` exatamente com essa lógica.
+>
+> Agora que os demais campos ganharam índice ([`indices-mongo.md`](./indices-mongo.md)), esse custo ficou mais visível por contraste: é o único filtro do `queryWith` que continua obrigando o Mongo a olhar documento por documento.
 
 ---
 
-## Busca textual por regex
+## Busca textual: de regex para `$text`
+
+Esta busca nasceu como um `$or` de três expressões regulares e foi **substituída** por índice de texto. Vale guardar as duas versões, porque a troca resume um trade-off que reaparece sempre.
+
+**Antes** — três regex agrupadas com `$or`:
 
 ```java
 private static final String flexibleRegex = "(?i)%s";
 
+String regexExpression = String.format(flexibleRegex, filter.getTerm());
+query.addCriteria(
+        new Criteria().orOperator(
+                Criteria.where("name").regex(regexExpression),
+                Criteria.where("brand").regex(regexExpression),
+                Criteria.where("description").regex(regexExpression)
+        )
+);
+```
+
+O `orOperator` agrupava os três num único criteria com `$or`. Se fossem três `addCriteria`, virariam `AND` — e o produto precisaria ter o termo nos três campos ao mesmo tempo. (O `(?i)` ligava o modo case-insensitive dentro da própria regex, e o `%s` era do `String.format`, não do Mongo.)
+
+**Agora** — um `$text` sobre o índice de texto da coleção:
+
+```java
 if (StringUtils.isNotBlank(filter.getTerm())) {
-    String regexExpression = String.format(flexibleRegex, filter.getTerm());
-    query.addCriteria(
-            new Criteria().orOperator(
-                    Criteria.where("name").regex(regexExpression),
-                    Criteria.where("brand").regex(regexExpression),
-                    Criteria.where("description").regex(regexExpression)
-            )
-    );
+    query.addCriteria(TextCriteria.forDefaultLanguage().matching(filter.getTerm()));
 }
 ```
 
-Três pontos:
+O que a troca custou e o que rendeu:
 
-1. **`orOperator` agrupa** — os três viram um único criteria com `$or`. Se fossem três `addCriteria`, virariam `AND`, e o produto precisaria ter o termo nos três campos ao mesmo tempo.
-2. **`(?i)`** liga o modo case-insensitive dentro da própria regex, sem precisar do segundo argumento de `regex()`.
-3. **O `%s` é do `String.format`**, não do Mongo — o projeto tem duas regex prontas:
-
-| Constante | Padrão | `?term=note` acha "Notebook"? |
+| | `$or` de regex | `$text` |
 |---|---|---|
-| `flexibleRegex` | `(?i)%s` | **sim** — casa em qualquer posição |
-| `regularRegex` | `(?i)(?<= \|^)%s(?= \|$)` | não — exige palavra inteira |
+| Usa índice | não — varre a coleção | sim |
+| `?term=note` acha "Notebook" | sim | **não** — casa palavra inteira |
+| Ordenação por relevância | não existe | nativa (campo `score`) |
+| Termo malicioso | ReDoS avaliado no servidor | inofensivo |
+| Campos cobertos | `name`, `brand`, `description` | `name`, `description` |
 
-### Regex vs. índice de texto
+Duas consequências que não são detalhe: **busca enquanto o usuário digita deixou de funcionar**, e **marca saiu da busca**.
 
-Regex sem âncora no início (`/note/` em vez de `/^note/`) **não usa índice** — o Mongo varre a coleção. A alternativa nativa é o índice de texto:
+Quando há termo, a ordenação pedida pelo cliente é ignorada em favor da relevância:
 
-```javascript
-db.products.createIndex({ name: "text", brand: "text", description: "text" })
-// consulta: { $text: { $search: "notebook gamer" } }
+```java
+private Sort sortWith(ProductFilter filter) {
+    if (StringUtils.isNotBlank(filter.getTerm())) {
+        return Sort.by("score");   // vira { score: { $meta: "textScore" } }
+    }
+    return Sort.by(filter.getSortDirectionOrDefault(),
+            filter.getSortByPropertyOrDefault().getPropertyName());
+}
 ```
 
-Índice de texto é muito mais rápido e faz stemming, mas casa **palavras inteiras** — busca incremental ("note" enquanto o usuário digita) não funciona. Para o volume deste projeto, regex está de bom tamanho; a decisão mudaria com escala.
+O detalhe de como `"score"` vira `$meta`, os pesos, o stemming e o índice de texto em si estão em **[`indices-mongo.md`](./indices-mongo.md)**.
+
+---
+
+## O mesmo padrão, segunda aplicação
+
+O `CategoryQueryServiceImpl` foi implementado nesta etapa (antes o `filter()` devolvia `null`) e é o mesmo esqueleto, campo a campo: `queryWith` → `count` → `sortWith` → `with(pageRequest)` → `PageModel`. A diferença é só o tamanho do `queryWith`, que tem dois filtros em vez de nove.
+
+É a prova de que a hierarquia `PageFilter` → `SortablePageFilter<T>` → `Filter` se paga: o `CategoryFilter` nasceu com paginação e ordenação type-safe funcionando, sem escrever nada disso de novo.
+
+Um contraste vale registrar: a categoria continua buscando por nome com regex não ancorada, e a coleção `categories` não tem índice nenhum — o oposto do que o produto acabou de adotar. Com poucas categorias não incomoda; é dívida consciente, não descuido.
 
 ---
 
@@ -365,13 +393,11 @@ Para um autocomplete que só mostra o nome, trazer 15 campos por produto é desp
 
 ## Pendências registradas
 
-- [ ] **A ordenação do cliente é ignorada.** `ProductFilter.getSortByPropertyOrDefault()` e `getSortDirectionOrDefault()` retornam constante fixa (`ADDED_AT`, `ASC`) sem olhar o que foi bindado. Na prática `?sortByProperty=SALE_PRICE&sortDirection=DESC` não faz nada. Falta o fallback:
-  ```java
-  return getSortByProperty() != null ? getSortByProperty() : SortType.ADDED_AT;
-  ```
-- [ ] **`regularRegex` está declarado e nunca é usado** — só o `flexibleRegex` entra na consulta. Ou vira opção de busca exata no filtro, ou sai.
-- [ ] **O `term` entra cru na regex**, sem `Pattern.quote`. Um termo com `(`, `[` ou `*` quebra a consulta; um termo construído de propósito (`(a+)+$`) é vetor de ReDoS, já que a avaliação roda no servidor do banco.
-- [ ] **Nenhum índice foi criado** para os campos filtrados (`enabled`, `salePrice`, `addedAt`, `categoryId`). Com a coleção pequena não aparece; com volume, toda consulta é varredura.
+- [x] ~~**A ordenação do cliente é ignorada.**~~ Corrigido: `ProductFilter` passou a cair no default só quando o campo vem `null`, então `?sortByProperty=SALE_PRICE&sortDirection=DESC` funciona.
+- [x] ~~**Nenhum índice foi criado** para os campos filtrados.~~ Resolvido — ver [`indices-mongo.md`](./indices-mongo.md).
+- [x] ~~**`regularRegex` está declarado e nunca é usado.**~~ As duas constantes de regex saíram junto com a troca para `$text`.
+- [ ] **O nome da categoria entra cru na regex.** A pendência do `Pattern.quote` migrou do produto (que não usa mais regex) para o `CategoryQueryServiceImpl`: `Criteria.where("name").regex(filter.getName().trim(), "i")`. Um termo com `(`, `[` ou `*` quebra a consulta; um termo construído de propósito (`(a+)+$`) é vetor de ReDoS, já que a avaliação roda no servidor do banco.
+- [ ] **A coleção `categories` não tem índice**, e a busca por nome é regex sem âncora — varredura garantida. Hoje é irrelevante pelo volume.
 - [ ] **Não há teste do `queryWith`.** Toda a lógica de montagem — inclusive o `if/else` dos intervalos — está sem cobertura. Um teste que só inspecione `query.getQueryObject()` já pegaria a maior parte dos erros, sem precisar de Mongo de pé.
 
 ---
@@ -382,7 +408,7 @@ Para um autocomplete que só mostra o nome, trazer 15 campos por produto é desp
 - [ ] Sei a diferença entre `Query` e `Criteria`, e que `addCriteria` sucessivos são `AND`
 - [ ] Entendo por que o intervalo precisa ser encadeado no mesmo `where`
 - [ ] Sei por que `hasDiscount` exige `$expr`, e o preço disso
-- [ ] Sei por que `orOperator` e não três `addCriteria` na busca textual
+- [ ] Sei o que se ganhou e o que se perdeu ao trocar o `$or` de regex por `$text`
 - [ ] Sei por que o `count` vem antes do `skip`/`limit`
 - [ ] Sei distinguir projeção no servidor (`fields`) de projeção na aplicação (ModelMapper)
 - [ ] Reconheço que `null` no filtro significa "não filtra", não "filtra por null"
@@ -394,6 +420,7 @@ Para um autocomplete que só mostra o nome, trazer 15 campos por produto é desp
 - [Spring Data MongoDB — Query by Criteria](https://docs.spring.io/spring-data/mongodb/reference/mongodb/template-query-operations.html)
 - [MongoDB — `$expr`](https://www.mongodb.com/docs/manual/reference/operator/query/expr/)
 - [MongoDB — `$regex` e o uso de índices](https://www.mongodb.com/docs/manual/reference/operator/query/regex/)
+- [`indices-mongo.md`](./indices-mongo.md) — os índices que servem estas consultas, e o `$text` da busca por termo
 - [`paginacao.md`](./paginacao.md) — o equivalente com JPA Criteria API no `ordering`
 - [`product-catalog-mongo.md`](./product-catalog-mongo.md) — modelagem do agregado consultado aqui
 - [`cqrs.md`](../01-arquitetura-design/cqrs.md) — por que a consulta não passa pelo agregado

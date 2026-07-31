@@ -125,7 +125,7 @@ Só depois de o domínio estar de pé é que a infraestrutura entra.
 
 ---
 
-## Fase 9 — Consultas dinâmicas e carga de dados (jul/2026) ← etapa atual
+## Fase 9 — Consultas dinâmicas e carga de dados (jul/2026)
 
 Com o agregado persistindo, o problema vira **ler**: uma listagem com nove filtros opcionais, e um banco de desenvolvimento que nasce vazio.
 
@@ -147,6 +147,28 @@ Com o agregado persistindo, o problema vira **ler**: uma listagem com nove filtr
 
 ---
 
+## Fase 10 — Índices e busca textual (jul/2026) ← etapa atual
+
+A fase anterior terminou com uma pendência escrita em letras grandes: *nenhum índice foi criado para os campos filtrados*. Esta fase é a resposta — e começa por um problema de método: **com dezenas de documentos não há o que medir**.
+
+| Marco | O que se aprende |
+|---|---|
+| `products-large.json` com 560 mil documentos | Otimização sem massa é palpite; primeiro se cria o cenário onde a diferença aparece |
+| `explain("executionStats")` | `COLLSCAN` vs. `IXSCAN`, e os números que dizem se o índice foi mesmo usado |
+| `@CompoundIndex` e a regra **ESR** | A ordem dos campos no índice não é estética — igualdade, ordenação, faixa |
+| Dois índices compostos, não um | Um índice serve bem **uma** ponta por consulta; a outra cairia em ordenação em memória |
+| `partialFilter: {enabled: true}` | Índice menor, em troca de só ser usado quando a consulta traz o predicado explícito |
+| `@TextIndexed` + `$text` no lugar do `$or` de regex | Índice de texto é único por coleção, faz stemming e casa palavra inteira |
+| `@TextScore` e `Sort.by("score")` | Ordenar por relevância; um campo que não existe no documento |
+| `drop()` → `deleteMany({})` no `DataLoader` | Ordem dos eventos na subida: os índices já existiam quando a carga rodava |
+| `CategoryQueryServiceImpl` implementado | O filtro dinâmico da fase 9 aplicado uma segunda vez, quase de graça |
+
+**A lição da fase:** índice não é melhoria, é **troca** — acelera leitura, encarece escrita e ocupa memória, e índice que ninguém usa é só custo (o `brand` desta fase é justamente esse caso). A outra lição é mais desconfortável: quase todo ganho veio com uma perda ao lado. O `$text` trouxe velocidade e tirou a busca por substring e por marca; o `partialFilter` encolheu o índice e o tornou inútil para quem não filtra por ativo. Escolher bem depende de saber qual consulta realmente acontece — e disso o `explain` é a única fonte honesta.
+
+> [`indices-mongo.md`](../02-persistencia/indices-mongo.md)
+
+---
+
 ## Onde o projeto está
 
 **Consolidado:**
@@ -157,12 +179,13 @@ Com o agregado persistindo, o problema vira **ler**: uma listagem com nove filtr
 - Arquitetura hexagonal no `ordering`
 - Modelagem documental no `product-catalog`
 - Consulta dinâmica paginada no `product-catalog`
+- Índices e busca textual no `product-catalog`
 
 **Próximos passos naturais:**
 - Mensageria real entre serviços (hoje os eventos são internos ao processo)
-- Ordenação do `product-catalog` (o filtro aceita `sortByProperty`, mas o valor é ignorado)
-- Índices no MongoDB para os campos filtrados
-- Testes do agregado `Product` e do `queryWith`
+- Índices na coleção `categories` (hoje a busca por nome é varredura com regex)
+- Devolver `brand` à busca por termo (`@TextIndexed`) e tirar o índice que ficou órfão
+- Testes do agregado `Product`, do `queryWith` e um que afirme `IXSCAN` no `explain`
 - Autenticação (a auditoria usa um `UUID` aleatório como placeholder)
 - Observabilidade — tracing distribuído, métricas, log estruturado
 - Resiliência — circuit breaker e retry nas chamadas entre serviços
@@ -171,7 +194,7 @@ Com o agregado persistindo, o problema vira **ler**: uma listagem com nove filtr
 
 ## O padrão que se repete
 
-Olhando as oito fases em conjunto, a ordem foi sempre a mesma:
+Olhando as dez fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

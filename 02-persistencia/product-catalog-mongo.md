@@ -386,6 +386,51 @@ Para subir o Mongo local: [`../04-infraestrutura/ambiente-local.md`](../04-infra
 
 ---
 
+## 11. Índices declarados no agregado
+
+Numa etapa posterior o `Product` ganhou índices, e eles são declarados **na própria classe** — a definição do índice mora ao lado da modelagem, não num script separado:
+
+```java
+@Document(collection = "products")
+@CompoundIndex(name = "pidx_product_by_category_enabledTrue_addedAt",
+        def = "{'categoryId': 1, 'enabled': 1, 'addedAt': -1}",
+        partialFilter = "{'enabled': true}")
+public class Product {
+
+    @TextIndexed(weight = 1)
+    private String name;
+
+    @Indexed(name = "idx_product_by_brand")
+    private String brand;
+    ...
+}
+```
+
+É uma diferença cultural em relação ao lado relacional do projeto: no `ordering` e no `billing` o índice nasce numa migration do [Flyway](./flyway.md), versionada e explícita. Aqui ele nasce de anotação, criada na subida por `spring.data.mongodb.auto-index-creation: true` — conveniente para estudar, inadequado para produção pelo mesmo motivo que `ddl-auto` é.
+
+**Mecânica, ESR, índice parcial, índice de texto e como conferir com `explain`:** [`indices-mongo.md`](./indices-mongo.md).
+
+### `@TextScore` — um campo que não é do documento
+
+```java
+@TextScore
+private Float score;
+```
+
+O `score` não existe na coleção. É preenchido pelo Mongo a cada busca textual com a relevância daquele documento naquela consulta, e chega `null` em qualquer outra leitura.
+
+Vale a pergunta honesta: **isso deveria estar no agregado de domínio?** É um dado de infraestrutura de consulta — a relevância de um resultado de busca não é atributo do produto. O mesmo raciocínio que manteve HTTP fora do domínio serviria para deixar o `score` só na projeção de leitura. Está no agregado porque é o que o Spring Data exige para popular o campo; é uma concessão consciente ao framework, do mesmo tipo que o `@Document` já era.
+
+### Construtor sem argumentos protegido
+
+```java
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+```
+
+O Spring Data precisa de um construtor sem argumentos para materializar o documento, mas ele instancia por reflexão e não se importa com a visibilidade. Deixá-lo `protected` fecha a porta para código de aplicação criar um `Product` vazio e preenchê-lo por fora, desviando do builder e dos invariantes. Mesmo padrão já usado no `Category`.
+
+---
+
 ## Pendências registradas
 
 Coisas que ficaram conscientemente pela metade nesta etapa:
@@ -395,6 +440,7 @@ Coisas que ficaram conscientemente pela metade nesta etapa:
 - [ ] `auditorProvider()` devolve `UUID.randomUUID()` até existir autenticação.
 - [ ] `quantityInStock` tem `setQuantityInStock` **privado** e nenhum método público de entrada/saída de estoque. Produto criado **pela API** fica travado em `0`, e `isInStock()` sempre retorna `false`. Os documentos carregados pelo [`DataLoader`](../04-infraestrutura/carga-de-dados-mongo.md) escapam disso porque são inseridos crus, direto na coleção — por isso o filtro `?inStock=true` funciona nos dados de teste e não funcionaria num produto cadastrado pelo endpoint.
 - [ ] N+1 latente no `@DocumentReference`: a listagem já está implementada, e cada `ProductSummaryOutput` que exponha o nome da categoria dispara uma leitura extra.
+- [ ] `brand` tem `@Indexed` e nenhuma consulta filtra por marca — índice que só custa escrita. Detalhe em [`indices-mongo.md`](./indices-mongo.md).
 
 ---
 
@@ -409,6 +455,7 @@ Coisas que ficaram conscientemente pela metade nesta etapa:
 - [ ] `compareTo` (não `equals`) ao comparar `BigDecimal`
 - [ ] `divide` de `BigDecimal` sempre com escala e `RoundingMode`
 - [ ] Propriedade `spring.mongodb.uri` (Boot 4), não `spring.data.mongodb.uri`
+- [ ] …mas `auto-index-creation` continua em `spring.data.mongodb` — os dois prefixos convivem
 
 ---
 
@@ -418,4 +465,5 @@ Coisas que ficaram conscientemente pela metade nesta etapa:
 - [MongoDB — Data Model Design (embed vs. reference)](https://www.mongodb.com/docs/manual/core/data-model-design/)
 - [RFC 9562 — UUID v7](https://www.rfc-editor.org/rfc/rfc9562)
 - [`consultas-mongo-criteria.md`](./consultas-mongo-criteria.md) — como consultar esse modelo
+- [`indices-mongo.md`](./indices-mongo.md) — os índices declarados neste agregado
 - [`carga-de-dados-mongo.md`](../04-infraestrutura/carga-de-dados-mongo.md) — como popular a coleção
