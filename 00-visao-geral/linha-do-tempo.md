@@ -114,7 +114,7 @@ Só depois de o domínio estar de pé é que a infraestrutura entra.
 |---|---|---|
 | 14/07 | `MongoConfig` — UUID e conversores | Representação de UUID, `OffsetDateTime` ↔ `Date` |
 | — | Agregado `Product` com `@Document` | Modelagem documental vs. relacional |
-| — | `@DocumentReference` para categoria | Embutir vs. referenciar |
+| — | `@DocumentReference` para categoria | Embutir vs. referenciar *(revertido na Fase 12)* |
 | — | Auditoria + `@Version` | `@CreatedDate`/`@CreatedBy`, lock otimista |
 | — | Hierarquia de exceções de domínio | Domínio não conhece HTTP; 404 vs. 422 |
 | — | `ProductSummaryOutput` + conversores do ModelMapper | Projeção de listagem, slug, descrição abreviada |
@@ -169,14 +169,14 @@ A fase anterior terminou com uma pendência escrita em letras grandes: *nenhum �
 
 ---
 
-## Fase 11 — Aggregation pipeline (jul/2026) ← etapa atual
+## Fase 11 — Aggregation pipeline (jul/2026)
 
-A listagem estava rápida, mas ainda mentia sobre o custo: para mostrar o nome da categoria, cada produto disparava uma leitura extra. Era o **N+1** registrado como pendência desde a Fase 8 — e resolvê-lo exigiu trocar a ferramenta de consulta.
+A listagem estava rápida, mas ainda mentia sobre o custo: para mostrar o nome da categoria, cada produto disparava uma leitura extra. Era o **N+1** registrado como pendência desde a Fase 8 — e resolvê-lo, *pela ferramenta de consulta*, exigiu trocar `find()` por pipeline. A Fase 12 mostraria que o problema era outro.
 
 | Marco | O que se aprende |
 |---|---|
 | `find()` → `aggregate()` na listagem | Pipeline como esteira de estágios, cada um alimentando o próximo |
-| `$lookup` + `$unwind` | O join que acaba com o N+1 — e que `unwind` sem flag é **inner join** |
+| `$lookup` + `$unwind` | O join que acaba com o N+1 — e que `unwind` sem flag é **inner join** *(aposentados na Fase 12)* |
 | `$project` com `andExpression` | `hasDiscount`, `inStock` e `shortDescription` calculados no banco, não no ModelMapper |
 | DTO como destino do `aggregate` | O `$project` devolve no formato do DTO, e o `TypeMap` do ModelMapper some |
 | `$addFields` com `$meta: textScore` | `@TextScore` **não** funciona em pipeline; o campo tem que ser criado à mão |
@@ -187,9 +187,35 @@ A listagem estava rápida, mas ainda mentia sobre o custo: para mostrar o nome d
 
 **A lição da fase:** a mesma pergunta das fases anteriores voltou de outro jeito — **calcular onde?** Antes era "no banco ou na escrita"; aqui é "no banco ou na aplicação". A resposta acabou sendo *depende do campo*: `hasDiscount` e `inStock` foram para o `$project` porque são comparações triviais que o Mongo faz de graça; o `slug` ficou em Java porque tirar acento com operador do Mongo custaria uma cadeia de `$replaceAll`. Poder empurrar tudo para o banco não é motivo para empurrar.
 
-A segunda lição é sobre controle: no `find()` o Mongo decide como executar; num pipeline **a ordem escrita é a ordem executada**, sem otimizador reescrevendo nada. Ganha-se precisão e herda-se a responsabilidade — o pipeline atual junta e projeta antes de paginar, e isso está documentado como o que ainda falta arrumar.
+A segunda lição é sobre controle: no `find()` o Mongo decide como executar; num pipeline **a ordem escrita é a ordem executada**, sem otimizador reescrevendo nada. Ganha-se precisão e herda-se a responsabilidade — o pipeline juntava e projetava antes de paginar, e isso ficou documentado como o que ainda faltava arrumar.
 
 > [`agregacoes-mongo.md`](../02-persistencia/agregacoes-mongo.md)
+
+---
+
+## Fase 12 — Desnormalização e eventos (ago/2026) ← etapa atual
+
+A Fase 11 tinha resolvido o N+1 com um `$lookup`. Esta fase pergunta por que ele existia: se **toda** listagem precisa do nome da categoria, esse nome deveria estar no documento. A categoria virou uma cópia embutida, o join sumiu — e apareceu um problema novo, que é o assunto da segunda metade da fase: **cópia envelhece**.
+
+| Marco | O que se aprende |
+|---|---|
+| `@DocumentReference` → `ProductCategory` embutido | Normalizado × desnormalizado, e que a decisão da Fase 8 estava do lado errado da própria regra |
+| `$lookup` + `$unwind` aposentados | A justificativa de uma ferramenta pode evaporar sem o código quebrar |
+| `'category.id'` virando `category._id` | Propriedade chamada `id`, mesmo embutida, vira `_id` — e só o `getIndexes()` conta a verdade |
+| `Product extends AbstractAggregateRoot` | `registerEvent` **enfileira**; quem publica é o `save()` do repositório |
+| Cinco eventos de domínio | Fato só é fato quando o estado muda — daí as guardas do `setEnabled` e do `changePrice` |
+| `ApplicationMessagePublisher` | Porta de saída: a `application` publica sem conhecer o Spring |
+| `@EventListener` + `@Async` + `updateMulti` | Consistência eventual na prática, e tudo que falta para virar mensageria |
+| `validatePrices` no construtor e no `changePrice` | Invariante que depende de dois campos não cabe num setter |
+| `_class` apontando para pacote inexistente | Falha silenciosa: o Spring Data engole e cai no tipo alvo |
+
+**A lição da fase:** as Fases 8, 11 e 12 são três respostas para a **mesma** pergunta — como mostrar o nome da categoria numa listagem — e a terceira só apareceu quando a pergunta mudou de camada. A Fase 11 otimizou a consulta; a Fase 12 mudou a modelagem e a consulta ficou trivial. **Otimizar uma consulta é, às vezes, adiar a decisão de modelagem.**
+
+A segunda lição é que desnormalizar não é atalho, é dívida com prazo: a leitura ficou barata às custas da escrita, e a diferença entre "cópia" e "bagunça" é ter um dono declarado e um mecanismo explícito de propagação. Aqui o dono é a coleção `categories` e o mecanismo é um evento assíncrono — com todas as garantias que ele **não** dá registradas em letras grandes.
+
+E a terceira, involuntária: mover um invariante é onde ele se perde. A regra de preço saiu dos setters para o `changePrice` e chegou lá comparando o valor novo com o antigo, aceitando promoção mais cara que o preço cheio. Um teste de agregado puro pegou o que a leitura não pegou.
+
+> [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md) · [`eventos-e-listeners.md`](../01-arquitetura-design/eventos-e-listeners.md)
 
 ---
 
@@ -204,14 +230,17 @@ A segunda lição é sobre controle: no `find()` o Mongo decide como executar; n
 - Modelagem documental no `product-catalog`
 - Consulta dinâmica paginada no `product-catalog`
 - Índices e busca textual no `product-catalog`
-- Aggregation pipeline na listagem — join, campos derivados no servidor, fim do N+1
+- Aggregation pipeline na listagem — campos derivados no servidor
+- Categoria desnormalizada no produto, com propagação por evento assíncrono
+- Eventos de domínio no `Product` via `AbstractAggregateRoot`
 
 **Próximos passos naturais:**
-- Mensageria real entre serviços (hoje os eventos são internos ao processo)
-- Reordenar os estágios do pipeline: paginar **antes** de `$lookup` e `$project`
+- Mensageria real entre serviços (hoje os eventos são internos ao processo, aqui e no `ordering`)
+- Retentativa, dead letter e reconciliação para a propagação da categoria
+- Reordenar os estágios do pipeline: paginar **antes** do `$project`
 - Índices na coleção `categories` (hoje a busca por nome é varredura com regex)
 - Devolver `brand` à busca por termo (`@TextIndexed`) e tirar o índice que ficou órfão
-- Testes do agregado `Product`, do pipeline e um que afirme `IXSCAN` no `explain`
+- Testes do pipeline e um que afirme `IXSCAN` no `explain` (o agregado `Product` já tem o seu)
 - Autenticação (a auditoria usa um `UUID` aleatório como placeholder)
 - Observabilidade — tracing distribuído, métricas, log estruturado
 - Resiliência — circuit breaker e retry nas chamadas entre serviços
@@ -220,7 +249,7 @@ A segunda lição é sobre controle: no `find()` o Mongo decide como executar; n
 
 ## O padrão que se repete
 
-Olhando as onze fases em conjunto, a ordem foi sempre a mesma:
+Olhando as doze fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

@@ -94,7 +94,7 @@ Três coisas para reparar:
 2. **`@Validated` + `@NotNull` derrubam a aplicação na inicialização** se a configuração faltar, com mensagem explícita. É o oposto do valor default silencioso: melhor falhar ao subir do que descobrir um `NullPointerException` no meio da carga.
 3. **`@Valid` na lista** propaga a validação para dentro de cada item — sem ele, um `source` com `collection` em branco passaria batido.
 
-A ordem da lista importa: `categories` vem antes de `products` porque o produto referencia a categoria por `categoryId`.
+A ordem da lista importa menos do que parece. Ela foi escrita quando o produto **referenciava** a categoria por `categoryId`; com a categoria [embutida no documento](../02-persistencia/desnormalizacao-mongo.md), cada produto é auto-suficiente e carregaria bem em qualquer ordem. Mantida assim por coerência de leitura — e porque a dependência conceitual continua existindo, mesmo sem a técnica.
 
 ---
 
@@ -108,12 +108,21 @@ A ordem da lista importa: `categories` vem antes de `products` porque o produto 
   "regularPrice": { "$numberDecimal": "3000.00" },
   "salePrice": { "$numberDecimal": "2789.00" },
   "quantityInStock": 50,
-  "categoryId": { "$uuid": "e0c4271d-0016-4a42-82fe-bf695a9fb9b8" },
+  "category": {
+    "_id": { "$uuid": "e0c4271d-0016-4a42-82fe-bf695a9fb9b8" },
+    "name": "Laptops",
+    "enabled": true
+  },
   "_class": "com.algaworks.algashop.product.catalog.domain.product.Product"
 }
 ```
 
 JSON tem 6 tipos; BSON tem mais de 20. **Extended JSON** é a notação que o MongoDB usa para representar os tipos extras dentro de um JSON válido.
+
+Dois detalhes do bloco acima que valem atenção:
+
+- **A notação vale em qualquer profundidade.** O `$uuid` dentro de `category._id` funciona igual ao do `_id` da raiz — Extended JSON não é privilégio do nível superior.
+- **O `_id` do subdocumento não é opção estética.** O campo se chama `id` no `ProductCategory`, e toda propriedade chamada `id` vira `_id` no documento. Gravar `"id"` aqui criaria um campo que o mapeamento não lê, e a categoria chegaria sem identificador. Ver [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md).
 
 ```java
 BsonArray array = BsonArray.parse(rawJson);
@@ -137,7 +146,21 @@ mongoOperations.insert(mongoDocs, collectionName);
 
 Isso insere `org.bson.Document` **cru** — não passa pelo mapeamento do Spring Data, porque não existe objeto de domínio no caminho. É a via rápida, e cobra um preço: o `_class` que o Spring Data normalmente escreveria sozinho precisa estar **escrito à mão no JSON**.
 
-Sem ele, gravar funciona e ler quebra: o Spring Data não sabe em qual classe materializar o documento.
+O que ele faz é dizer **em qual classe materializar** o documento na leitura. Sem ele — ou com um valor que não resolve — o Spring Data cai no tipo que a consulta pediu.
+
+> #### Nota de estudo: o `_class` errado que ninguém percebeu
+>
+> Por muito tempo o `products.json` gravou isto:
+>
+> ```json
+> "_class": "com.algaworks.algashop.product.catalog.domain.model.product.Product"
+> ```
+>
+> Um `.model.` a mais no caminho — **pacote que não existe** neste projeto. E nada quebrou.
+>
+> O motivo é que o `SimpleTypeInformationMapper` tenta resolver a classe pelo nome, captura o `ClassNotFoundException` e devolve `null`; o `DefaultTypeMapper` então usa o tipo que a consulta pediu. Como toda leitura aqui já pede `Product.class`, o fallback dá exatamente no mesmo resultado.
+>
+> Ou seja: **`_class` errado não é erro de leitura, é erro de dado** — e o silêncio é o problema. No dia em que o agregado tiver herança, o `_class` deixa de ser decorativo e passa a decidir a classe materializada; aí um valor que não resolve devolve o tipo errado, também sem avisar. Corrigido na Fase 12, com o comportamento registrado em [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md).
 
 > Esse é o mesmo campo `_class` que aparece nos documentos criados pela API — a diferença é só quem o escreve.
 
@@ -280,6 +303,8 @@ A última linha é a consulta que o filtro `hasDiscount` gera — ver [`consulta
 - [ ] **`enabled: true` e `auto-drop: true` estão no `application.yml` default.** Deveriam viver num perfil de desenvolvimento; do jeito que está, qualquer ambiente apaga as coleções ao subir.
 - [ ] **Log do driver Mongo em `DEBUG` no perfil default** (`org.mongodb.driver.protocol.command`). Útil para ver a query gerada pelos `Criteria`, barulhento demais para ficar ligado sempre.
 - [ ] **A carga não valida o que insere.** Documentos vão crus para a coleção, sem passar pelas invariantes do agregado — um produto com `salePrice > regularPrice` no JSON entra sem reclamar, mesmo sendo estado que o `Product` proíbe.
+- [ ] **A cópia da categoria pode nascer dessincronizada.** Cada produto traz `category.name` escrito à mão no JSON, e nada confere contra `categories.json` — o `ProductCategory.of(...)` não participa da carga. Ver [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md).
+- [x] ~~**`_class` apontando para um pacote inexistente** (`domain.model.product.Product`).~~ Corrigido na Fase 12 — ver a nota de estudo acima.
 - [x] ~~**Nenhum índice é criado.**~~ Resolvido por fora daqui: os índices são declarados por anotação no agregado e criados pelo `auto-index-creation` — ver [`../02-persistencia/indices-mongo.md`](../02-persistencia/indices-mongo.md). Foi por causa disso que o `drop()` virou `deleteMany({})`.
 - [ ] **A massa grande não está referenciada.** `products-large.json` está no repositório, mas a entrada no `sources` está comentada — quem clonar e rodar o `explain` vai medir sobre dezenas de documentos e não ver diferença.
 - [ ] **Sem teste.** `parseJsonToDocuments` é uma função pura sobre `String` — daria um teste unitário barato, sem Mongo de pé.

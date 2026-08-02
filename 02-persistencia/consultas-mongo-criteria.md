@@ -3,7 +3,7 @@
 > Como o `product-catalog` monta um filtro de listagem com 9 parâmetros opcionais sem escrever 512 consultas.
 > Código real: `infrastructure/persistence/product/ProductQueryServiceImpl.java`, `.../category/CategoryQueryServiceImpl.java`.
 
-> ℹ️ **Este é o jeito 1 de consultar.** A listagem de produtos migrou depois para um **aggregation pipeline** — [`agregacoes-mongo.md`](./agregacoes-mongo.md) — para juntar a coleção de categorias e calcular campos derivados no servidor.
+> ℹ️ **Este é o jeito 1 de consultar.** A listagem de produtos migrou depois para um **aggregation pipeline** — [`agregacoes-mongo.md`](./agregacoes-mongo.md) — para juntar a coleção de categorias e calcular campos derivados no servidor. (Da Fase 12 em diante, só a segunda metade dessa justificativa continua valendo: a categoria passou a ser embutida e não há mais coleção a juntar — ver [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).)
 >
 > Nada aqui ficou obsoleto: o `findById` e o `CategoryQueryServiceImpl` continuam neste jeito, e o **`Criteria` desta página é o mesmo que alimenta o `$match` do pipeline**. O que muda é como ele é montado e o que vem depois. A seção [Quando usar cada um](#quando-usar-cada-um) fecha a comparação.
 
@@ -318,7 +318,7 @@ Nos filtros booleanos isso dá três estados úteis com um só parâmetro:
 | `addedAtFrom` + `addedAtTo` | `where("addedAt").gte(a).lte(b)` | `{ addedAt: { $gte: a, $lte: b } }` |
 | `priceFrom` + `priceTo` | `where("salePrice").gte(a).lte(b)` | `{ salePrice: { $gte: a, $lte: b } }` |
 | `inStock` | `where("quantityInStock").gt(0)` | `{ quantityInStock: { $gt: 0 } }` |
-| `categoriesId` | `where("categoryId").in(ids)` | `{ categoryId: { $in: [...] } }` |
+| `categoriesId` | `where("category.id").in(ids)` | `{ "category._id": { $in: [...] } }` |
 | `hasDiscount` | `AggregationExpressionCriteria.whereExpr(...)` | `{ $expr: { $lt: ["$salePrice", "$regularPrice"] } }` |
 | `term` | `TextCriteria.forDefaultLanguage().matching(x)` | `{ $text: { $search: "x" } }` |
 
@@ -350,13 +350,20 @@ query.addCriteria(Criteria.where("salePrice").lte(to));
 
 O documento BSON é um mapa: não existe a mesma chave duas vezes. Os dois operadores precisam ser **encadeados no mesmo `where`** para caírem dentro do mesmo objeto. Daí o `if/else`.
 
-### `categoryId`: filtrar sem carregar a categoria
+### `categoriesId`: filtrar sem carregar a categoria
 
 ```java
-query.addCriteria(Criteria.where("categoryId").in((Object[]) filter.getCategoriesId()));
+query.addCriteria(Criteria.where("category.id").in((Object[]) filter.getCategoriesId()));
 ```
 
-O campo procurado é o `categoryId` que o `@DocumentReference` grava dentro do documento de produto — não a `Category` inteira. Filtrar por categoria não custa nenhuma leitura extra: o dado já está no documento. Ver [`product-catalog-mongo.md`](./product-catalog-mongo.md#2-relacionamento-por-referência--documentreference).
+A conclusão desta seção nunca mudou — **filtrar por categoria não custa nenhuma leitura extra, porque o dado já está no documento** — mas o mecanismo por trás dela mudou duas vezes:
+
+| Fase | O que o documento guardava | O que a consulta procura |
+|---|---|---|
+| 8 | `categoryId`, gravado pelo `@DocumentReference` | `where("categoryId")` |
+| 12 | o subdocumento `category` embutido | `where("category.id")` → `{ "category._id": ... }` |
+
+Note a tradução na última linha: escreve-se `category.id`, e o Mongo recebe `category._id`. Toda propriedade chamada `id`, mesmo dentro de um objeto embutido, vira `_id` — quem resolve isso é o mapping context do Spring Data. Ver [`indices-mongo.md`](./indices-mongo.md#-categoryid-no-java-category_id-no-banco) e [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).
 
 ---
 
@@ -529,7 +536,7 @@ A terceira coluna é o assunto de [`agregacoes-mongo.md`](./agregacoes-mongo.md#
 ## Armadilhas
 
 1. **Nome de campo é `String`.** Nada valida em tempo de compilação. Renomeou o campo no `Product`? A consulta continua compilando e para de achar.
-2. **O nome é o do documento, não o do Java.** `Product.category` é gravado como `categoryId` por causa do `@Field`. A consulta usa `categoryId`.
+2. **O nome é o do documento, não o do Java** — mas o Spring Data traduz o caminho da propriedade. `Product.category` é gravado como o subdocumento `category`, e `category.id` chega ao Mongo como `category._id`. As duas grafias funcionam no `Criteria`; só uma delas aparece no `getIndexes()`.
 3. **Dois criterias no mesmo campo estouram.** Encadeie no mesmo `where`.
 4. **`count` depois de paginar mente.** Sempre antes.
 5. **Divisão inteira no `totalPages`.** O cast para `double` não é decorativo.

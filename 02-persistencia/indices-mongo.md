@@ -11,6 +11,8 @@ O doc de [consultas dinâmicas](./consultas-mongo-criteria.md) terminou com uma 
 
 > *"Nenhum índice foi criado para os campos filtrados (`enabled`, `salePrice`, `addedAt`, `categoryId`). Com a coleção pequena não aparece; com volume, toda consulta é varredura."*
 
+> 🔧 **Mudou na Fase 12.** O campo `categoryId` deixou de existir: a categoria virou um subdocumento embutido, e os índices compostos passaram a começar em `category.id` — que no banco nasce como `category._id`. Ver a seção [`category.id` no Java, `category._id` no banco](#-categoryid-no-java-category_id-no-banco) e [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).
+
 Esta etapa é a resposta a ela.
 
 O detalhe é que o problema **não dava para ver**. Com o `products.json` de carga — algumas dezenas de documentos — varrer tudo e usar índice levam o mesmo tempo. Foi por isso que entrou o `db/testdata/products-large.json`, com 560 mil produtos: sem massa, não há o que medir, e "otimização" vira palpite.
@@ -29,7 +31,7 @@ Toda consulta gera um **plano de execução**, e ele começa de um jeito ou de o
 Quem conta a verdade é o `explain`:
 
 ```javascript
-db.products.find({ categoryId: UUID("..."), enabled: true, salePrice: { $gte: 100 } })
+db.products.find({ "category._id": UUID("..."), enabled: true, salePrice: { $gte: 100 } })
            .explain("executionStats")
 ```
 
@@ -80,10 +82,10 @@ O agregado declara dois:
 
 ```java
 @CompoundIndex(name = "pidx_product_by_category_enabledTrue_salePrice",
-        def = "{'categoryId': 1, 'enabled': 1, 'salePrice': 1}",
+        def = "{'category.id': 1, 'enabled': 1, 'salePrice': 1}",
         partialFilter = "{'enabled': true}")
 @CompoundIndex(name = "pidx_product_by_category_enabledTrue_addedAt",
-        def = "{'categoryId': 1, 'enabled': 1, 'addedAt': -1}",
+        def = "{'category.id': 1, 'enabled': 1, 'addedAt': -1}",
         partialFilter = "{'enabled': true}")
 public class Product { ... }
 ```
@@ -92,7 +94,7 @@ public class Product { ... }
 
 | Posição | Tipo de uso | No índice acima |
 |---|---|---|
-| 1º | **E**quality — igualdade exata (`is`, `$in`) | `categoryId`, `enabled` |
+| 1º | **E**quality — igualdade exata (`is`, `$in`) | `category.id`, `enabled` |
 | 2º | **S**ort — ordenação | `addedAt` (no segundo índice) |
 | 3º | **R**ange — faixa (`$gte`, `$lt`) | `salePrice` (no primeiro) |
 
@@ -111,6 +113,37 @@ Os dois no mesmo índice competem pela mesma posição. Com um índice só, uma 
 
 ---
 
+## ⚠️ `category.id` no Java, `category._id` no banco
+
+O `def` acima declara `'category.id'`. Só que o índice criado é outro:
+
+```javascript
+db.products.getIndexes()
+```
+
+```
+{"_id":1}                                        name=_id_
+{"_fts":"text","_ftsx":1}                        name=Product_TextIndex
+{"brand":1}                                      name=idx_product_by_brand
+{"category._id":1,"enabled":1,"salePrice":1}     name=pidx_product_by_category_enabledTrue_salePrice
+{"category._id":1,"enabled":1,"addedAt":-1}      name=pidx_product_by_category_enabledTrue_addedAt
+```
+
+Toda propriedade chamada `id` — **inclusive dentro de um objeto embutido** — vira `_id` no documento. É a mesma convenção do `@Id` do agregado raiz, aplicada um nível abaixo. Quem faz a tradução é o mapping context do Spring Data, e ela vale em mais lugares do que parece:
+
+| Onde | O que se escreve | O que chega no Mongo |
+|---|---|---|
+| `def` do `@CompoundIndex` | `category.id` | `category._id` |
+| `Criteria` do `$match` | `category.id` | `category._id` |
+| `Criteria` do `updateMulti` | `category._id` | `category._id` |
+| `$project` | `category._id` | `category._id` |
+
+As duas grafias funcionam, e é por isso que o código convive com ambas sem quebrar. O que não se pode é procurar por `category.id` no `getIndexes()` e concluir que o índice não foi criado.
+
+> **Índice sobre campo inexistente não dá erro.** Ele é criado normalmente, sobre um caminho que nenhum documento tem, e simplesmente nunca é escolhido pelo planejador. O `explain` acusaria `COLLSCAN` com o índice ali, íntegro e inútil. Confira sempre no `getIndexes()`, não na anotação.
+
+---
+
 ## Índice parcial: menor, mas mais exigente
 
 ```java
@@ -123,9 +156,9 @@ Só entra no índice o documento que satisfaz o filtro. Produto desativado não 
 
 | Consulta | Usa o índice parcial? |
 |---|---|
-| `{ categoryId: X, enabled: true }` | ✅ sim |
-| `{ categoryId: X, enabled: false }` | ❌ não — pede o que não está no índice |
-| `{ categoryId: X }` (sem `enabled`) | ❌ **não** — pode haver inativo no resultado |
+| `{ "category._id": X, enabled: true }` | ✅ sim |
+| `{ "category._id": X, enabled: false }` | ❌ não — pede o que não está no índice |
+| `{ "category._id": X }` (sem `enabled`) | ❌ **não** — pode haver inativo no resultado |
 
 A última linha é a armadilha. `ProductFilter.enabled` é opcional; cliente que não manda `?enabled=true` cai em varredura mesmo com o índice ali, criado e íntegro. Não é bug — é o Mongo sendo correto: o índice parcial não tem como responder por documento que ele não indexou.
 
@@ -229,7 +262,7 @@ Ver [`carga-de-dados-mongo.md`](../04-infraestrutura/carga-de-dados-mongo.md).
 db.products.getIndexes()
 
 // a consulta usa índice?
-db.products.find({ categoryId: UUID("..."), enabled: true }).explain("executionStats")
+db.products.find({ "category._id": UUID("..."), enabled: true }).explain("executionStats")
 
 // quem está sendo realmente usado — 'accesses.ops' zerado = índice que só custa
 db.products.aggregate([{ $indexStats: {} }])
@@ -252,12 +285,12 @@ O motivo é direto: o índice descreve os documentos **como estão gravados**. D
 Consequências práticas:
 
 - Um `$match` colocado depois de um `$lookup` ou de um `$project` **não usa índice**, mesmo que exista um perfeito para ele.
-- Um `$sort` depois de um `$lookup` perde a chance de ser servido pelo índice composto criado justamente para ordenar. Vira ordenação em memória, com o teto de 32 MB de volta ao jogo.
+- Um `$sort` depois de um `$lookup` perdia a chance de ser servido pelo índice composto criado justamente para ordenar. Virava ordenação em memória, com o teto de 32 MB de volta ao jogo. *(Deixou de morder aqui na Fase 12: sem `$lookup`, o `$sort` vem logo depois do `$match`.)*
 - Por isso a regra de ouro de pipeline é **filtrar e ordenar o mais cedo possível**, e só então enriquecer e projetar.
 
 O `explain` continua valendo — `db.products.aggregate([...]).explain()` mostra o plano do primeiro estágio e revela se ele foi `IXSCAN` ou `COLLSCAN`.
 
-> A ordem de estágios do pipeline atual do projeto **não** segue essa regra, e isso está registrado como pendência em [`agregacoes-mongo.md`](./agregacoes-mongo.md#-a-ordem-dos-estágios-é-o-custo).
+> A ordem de estágios do pipeline atual do projeto **ainda não** segue essa regra por inteiro — o `$project` continua vindo antes do `$skip`/`$limit`. A metade cara do problema, o `$lookup`, sumiu com a desnormalização. Registrado como pendência em [`agregacoes-mongo.md`](./agregacoes-mongo.md#-a-ordem-dos-estágios-é-o-custo).
 
 ---
 
@@ -295,6 +328,7 @@ Por isso não se indexa "tudo por via das dúvidas". Indexa-se o que a consulta 
 - [ ] **`auto-index-creation: true` está no `application.yml` default**, não num perfil de desenvolvimento — mesma situação do `data-load.auto-drop`.
 - [ ] **O `products-large.json` não está referenciado** no `sources` do `data-load` (a entrada está comentada). Quem clonar o projeto e rodar o `explain` vai medir sobre dezenas de documentos e não ver diferença nenhuma.
 - [ ] **Nenhum teste verifica o plano de execução.** Um teste de integração que rode `explain` e afirme `IXSCAN` seria a única forma de perceber que um índice parou de ser usado — hoje isso passaria em silêncio.
+- [ ] **A propagação da categoria não usa nenhum dos dois índices.** O `updateMulti` do `ProductCategoryUpdater` filtra só por `category._id`, sem `enabled`, então não casa o `partialFilter` — é varredura, e ainda escreve em campo indexado, mexendo nos dois compostos. Ver [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).
 
 ---
 
@@ -303,6 +337,7 @@ Por isso não se indexa "tudo por via das dúvidas". Indexa-se o que a consulta 
 - [ ] Sei ler um `explain` e distinguir `COLLSCAN` de `IXSCAN`
 - [ ] Sei o que significam `totalKeysExamined` e `totalDocsExamined`
 - [ ] Sei a regra ESR e por que a ordem dos campos no índice composto importa
+- [ ] Sei que `category.id` vira `category._id`, e que a fonte de verdade é o `getIndexes()`
 - [ ] Sei explicar por que são **dois** índices compostos e não um
 - [ ] Sei em que situação um índice parcial deixa de ser usado
 - [ ] Sei que só existe um índice de texto por coleção

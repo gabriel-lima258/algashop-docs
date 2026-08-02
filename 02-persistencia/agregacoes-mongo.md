@@ -5,6 +5,10 @@
 
 > Este é o **jeito 2** de consultar. O jeito 1, com `Query` + `Criteria`, continua vivo e documentado em [`consultas-mongo-criteria.md`](./consultas-mongo-criteria.md) — a seção [Quando usar cada um](#quando-usar-cada-um) compara os dois.
 
+> 🔧 **Mudou na Fase 12.** O `$lookup` e o `$unwind` descritos aqui foram **aposentados**: a categoria deixou de ser referência e passou a ser uma cópia embutida no próprio documento, então não há mais nada a juntar. O pipeline continua de pé, agora justificado só pelo `$project`. As seções sobre o join permanecem neste documento de propósito — mostram o que existiu, e por quê. Ver [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).
+>
+> O pipeline em produção hoje é: `$match → ($addFields score) → $sort → $project → $skip → $limit`.
+
 ---
 
 ## O problema
@@ -15,7 +19,7 @@ Com `find()` + ModelMapper, cada um desses custa caro por um motivo diferente:
 
 | O que a tela precisa | Como saía antes | Custo |
 |---|---|---|
-| Nome da categoria | `getCategory().getName()` via `@DocumentReference` | **uma consulta extra por produto** — o clássico N+1 |
+| Nome da categoria | `getCategory().getName()` via `@DocumentReference` | **uma consulta extra por produto** — o clássico N+1 (resolvido de vez na Fase 12, ver callout acima) |
 | `hasDiscount`, `inStock` | calculado em Java, depois da consulta | o documento inteiro trafega, mesmo o que não se usa |
 | `shortDescription` | conversor do ModelMapper | idem — a descrição completa vem pela rede para ser cortada em Java |
 
@@ -142,7 +146,9 @@ Repare que é uma **lambda**. `AggregationOperation` é uma interface funcional 
 
 ---
 
-## `$lookup` + `$unwind`: o fim do N+1
+## `$lookup` + `$unwind`: o fim do N+1 *(aposentado na Fase 12)*
+
+> 🔧 **Estes dois estágios não estão mais no pipeline.** Continuam no código, comentados, como referência de estudo. A seção fica porque o raciocínio dela é válido e reaproveitável — só não é mais o que roda aqui. O que os aposentou não foi um defeito, e sim a mudança de modelagem descrita em [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md): sem categoria em outra coleção, não há o que juntar.
 
 ```java
 lookup("categories", "categoryId", "_id", "category"),
@@ -159,8 +165,9 @@ O ganho é direto:
 |---|---|
 | `@DocumentReference` + ModelMapper | 1 + 15 |
 | `$lookup` | 1 |
+| categoria embutida (Fase 12) | 1, e sem join |
 
-> ⚠️ **`unwind` sem `preserveNullAndEmptyArrays` é INNER JOIN.** Produto cujo `categoryId` não resolve — categoria apagada, referência quebrada — **desaparece do resultado**, silenciosamente. Para comportamento de `LEFT JOIN` seria `unwind("$category", true)`. A escolha atual não foi deliberada; está registrada como pendência.
+> ⚠️ **`unwind` sem `preserveNullAndEmptyArrays` é INNER JOIN.** Produto cujo `categoryId` não resolve — categoria apagada, referência quebrada — **desaparece do resultado**, silenciosamente. Para comportamento de `LEFT JOIN` seria `unwind("$category", true)`. A escolha nunca foi deliberada, e a desnormalização tornou a questão obsoleta: hoje o produto aparece exibindo a cópia que tem.
 
 ---
 
@@ -172,6 +179,7 @@ project()
         // ...
         .and("category._id").as("category._id")
         .and("category.name").as("category.name")
+        .and("category.enabled").as("category.enabled")
 
         .andExpression("salePrice < regularPrice").as("hasDiscount")
         .andExpression("quantityInStock > 0").as("inStock")
@@ -186,7 +194,7 @@ A primeira metade repassa campo cru. A segunda **calcula** — e é onde o pipel
 | `hasDiscount` | não existia na listagem | `$project`, no banco |
 | `inStock` | não existia na listagem | `$project`, no banco |
 | `shortDescription` | `Converter` com `abbreviate(15)` | `$substrCP(0, 50)`, no banco |
-| `category` | `@DocumentReference` + ModelMapper (N+1) | `$lookup`, no banco |
+| `category` | `@DocumentReference` + ModelMapper (N+1) | repasse puro — vem embutido no documento (era `$lookup` até a Fase 12) |
 | `slug` | `Converter` com `Slugfier` | **continua em Java**, num getter do DTO |
 
 O `slug` ficou de fora de propósito: remover acento no Mongo exigiria uma cadeia de `$replaceAll` caractere por caractere, enquanto o `Normalizer.Form.NFD` do Java resolve numa linha. Nem tudo que **pode** ir para o banco **deve**.
@@ -207,13 +215,13 @@ O `ProductDetailOutput` continua no caminho antigo (`findById` → `find()` → 
 
 ## ⚠️ A ordem dos estágios é o custo
 
-Esta é a parte que separa "funciona" de "funciona bem". O pipeline atual está assim:
+Esta é a parte que separa "funciona" de "funciona bem". Até a Fase 12 o pipeline estava assim:
 
 ```
 $match → $lookup → $unwind → $sort → $project → $skip → $limit
 ```
 
-O `$lookup` e o `$project` rodam **antes** da paginação. Ou seja: com 5.000 produtos casando o filtro, o Mongo faz o join e a projeção nos **5.000**, e só então joga 4.985 fora.
+O `$lookup` e o `$project` rodavam **antes** da paginação. Ou seja: com 5.000 produtos casando o filtro, o Mongo fazia o join e a projeção nos **5.000**, e só então jogava 4.985 fora.
 
 A ordem que faz o mesmo trabalho por muito menos:
 
@@ -221,9 +229,11 @@ A ordem que faz o mesmo trabalho por muito menos:
 $match → $sort → $skip → $limit → $lookup → $project
 ```
 
-Paginar primeiro, juntar depois: o `$lookup` roda sobre **15** documentos.
+Paginar primeiro, juntar depois: o `$lookup` rodaria sobre **15** documentos.
 
-E o motivo é o mesmo do doc de índices ([`indices-mongo.md`](./indices-mongo.md)): **só o primeiro `$match` aproveita índice da coleção**. Depois do primeiro estágio, o Mongo está trabalhando sobre um resultado intermediário em memória, onde não há índice nenhum. Um `$sort` colocado depois de um `$lookup` perdeu a chance de ser servido pelo índice composto que existe justamente para ele.
+> 🔧 **Metade do problema evaporou na Fase 12.** Sem `$lookup` nem `$unwind`, o pipeline atual é `$match → ($addFields) → $sort → $project → $skip → $limit`. O join caro deixou de existir — mas o `$project` **continua rodando antes do `$skip`/`$limit`**, e recortar campo de 5.000 documentos para devolver 15 continua sendo desperdício. A pendência encolheu; não desapareceu.
+
+E o motivo é o mesmo do doc de índices ([`indices-mongo.md`](./indices-mongo.md)): **só o primeiro `$match` aproveita índice da coleção**. Depois do primeiro estágio, o Mongo está trabalhando sobre um resultado intermediário em memória, onde não há índice nenhum. Um `$sort` colocado depois de um `$lookup` perdia a chance de ser servido pelo índice composto que existe justamente para ele — hoje o `$sort` vem logo após o `$match`, e essa parte melhorou de graça.
 
 Regra prática para montar pipeline:
 
@@ -249,7 +259,7 @@ long totalElements = mongoOperations.count(query, Product.class);
 
 Mesma lógica do jeito 1: contar **antes** de paginar (ver [`consultas-mongo-criteria.md`](./consultas-mongo-criteria.md#paginação-contar-antes-de-paginar)). É mais barato que um `$count` no fim de um pipeline com join e projeção.
 
-> ⚠️ **Os dois podem discordar.** O `count` conta o que casa com o `$match`; o pipeline aplica também o `$unwind`, que é inner join. Um produto de categoria órfã **entra na contagem e some do resultado** — a API responderia `totalElements: 100` com 99 itens espalhados nas páginas.
+> ✅ **Os dois já puderam discordar — não podem mais.** Enquanto havia `$unwind` (inner join), um produto de categoria órfã **entrava na contagem e sumia do resultado**, e a API respondia `totalElements: 100` com 99 itens espalhados nas páginas. Sem join, `count` e pipeline enxergam exatamente o mesmo conjunto. Ver [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).
 
 ---
 
@@ -271,6 +281,12 @@ Mesma lógica do jeito 1: contar **antes** de paginar (ver [`consultas-mongo-cri
 
 O erro comum é escolher aggregation por parecer mais sofisticado. Ele custa mais para escrever, mais para ler, e tira do banco boa parte da liberdade de otimizar.
 
+> #### Nota de estudo: a listagem hoje é um caso de fronteira
+>
+> Vale olhar o próprio projeto com esse critério. A listagem de produtos escolheu aggregation por causa do `$lookup` — e o `$lookup` foi embora na Fase 12. Do que sobrou, só o `$project` justifica o pipeline: `hasDiscount`, `inStock` e `shortDescription` calculados no servidor, em vez de trazer o documento inteiro para recortar em Java.
+>
+> É justificativa real, mas mais magra que a original, e conviria reavaliá-la se um dia o `$project` encolher. O ponto de estudo é esse: **a razão que justifica uma ferramenta pode desaparecer sem que ninguém repare**, porque o código continua funcionando. Vale reler a decisão quando a premissa muda, não só quando o código quebra.
+
 ---
 
 ## Armadilhas
@@ -279,7 +295,7 @@ O erro comum é escolher aggregation por parecer mais sofisticado. Ele custa mai
 2. **`@TextScore` não funciona em pipeline.** Sem `$addFields` com `$meta`, o campo não existe.
 3. **`Sort.by("score")` é ascendente.** No pipeline `score` é campo comum; o `DESC` é obrigatório.
 4. **`$substr` corta por byte.** Com acento, a consulta **erra**. Use `$substrCP`.
-5. **`$unwind` sem flag é inner join.** Documento sem correspondência some sem aviso.
+5. **`$unwind` sem flag é inner join.** Documento sem correspondência some sem aviso. *(Não morde mais aqui — não há `$unwind` no pipeline atual.)*
 6. **`AggregationExpressionCriteria` não é `Criteria`.** Não entra em `andOperator`.
 7. **`new Criteria()` vazio casa tudo.** Por isso o `Optional`.
 8. **Só o primeiro `$match` usa índice.** Tudo depois trabalha em memória.
@@ -289,12 +305,12 @@ O erro comum é escolher aggregation por parecer mais sofisticado. Ele custa mai
 
 ## Pendências registradas
 
-- [ ] **A ordem dos estágios paga caro.** `$lookup` e `$project` antes de `$skip`/`$limit` fazem join e projeção sobre todo o conjunto filtrado. Ver a seção acima; a correção é reordenar para `$match` → `$sort` → `$skip` → `$limit` → `$lookup` → `$project`.
-- [ ] **`count` e pipeline podem divergir** por causa do `$unwind` como inner join. Ou o `unwind` vira `preserveNullAndEmptyArrays`, ou o total passa a sair de um `$count` no próprio pipeline.
+- [ ] **O `$project` ainda roda antes do `$skip`/`$limit`**, recortando campo sobre todo o conjunto filtrado para devolver 15. A correção é reordenar para `$match` → `$sort` → `$skip` → `$limit` → `$project`. *(Encolheu na Fase 12: a metade cara desta pendência, o `$lookup`, deixou de existir.)*
+- [x] ~~**`count` e pipeline podem divergir** por causa do `$unwind` como inner join.~~ Resolvido pela desnormalização — sem join, não há divergência possível. Ver [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).
 - [ ] **`_id` e `score` aparecem duplicados** no `$project`. Inofensivo (o segundo sobrescreve o primeiro), mas é sinal de código montado por tentativa.
 - [ ] **O resumo mudou de formato sem decisão explícita.** Era `abbreviate(15)`, que corta em 15 e acrescenta `"..."`; virou `$substrCP(0, 50)`, que corta em 50 caracteres crus, sem reticências e podendo cortar palavra ao meio.
 - [ ] **`fromStringToShortStringConverter` ficou sem uso** no `ModelMapperConfig` — foi mantido como referência do que o mapper fazia, mas é código morto.
-- [~] **O pipeline em si continua sem teste.** O `ProductQueryServiceImplTest` cobre a montagem do `$match` — mocka o `MongoOperations`, faz o `count` devolver zero e inspeciona o `query.getQueryObject()` capturado, o que valida o `$expr` sem precisar de Mongo de pé. Justamente por sair cedo no caminho de zero resultados, ele **não** exercita `$lookup`, `$unwind`, `$project` nem a ordem dos estágios. Isso pede um teste de integração com `@DataMongoTest`.
+- [~] **O pipeline em si continua sem teste.** O `ProductQueryServiceImplTest` cobre a montagem do `$match` — mocka o `MongoOperations`, faz o `count` devolver zero e inspeciona o `query.getQueryObject()` capturado, o que valida o `$expr` sem precisar de Mongo de pé. Justamente por sair cedo no caminho de zero resultados, ele **não** exercita `$project` nem a ordem dos estágios. Isso pede um teste de integração com `@DataMongoTest`.
 
 ---
 
@@ -302,7 +318,7 @@ O erro comum é escolher aggregation por parecer mais sofisticado. Ele custa mai
 
 - [ ] Sei explicar o que é um estágio e por que a saída de um alimenta o próximo
 - [ ] Sei o equivalente SQL de `$match`, `$lookup`, `$project`, `$skip`/`$limit`
-- [ ] Sei por que o `$lookup` acaba com o N+1 do `@DocumentReference`
+- [ ] Sei por que o `$lookup` acabava com o N+1 do `@DocumentReference` — e por que ele foi aposentado sem ter dado errado
 - [ ] Sei que `$unwind` sem flag é inner join
 - [ ] Sei por que `$text` tem que ser o primeiro estágio
 - [ ] Sei por que `@TextScore` não funciona aqui e o que o substitui
@@ -323,3 +339,4 @@ O erro comum é escolher aggregation por parecer mais sofisticado. Ele custa mai
 - [`consultas-mongo-criteria.md`](./consultas-mongo-criteria.md) — o jeito 1, com `Query` + `Criteria`
 - [`indices-mongo.md`](./indices-mongo.md) — por que só o primeiro `$match` usa índice
 - [`product-catalog-mongo.md`](./product-catalog-mongo.md) — o `@DocumentReference` que gerava o N+1
+- [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md) — a mudança de modelagem que aposentou o `$lookup`

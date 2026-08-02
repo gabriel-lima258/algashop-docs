@@ -54,7 +54,7 @@ Comparando com o mundo JPA do `ordering`:
 | `@Entity` + `@Table(name = "orders")` | `@Document(collection = "products")` |
 | `@Id` de `jakarta.persistence` | `@Id` de `org.springframework.data.annotation` |
 | `@Column(...)` | `@Field(name = "...")` (só quando o nome difere) |
-| `@ManyToOne` / `@OneToMany` | `@DocumentReference` ou documento embutido |
+| `@ManyToOne` / `@OneToMany` | `@DocumentReference` ou documento embutido — [aqui, embutido](./desnormalizacao-mongo.md) |
 | Schema criado por migration (Flyway) | Sem schema — a coleção nasce no primeiro insert |
 
 **Atenção ao import do `@Id`.** É `org.springframework.data.annotation.Id`, não `jakarta.persistence.Id`. Como o projeto costuma ter as duas dependências no classpath em outros serviços, a IDE sugere a errada com facilidade — e o sintoma é o Mongo gerar um `ObjectId` próprio e ignorar o seu campo.
@@ -65,15 +65,17 @@ O `@EqualsAndHashCode(onlyExplicitlyIncluded = true)` com `@EqualsAndHashCode.In
 
 ## 2. Relacionamento por referência — `@DocumentReference`
 
+> 🔧 **Esta decisão foi REVERTIDA na Fase 12.** A escolha registrada abaixo — referenciar — deixou de valer: hoje a categoria é **embutida** (a Opção A), e o `@DocumentReference` está comentado no código. A seção continua aqui porque o raciocínio dela é o mais instrutivo do documento: a regra prática do fim estava certa, e mesmo assim a conclusão saiu errada. A comparação completa dos dois jeitos, e o que a inversão custou, estão em [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).
+
 A decisão de modelagem mais importante do documento. Em Mongo existem dois caminhos para representar "produto pertence a uma categoria":
 
-**Opção A — embutir (embedded):**
+**Opção A — embutir (embedded) — *a escolhida a partir da Fase 12*:**
 ```json
-{ "_id": "...", "name": "Notebook", "category": { "name": "Eletrônicos", "enabled": true } }
+{ "_id": "...", "name": "Notebook", "category": { "_id": "0197f2c1-...", "name": "Eletrônicos", "enabled": true } }
 ```
-Leitura em uma única ida ao banco. Mas renomear uma categoria exige atualizar **todos** os produtos dela.
+Leitura em uma única ida ao banco. Mas renomear uma categoria exige atualizar **todos** os produtos dela — o que hoje é feito por evento, de forma assíncrona (ver [`eventos-e-listeners.md`](../01-arquitetura-design/eventos-e-listeners.md)).
 
-**Opção B — referenciar (a escolhida):**
+**Opção B — referenciar — *a escolhida originalmente, revertida depois*:**
 ```java
 // domain/product/Product.java
 @DocumentReference
@@ -90,11 +92,17 @@ O documento guarda só o id; o Spring Data resolve o objeto `Category` quando vo
 
 **O custo:** cada leitura de produto que toca `getCategory()` dispara uma consulta extra na coleção `categories`. Em uma listagem de 20 produtos isso vira 20 consultas — o clássico **N+1**.
 
-> ✅ **Resolvido na listagem.** Ela deixou de usar `find()` e passou a montar um aggregation pipeline com `$lookup`, que traz a categoria de todos os produtos da página numa ida só. Ver [`agregacoes-mongo.md`](./agregacoes-mongo.md#lookup--unwind-o-fim-do-n1).
+> ✅ **Resolvido em duas etapas.** Primeiro a listagem deixou de usar `find()` e passou a montar um aggregation pipeline com `$lookup`, trazendo a categoria de todos os produtos da página numa ida só — mas o N+1 continuava para quem carregasse `Product` pelo repositório e tocasse `getCategory()`.
 >
-> O N+1 continua existindo para quem carregar `Product` pelo repositório e tocar `getCategory()` — o que muda é que o caminho crítico não faz mais isso.
+> A Fase 12 acabou com ele de vez: **não há mais referência a resolver**, então nenhum caminho de leitura pode disparar consulta extra. Ver [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).
 
 > Regra prática: **embuta o que é lido junto e muda junto; referencie o que tem vida própria.**
+
+> #### Nota de estudo: a regra estava certa, a leitura dela é que estava apressada
+>
+> Repare que a Fase 12 **não** desmentiu a regra prática acima — ela apenas a aplicou melhor. O erro original foi deixar *"tem vida própria"* ganhar de *"é lido junto"*, quando os dois critérios respondem perguntas diferentes: um decide se a categoria é um **agregado**, o outro decide se uma **cópia** dela pode viver em outro documento. `Category` continua sendo um agregado; o que está embutido no produto não é a categoria, é uma fotografia dela.
+>
+> Vale guardar as duas versões, porque a inversão resume um erro que se repete: aplicar a regra certa na ordem errada, e só descobrir quando a conta de leitura chega.
 
 ---
 
@@ -224,7 +232,9 @@ Sem isso, a segunda escrita simplesmente sobrescreveria a primeira em silêncio 
 
 ## 7. Regra de negócio dentro do agregado
 
-O `Product` **não** é um saco de getters e setters. Ele protege os próprios invariantes:
+O `Product` **não** é um saco de getters e setters. Ele protege os próprios invariantes.
+
+Na primeira versão, cada setter público guardava a regra sozinho:
 
 ```java
 public void setRegularPrice(BigDecimal regularPrice) {
@@ -245,10 +255,42 @@ public void setRegularPrice(BigDecimal regularPrice) {
 }
 ```
 
+Na Fase 12 os setters de preço ficaram **privados** e a operação de negócio virou `changePrice(regularPrice, salePrice)`, que recebe os dois de uma vez. A regra saiu dos setters e passou a viver em um método só:
+
+```java
+// domain/product/Product.java
+private void validatePrices(BigDecimal regularPrice, BigDecimal salePrice) {
+    if (salePrice.compareTo(regularPrice) > 0) {
+        throw new DomainException("Sale price cannot be greater than regular price");
+    }
+}
+```
+
+chamado pelo construtor e pelo `changePrice`, sempre sobre o **par completo**.
+
+> #### Nota de estudo: mover um invariante é onde ele se perde
+>
+> A mudança acima nasceu quebrada, e vale muito mais documentada do que escondida. Ao passar a regra dos setters para o `changePrice`, ela ficou escrita assim:
+>
+> ```java
+> if (regularPrice.compareTo(this.salePrice) < 0) {   // this.salePrice é o ANTIGO
+> ```
+>
+> O parâmetro novo sendo comparado com o campo **antigo**. Isso errava nas duas direções:
+>
+> | Chamada, partindo de `(3000, 2789)` | O que acontecia | O que deveria |
+> |---|---|---|
+> | `changePrice(2500, 2400)` | rejeitava — `2500 < 2789` | aceitar: `2400 ≤ 2500` |
+> | `changePrice(3000, 5000)` | **aceitava** — `3000 < 2789` é falso | rejeitar: `5000 > 3000` |
+>
+> O segundo caso gravava promoção mais cara que o preço cheio, com `discountPercentageRounded` em **-67%**. E o caminho de criação ficou sem validação nenhuma, porque as guardas tinham saído dos setters e só o `changePrice` recebeu uma.
+>
+> A lição não é "revise melhor": é que **um setter enxerga metade da regra**. Enquanto o invariante depende de dois campos, guardá-lo em qualquer método que receba só um é acidente esperando acontecer — e o teste que pega isso é o de agregado puro, sem Spring (`src/test/.../domain/product/ProductTest.java`).
+
 Três lições concretas:
 
 1. **`compareTo`, nunca `equals`, com `BigDecimal`.** `new BigDecimal("10.0").equals(new BigDecimal("10.00"))` é `false` — o `equals` compara também a escala. `compareTo` compara valor.
-2. **O invariante mora no agregado.** "Preço promocional não pode ser maior que o preço normal" é verificado no setter. Não existe caminho — nem application service, nem controller — que consiga criar um produto violando isso.
+2. **O invariante mora no agregado — e num ponto só.** "Preço promocional não pode ser maior que o preço normal" é verificado em `validatePrices`. Não existe caminho — nem application service, nem controller — que consiga criar ou alterar um produto violando isso.
 3. **Campo derivado é calculado, não recebido.** `discountPercentageRounded` não tem setter público:
 
 ```java
@@ -286,7 +328,7 @@ public interface ProductQueryService {
 
 | | `ProductSummaryOutput` (lista) | `ProductDetailOutput` (detalhe) |
 |---|---|---|
-| Descrição | `shortDescription` (abreviada em 15 chars) | `description` completa |
+| Descrição | `shortDescription` (50 caracteres, via `$substrCP` no banco) | `description` completa |
 | Uso | grid/listagem de produtos | página do produto |
 
 Por que separar: uma listagem de 20 produtos não deve trafegar 20 descrições completas. O payload cresce sem que ninguém leia aquilo na tela. É a mesma ideia de projeção já usada no `ordering` — ver [`paginacao.md`](./paginacao.md) e [`cqrs.md`](../01-arquitetura-design/cqrs.md).
@@ -410,9 +452,9 @@ Numa etapa posterior o `Product` ganhou índices, e eles são declarados **na pr
 ```java
 @Document(collection = "products")
 @CompoundIndex(name = "pidx_product_by_category_enabledTrue_addedAt",
-        def = "{'categoryId': 1, 'enabled': 1, 'addedAt': -1}",
+        def = "{'category.id': 1, 'enabled': 1, 'addedAt': -1}",
         partialFilter = "{'enabled': true}")
-public class Product {
+public class Product extends AbstractAggregateRoot<Product> {
 
     @TextIndexed(weight = 1)
     private String name;
@@ -456,7 +498,7 @@ Coisas que ficaram conscientemente pela metade nesta etapa:
 - [ ] Não há testes cobrindo o agregado `Product` (nem os invariantes de preço, nem a persistência). O `ProductRepositoryIT` que surgiu depois exercita só a projeção do repositório, e sem asserção — apenas loga o resultado.
 - [ ] `auditorProvider()` devolve `UUID.randomUUID()` até existir autenticação.
 - [ ] `quantityInStock` tem `setQuantityInStock` **privado** e nenhum método público de entrada/saída de estoque. Produto criado **pela API** fica travado em `0`, e `isInStock()` sempre retorna `false`. Os documentos carregados pelo [`DataLoader`](../04-infraestrutura/carga-de-dados-mongo.md) escapam disso porque são inseridos crus, direto na coleção — por isso o filtro `?inStock=true` funciona nos dados de teste e não funcionaria num produto cadastrado pelo endpoint.
-- [x] ~~N+1 latente no `@DocumentReference`.~~ Resolvido na listagem pelo `$lookup` do aggregation — ver [`agregacoes-mongo.md`](./agregacoes-mongo.md). Continua valendo para quem carregar `Product` pelo repositório e tocar `getCategory()`.
+- [x] ~~N+1 latente no `@DocumentReference`.~~ Resolvido de vez: a listagem primeiro trocou o N+1 pelo `$lookup` (ver [`agregacoes-mongo.md`](./agregacoes-mongo.md)), e a Fase 12 removeu a referência inteira — não há mais o que resolver em nenhum caminho de leitura. Ver [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).
 - [ ] `brand` tem `@Indexed` e nenhuma consulta filtra por marca — índice que só custa escrita. Detalhe em [`indices-mongo.md`](./indices-mongo.md).
 
 ---
@@ -483,5 +525,7 @@ Coisas que ficaram conscientemente pela metade nesta etapa:
 - [RFC 9562 — UUID v7](https://www.rfc-editor.org/rfc/rfc9562)
 - [`consultas-mongo-criteria.md`](./consultas-mongo-criteria.md) — como consultar esse modelo
 - [`agregacoes-mongo.md`](./agregacoes-mongo.md) — o pipeline que resolveu o N+1 do `@DocumentReference`
+- [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md) — a reversão da decisão da seção 2, e o que ela custou
+- [`eventos-e-listeners.md`](../01-arquitetura-design/eventos-e-listeners.md) — os eventos de domínio do `Product` e a propagação da cópia da categoria
 - [`indices-mongo.md`](./indices-mongo.md) — os índices declarados neste agregado
 - [`carga-de-dados-mongo.md`](../04-infraestrutura/carga-de-dados-mongo.md) — como popular a coleção
