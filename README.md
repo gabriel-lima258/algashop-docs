@@ -12,7 +12,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 |---|---|---|---|
 | **`algashop-ordering`** | 8081 | PostgreSQL | DDD tático, arquitetura hexagonal, CQRS, domain events |
 | **`algashop-billing`** | 8082 | PostgreSQL | Integração com gateway de pagamento, contract tests, Testcontainers |
-| **`product-catalog`** | 8083 | MongoDB | Modelagem documental e desnormalização, eventos de domínio, Spring Boot 4, REST Docs |
+| **`product-catalog`** | 8083 | MongoDB | Modelagem documental e desnormalização, eventos de domínio, concorrência atômica, Spring Boot 4, REST Docs |
 | **`billing-scheduler`** | — | — | Jobs agendados, cancelamento de faturas expiradas |
 
 > Como os serviços se conectam, quem chama quem e por quê: **[Arquitetura](./00-visao-geral/arquitetura.md)**
@@ -26,7 +26,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 12 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 13 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -47,6 +47,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Índices no MongoDB](./02-persistencia/indices-mongo.md) | `explain`, regra ESR, índice composto, índice parcial, índice de texto e ordenação por relevância |
 | [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) | O outro jeito de consultar: `$lookup` contra o N+1, campos derivados no `$project` e por que a ordem dos estágios é o custo |
 | [Normalizado × desnormalizado](./02-persistencia/desnormalizacao-mongo.md) | Quando duplicar dado é decisão e não bagunça — a cópia embutida, o que ela cobra e a pegadinha do `category._id` |
+| [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) | Lost update, atualização condicional com `findAndModify`, `$inc` como delta e por que teste sequencial não prova nada |
 | [Paginação](./02-persistencia/paginacao.md) | Paginação com Criteria API, projeção com `builder.construct()` e consulta de contagem |
 | [Flyway](./02-persistencia/flyway.md) | Versionar o schema como código; por que `ddl-auto` não serve para produção |
 
@@ -86,7 +87,7 @@ Para revisar o conteúdo do zero, nesta ordem:
 [Ports & Adapters](./01-arquitetura-design/ports-hexagonal.md) → [Specification](./01-arquitetura-design/specification.md) → [CQS e CQRS](./01-arquitetura-design/cqrs.md)
 
 **3. Como os dados são guardados e consultados**
-[Flyway](./02-persistencia/flyway.md) → [Paginação](./02-persistencia/paginacao.md) → [NoSQL conceitos](./02-persistencia/nosql-conceitos.md) → [MongoDB na prática](./02-persistencia/product-catalog-mongo.md) → [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) → [Índices](./02-persistencia/indices-mongo.md) → [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) → [Normalizado × desnormalizado](./02-persistencia/desnormalizacao-mongo.md) → [Eventos e listeners](./01-arquitetura-design/eventos-e-listeners.md)
+[Flyway](./02-persistencia/flyway.md) → [Paginação](./02-persistencia/paginacao.md) → [NoSQL conceitos](./02-persistencia/nosql-conceitos.md) → [MongoDB na prática](./02-persistencia/product-catalog-mongo.md) → [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) → [Índices](./02-persistencia/indices-mongo.md) → [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) → [Normalizado × desnormalizado](./02-persistencia/desnormalizacao-mongo.md) → [Eventos e listeners](./01-arquitetura-design/eventos-e-listeners.md) → [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md)
 
 **4. Como os serviços conversam e falham**
 [Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md)
@@ -110,6 +111,8 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Resolver N+1 no Mongo | [Normalizado × desnormalizado](./02-persistencia/desnormalizacao-mongo.md), [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) |
 | Manter uma cópia desnormalizada em dia | [Eventos e listeners](./01-arquitetura-design/eventos-e-listeners.md) |
 | Publicar um evento de domínio a partir do agregado | [Eventos e listeners](./01-arquitetura-design/eventos-e-listeners.md) |
+| Evitar que duas escritas concorrentes se atropelem | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) |
+| Dar baixa em estoque sem vender o que não tem | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) |
 | Calcular campo derivado no banco em vez de em Java | [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) |
 | Saber se minha consulta usa índice | [Índices no MongoDB](./02-persistencia/indices-mongo.md) |
 | Por que meu índice existe e não foi usado | [Índices no MongoDB](./02-persistencia/indices-mongo.md) |

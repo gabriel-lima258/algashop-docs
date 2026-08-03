@@ -193,7 +193,7 @@ A segunda lição é sobre controle: no `find()` o Mongo decide como executar; n
 
 ---
 
-## Fase 12 — Desnormalização e eventos (ago/2026) ← etapa atual
+## Fase 12 — Desnormalização e eventos (ago/2026)
 
 A Fase 11 tinha resolvido o N+1 com um `$lookup`. Esta fase pergunta por que ele existia: se **toda** listagem precisa do nome da categoria, esse nome deveria estar no documento. A categoria virou uma cópia embutida, o join sumiu — e apareceu um problema novo, que é o assunto da segunda metade da fase: **cópia envelhece**.
 
@@ -219,6 +219,32 @@ E a terceira, involuntária: mover um invariante é onde ele se perde. A regra d
 
 ---
 
+## Fase 13 — Concorrência e atomicidade no estoque (ago/2026) ← etapa atual
+
+Uma pendência aberta desde a Fase 8 dizia que `quantityInStock` não tinha operação pública de entrada ou saída — produto criado pela API ficava travado em `0`. Resolvê-la parecia trivial: um `withdraw()` no agregado. A fase escolheu o caminho difícil, e é aí que está a lição: **carregar o agregado para alterar estoque é exatamente o que não se pode fazer**, porque entre ler, conferir e gravar cabe a requisição inteira de outra pessoa.
+
+| Marco | O que se aprende |
+|---|---|
+| `findAndModify` com a regra no filtro | Atualização condicional atômica — o banco previne o conflito em vez de detectá-lo |
+| `$inc` em vez de `set` | Delta compõe, valor absoluto sobrescreve: dois `$inc` concorrentes somam, dois `set` se atropelam |
+| `gte(quantity)` no filtro | `$inc` sozinho não impede estoque negativo; quem impede é a condição de casamento |
+| `returnNew(false)` | "Atômico" não basta se o valor anterior vier de outra ida ao banco |
+| `Result` com antes **e** depois | Evento nasce de **transição**, não de estado — daí `isOutOfStock` exigir `previous != 0` |
+| `StockService` como serviço de domínio | Comportamento de negócio que não cabe em um agregado, porque não passa por ele |
+| `DomainEventPublisher` | Sem `save()`, o `AbstractAggregateRoot` não publica nada — o evento precisa de outra porta |
+| `@Version` incrementado à mão | O Spring Data faria sozinho; a linha explícita é o que o faz pular a dele |
+| Banco `product_catalog_test` | `auto-drop: true` apaga coleções — a suíte não pode apontar para o banco de desenvolvimento |
+
+**A lição da fase:** as três estratégias de concorrência resolvem problemas diferentes, e a escolha não é sobre qual é mais forte. Lock otimista **detecta** o conflito e devolve a decisão para alguém; atualização condicional **previne**, e não há decisão a devolver. Saque de estoque é "subtraia 2", não "passe a valer 40" — e operações que compõem não precisam de ninguém para arbitrar. Escolher a estratégia é escolher quem fica com o problema.
+
+A segunda lição é sobre o que um teste prova. Os testes sequenciais do ajuste passavam em qualquer implementação, inclusive na errada; só um teste com threads de verdade — soltas juntas por um `CountDownLatch` — distingue "a conta fecha" de "a conta fecha sob concorrência". **Teste que não expõe a condição de corrida não testa a garantia que interessa.**
+
+E a terceira, que voltou pela segunda vez seguida: mover uma responsabilidade é onde ela se perde. A leitura do valor anterior estava *fora* da operação atômica, e o resultado era evento duplicado — a operação estava certa, o entorno dela não.
+
+> [`concorrencia-e-atomicidade.md`](../02-persistencia/concorrencia-e-atomicidade.md) · [`eventos-e-listeners.md`](../01-arquitetura-design/eventos-e-listeners.md)
+
+---
+
 ## Onde o projeto está
 
 **Consolidado:**
@@ -233,10 +259,12 @@ E a terceira, involuntária: mover um invariante é onde ele se perde. A regra d
 - Aggregation pipeline na listagem — campos derivados no servidor
 - Categoria desnormalizada no produto, com propagação por evento assíncrono
 - Eventos de domínio no `Product` via `AbstractAggregateRoot`
+- Estoque com atualização condicional atômica, coberto por teste de concorrência
 
 **Próximos passos naturais:**
 - Mensageria real entre serviços (hoje os eventos são internos ao processo, aqui e no `ordering`)
-- Retentativa, dead letter e reconciliação para a propagação da categoria
+- Retentativa, dead letter e reconciliação para a propagação da categoria e para os eventos de estoque
+- Contratos Spring Cloud Contract para `/restock` e `/withdraw`
 - Reordenar os estágios do pipeline: paginar **antes** do `$project`
 - Índices na coleção `categories` (hoje a busca por nome é varredura com regex)
 - Devolver `brand` à busca por termo (`@TextIndexed`) e tirar o índice que ficou órfão
@@ -249,7 +277,7 @@ E a terceira, involuntária: mover um invariante é onde ele se perde. A regra d
 
 ## O padrão que se repete
 
-Olhando as doze fases em conjunto, a ordem foi sempre a mesma:
+Olhando as treze fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

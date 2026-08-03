@@ -208,6 +208,8 @@ paths:
           description: OK
         "404":
           $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
   /api/v1/products/{productId}/withdraw:
     post:
       tags:
@@ -222,6 +224,8 @@ paths:
           description: OK
         "404":
           $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
 
   /api/v1/categories:
     get:
@@ -472,6 +476,15 @@ components:
             $ref: "#/components/schemas/ProblemDetail"
     BadRequest:
       description: Invalid request
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    UnprocessableEntity:
+      description: >-
+        The request is well-formed but violates a business rule.
+        For stock operations, this is returned when the available quantity
+        is lower than the requested one.
       content:
         application/problem+json:
           schema:

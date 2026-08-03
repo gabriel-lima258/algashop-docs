@@ -244,11 +244,46 @@ Trocando de perfil:
 ./gradlew bootRun --args='--spring.profiles.active=docker'
 ```
 
-Rodando os testes (exigem o Postgres de pé — usam os bancos `*_test`):
+Rodando os testes:
 
 ```bash
-./gradlew test
+./gradlew test              # unitários e fatias de contexto — não precisam de infra
+./gradlew contractTest      # testes gerados a partir dos contratos
+./gradlew integrationTest   # classes com sufixo *IT — PRECISAM do banco de pé
 ```
+
+As três suítes são separadas de propósito: falha barata aparece antes de gastar tempo com a que precisa de infraestrutura.
+
+### Bancos de teste
+
+Cada serviço roda sua suíte contra um banco **próprio**, nunca contra o de desenvolvimento:
+
+| Serviço | Desenvolvimento | Testes |
+|---|---|---|
+| `ordering`, `billing` | `ordering`, `billing` | `*_test` (PostgreSQL) |
+| `product-catalog` | `product_catalog` | `product_catalog_test` (MongoDB) |
+
+No `product-catalog` isso é feito por um grupo de perfis em `src/test/resources`:
+
+```yaml
+# src/test/resources/application.yml — sombreia o de src/main durante os testes
+spring:
+  profiles:
+    active: test
+    group:
+      test:
+        - base        # o que vale em qualquer ambiente: índices, carga, nome da app
+        - test-env    # só a URI, apontando para product_catalog_test
+```
+
+> ⚠️ **Não é preciosismo.** A suíte roda com `algashop.data-load.auto-drop: true`, que **apaga as coleções** antes de recarregar a massa. Apontar os testes para `product_catalog` destruiria os dados de desenvolvimento a cada `./gradlew integrationTest`. Para conferir que a separação está funcionando, compare os dois bancos depois de rodar a suíte:
+>
+> ```javascript
+> use product_catalog
+> db.products.countDocuments({})      // intacto
+> use product_catalog_test
+> db.products.countDocuments({})      // recarregado pela suíte
+> ```
 
 ---
 
@@ -269,6 +304,8 @@ Rodando os testes (exigem o Postgres de pé — usam os bancos `*_test`):
 | Busca por termo não acha por marca | `$text` cobre só `name` e `description` | Comportamento atual, registrado como pendência em [`indices-mongo.md`](../02-persistencia/indices-mongo.md) |
 | Listagem lenta mesmo com índice criado | Índice parcial ignorado sem `enabled: true` | Rode `.explain("executionStats")` e compare `IXSCAN`/`COLLSCAN` — [detalhes](../02-persistencia/indices-mongo.md) |
 | `./gradlew test` falha por falta de banco | Teste `*IT` rodando na suíte errada | `*IT` sai em `integrationTest`; confira o sufixo da classe |
+| Dados de desenvolvimento sumiram depois de rodar testes | A suíte apontando para o banco errado | Confira `src/test/resources/application-test-env.yaml` — tem que ser `product_catalog_test` |
+| Teste de concorrência passa sempre, mesmo com código errado | As threads não chegaram a se sobrepor | O `CountDownLatch` é o que solta todas juntas — sem ele o teste não prova nada |
 | Container reiniciando sem parar | Falta memória | Os limites do compose são apertados (256M–512M) |
 
 ---

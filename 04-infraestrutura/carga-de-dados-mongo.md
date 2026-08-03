@@ -308,6 +308,7 @@ A última linha é a consulta que o filtro `hasDiscount` gera — ver [`consulta
 - [x] ~~**Nenhum índice é criado.**~~ Resolvido por fora daqui: os índices são declarados por anotação no agregado e criados pelo `auto-index-creation` — ver [`../02-persistencia/indices-mongo.md`](../02-persistencia/indices-mongo.md). Foi por causa disso que o `drop()` virou `deleteMany({})`.
 - [ ] **A massa grande não está referenciada.** `products-large.json` está no repositório, mas a entrada no `sources` está comentada — quem clonar e rodar o `explain` vai medir sobre dezenas de documentos e não ver diferença.
 - [ ] **Sem teste.** `parseJsonToDocuments` é uma função pura sobre `String` — daria um teste unitário barato, sem Mongo de pé.
+- [x] ~~**O `auto-drop` é perigoso demais para conviver com a suíte de testes.**~~ Resolvido na Fase 13: os testes rodam contra `product_catalog_test`, um banco separado, definido em `src/test/resources/application-test-env.yaml`. O `DataLoader` passou a ser usado **dentro** dos testes (`dataLoader.run(...)` no `@BeforeEach`), onde apagar e recarregar deixa de ser risco e vira exatamente o que se quer — cada cenário começando do mesmo estado. Ver [`ambiente-local.md`](./ambiente-local.md).
 
 ---
 

@@ -94,10 +94,10 @@ Produtos e categorias. O único serviço em MongoDB — e a razão é o padrão 
 |---|---|
 | **Porta** | 8083 |
 | **Banco** | MongoDB (`product_catalog`) |
-| **Destaques** | Modelagem documental e desnormalização, eventos de domínio, Spring Boot 4, REST Docs, contract-driven development |
+| **Destaques** | Modelagem documental e desnormalização, eventos de domínio, controle de concorrência atômico, Spring Boot 4, REST Docs, contract-driven development |
 | **Pacote** | `com.algaworks.algashop.product.catalog` |
 
-> [`product-catalog-mongo.md`](../02-persistencia/product-catalog-mongo.md) · [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md) · [`eventos-e-listeners.md`](../01-arquitetura-design/eventos-e-listeners.md) · [`tratamento-erros-api.md`](../03-testes-integracao/tratamento-erros-api.md)
+> [`product-catalog-mongo.md`](../02-persistencia/product-catalog-mongo.md) · [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md) · [`concorrencia-e-atomicidade.md`](../02-persistencia/concorrencia-e-atomicidade.md) · [`eventos-e-listeners.md`](../01-arquitetura-design/eventos-e-listeners.md) · [`tratamento-erros-api.md`](../03-testes-integracao/tratamento-erros-api.md)
 
 ### `billing-scheduler` — jobs agendados
 
@@ -146,7 +146,7 @@ Mensageria (RabbitMQ/Kafka) entre serviços. Os eventos hoje são **internos ao 
 | Onde | Como |
 |---|---|
 | `ordering` | domain events publicados e consumidos via `ApplicationEventPublisher` do Spring |
-| `product-catalog` | o mesmo mecanismo, embrulhado numa porta de saída (`ApplicationMessagePublisher`), com o consumidor da categoria rodando `@Async` |
+| `product-catalog` | o mesmo mecanismo, por **duas** portas de saída — `ApplicationMessagePublisher` (aplicação) e `DomainEventPublisher` (domínio) —, com o consumidor da categoria rodando `@Async` |
 
 O `product-catalog` é o caso mais interessante dos dois, porque lá o evento não é acessório: ele é o que mantém a cópia desnormalizada da categoria em dia. Um evento perdido não é só uma notificação a menos — é dado desatualizado que ninguém corrige. Ver [`eventos-e-listeners.md`](../01-arquitetura-design/eventos-e-listeners.md).
 

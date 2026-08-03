@@ -228,6 +228,8 @@ O campo é gerenciado pelo Spring Data. Na prática:
 
 Sem isso, a segunda escrita simplesmente sobrescreveria a primeira em silêncio (*lost update*). Chama-se "otimista" porque não trava nada: assume que conflito é raro e só detecta quando acontece.
 
+> 🔧 **Não é a única estratégia — e na Fase 13 o estoque escolheu outra.** Lock otimista **detecta** o conflito e faz alguém repetir a operação; para saque de estoque não há decisão a repetir, então o ajuste passou a usar **atualização condicional atômica** (`findAndModify` com a regra dentro do filtro), sem carregar o agregado. O `@Version` descrito acima continua valendo para `update`, `enable` e `disable`, que passam pelo repositório. A comparação das três estratégias está em [`concorrencia-e-atomicidade.md`](./concorrencia-e-atomicidade.md).
+
 ---
 
 ## 7. Regra de negócio dentro do agregado
@@ -497,7 +499,7 @@ Coisas que ficaram conscientemente pela metade nesta etapa:
 - ✅ ~~`ProductQueryServiceImpl.filter()` ainda retorna `null`~~ — **implementado** com `Query` + `Criteria` e paginação manual; ver [`consultas-mongo-criteria.md`](./consultas-mongo-criteria.md).
 - [ ] Não há testes cobrindo o agregado `Product` (nem os invariantes de preço, nem a persistência). O `ProductRepositoryIT` que surgiu depois exercita só a projeção do repositório, e sem asserção — apenas loga o resultado.
 - [ ] `auditorProvider()` devolve `UUID.randomUUID()` até existir autenticação.
-- [ ] `quantityInStock` tem `setQuantityInStock` **privado** e nenhum método público de entrada/saída de estoque. Produto criado **pela API** fica travado em `0`, e `isInStock()` sempre retorna `false`. Os documentos carregados pelo [`DataLoader`](../04-infraestrutura/carga-de-dados-mongo.md) escapam disso porque são inseridos crus, direto na coleção — por isso o filtro `?inStock=true` funciona nos dados de teste e não funcionaria num produto cadastrado pelo endpoint.
+- [x] ~~`quantityInStock` tem `setQuantityInStock` **privado** e nenhum método público de entrada/saída de estoque. Produto criado **pela API** fica travado em `0`, e `isInStock()` sempre retorna `false`.~~ Resolvido na Fase 13 com `POST /{productId}/restock` e `/withdraw` — e resolvido **sem** setter público: o ajuste acontece direto no banco, de forma atômica, sem carregar o agregado. Ver [`concorrencia-e-atomicidade.md`](./concorrencia-e-atomicidade.md). O detalhe histórico continua valendo: os documentos do [`DataLoader`](../04-infraestrutura/carga-de-dados-mongo.md) são inseridos crus, e era por isso que `?inStock=true` funcionava na massa de teste e não num produto cadastrado pelo endpoint.
 - [x] ~~N+1 latente no `@DocumentReference`.~~ Resolvido de vez: a listagem primeiro trocou o N+1 pelo `$lookup` (ver [`agregacoes-mongo.md`](./agregacoes-mongo.md)), e a Fase 12 removeu a referência inteira — não há mais o que resolver em nenhum caminho de leitura. Ver [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).
 - [ ] `brand` tem `@Indexed` e nenhuma consulta filtra por marca — índice que só custa escrita. Detalhe em [`indices-mongo.md`](./indices-mongo.md).
 
@@ -526,6 +528,7 @@ Coisas que ficaram conscientemente pela metade nesta etapa:
 - [`consultas-mongo-criteria.md`](./consultas-mongo-criteria.md) — como consultar esse modelo
 - [`agregacoes-mongo.md`](./agregacoes-mongo.md) — o pipeline que resolveu o N+1 do `@DocumentReference`
 - [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md) — a reversão da decisão da seção 2, e o que ela custou
+- [`concorrencia-e-atomicidade.md`](./concorrencia-e-atomicidade.md) — a outra estratégia de concorrência, e a escrita que não passa pelo repositório
 - [`eventos-e-listeners.md`](../01-arquitetura-design/eventos-e-listeners.md) — os eventos de domínio do `Product` e a propagação da cópia da categoria
 - [`indices-mongo.md`](./indices-mongo.md) — os índices declarados neste agregado
 - [`carga-de-dados-mongo.md`](../04-infraestrutura/carga-de-dados-mongo.md) — como popular a coleção

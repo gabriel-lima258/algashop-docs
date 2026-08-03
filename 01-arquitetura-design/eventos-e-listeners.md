@@ -1,7 +1,7 @@
 # Eventos, Listeners e Consistência Eventual
 
 > Como o `product-catalog` passou a anunciar fatos em vez de só gravar estado — e como a cópia da categoria dentro de cada produto se mantém em dia sem travar quem chamou a API.
-> Código real: `domain/product/Product.java`, `application/ApplicationMessagePublisher.java`, `infrastructure/listener/`, `infrastructure/persistence/category/ProductCategoryUpdater.java`.
+> Código real: `domain/product/Product.java`, `domain/product/StockService.java`, `application/ApplicationMessagePublisher.java`, `domain/DomainEventPublisher.java`, `infrastructure/listener/`, `infrastructure/persistence/category/ProductCategoryUpdater.java`.
 
 > Este documento é a continuação de [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md). Lá se decidiu **copiar** o nome da categoria para dentro do produto; aqui se paga a conta dessa decisão.
 
@@ -29,20 +29,28 @@ Alguém precisa reescrever esses doze produtos. As opções, e por que a escolhi
 
 ---
 
-## Dois mecanismos diferentes no mesmo serviço
+## Três mecanismos diferentes no mesmo serviço
 
-O serviço tem **duas** famílias de evento, e elas não são a mesma coisa com nomes diferentes:
+O serviço tem **três** famílias de evento, e elas não são a mesma coisa com nomes diferentes:
 
-| | Eventos de domínio (`Product`) | Evento de aplicação (`CategoryUpdatedEvent`) |
-|---|---|---|
-| Quem registra | o próprio agregado | o application service, explicitamente |
-| Quando é publicado | no `productRepository.save()` | na chamada a `send()` |
-| Quem publica | `EventPublishingRepositoryProxyPostProcessor` (Spring Data) | `ApplicationMessagePublisher` (porta de saída) |
-| Onde mora a classe | `domain/product/` | `application/category/event/` |
-| Listener | `ProductEventListener`, **síncrono** | `CategoryEventListener`, **`@Async`** |
-| Se o listener falhar | a exceção sobe para quem salvou | vira log, e a cópia fica velha |
+| | Eventos do agregado (`Product`) | Evento de aplicação (`CategoryUpdatedEvent`) | Eventos de serviço de domínio (estoque) |
+|---|---|---|---|
+| Quem registra | o próprio agregado | o application service, explicitamente | o `StockService`, explicitamente |
+| Quando é publicado | no `productRepository.save()` | na chamada a `send()` | na chamada a `publish()` |
+| Quem publica | `EventPublishingRepositoryProxyPostProcessor` (Spring Data) | `ApplicationMessagePublisher` | `DomainEventPublisher` |
+| Onde mora a classe | `domain/product/` | `application/category/event/` | `domain/product/` |
+| Listener | `ProductEventListener`, **síncrono** | `CategoryEventListener`, **`@Async`** | `ProductEventListener`, **síncrono** |
+| Se o listener falhar | a exceção sobe para quem salvou | vira log, e a cópia fica velha | a exceção sobe para quem ajustou o estoque |
 
-A distinção que importa: **um evento de domínio é um fato que o agregado descobriu sozinho** ("este produto entrou em promoção"). Um evento de aplicação é uma **notificação que alguém decidiu emitir** porque outro pedaço do sistema tem interesse. Fazer a `Category` emitir `CategoryUpdatedEvent` seria dar a ela conhecimento de um problema que é do vizinho — quem tem cópia de categoria é o produto, e a categoria não precisa saber disso.
+A distinção entre os dois primeiros: **um evento de domínio é um fato que o agregado descobriu sozinho** ("este produto entrou em promoção"). Um evento de aplicação é uma **notificação que alguém decidiu emitir** porque outro pedaço do sistema tem interesse. Fazer a `Category` emitir `CategoryUpdatedEvent` seria dar a ela conhecimento de um problema que é do vizinho — quem tem cópia de categoria é o produto, e a categoria não precisa saber disso.
+
+O terceiro é de domínio como o primeiro — `ProductSoldOutEvent` é um fato sobre o produto — mas **não pode usar o mesmo caminho**, e a razão é puramente técnica: o ajuste de estoque não carrega nem salva o agregado, então não existe `save()` para disparar a publicação. Ver [`concorrencia-e-atomicidade.md`](../02-persistencia/concorrencia-e-atomicidade.md).
+
+> #### Nota de estudo: duas portas quase idênticas, de propósito
+>
+> `ApplicationMessagePublisher` (na `application`) e `DomainEventPublisher` (no `domain`) têm a mesma assinatura e são implementadas pelo **mesmo** `ApplicationEventPublisher` do Spring, em dois `@Configuration` separados. Parece duplicação, e em parte é — mas o que as separa é **camada**, não comportamento: o domínio não pode depender de uma interface declarada na `application`, ou a seta de dependência aponta para o lado errado.
+>
+> O custo está registrado: duas interfaces gêmeas e dois beans para manter, e um leitor desavisado escolhe a errada com facilidade. A alternativa — uma porta só, no domínio — economizaria código ao preço de fazer o `CategoryUpdatedEvent`, que não é evento de domínio, viajar por uma porta do domínio. Foi essa a troca escolhida; vale conhecer as duas pontas.
 
 ---
 
@@ -173,6 +181,49 @@ O evento leva `name` e `enabled`, não só o id, para o consumidor não precisar
 
 ---
 
+## Evento de domínio sem `save()` — a terceira porta
+
+Os cinco eventos acima dependem de uma condição que parecia universal: **alguém chama `productRepository.save()`**. A Fase 13 quebrou essa premissa.
+
+O ajuste de estoque não carrega o agregado. Ele altera o documento direto, com uma operação condicional atômica, porque é a única forma de dois saques simultâneos não se atropelarem — ver [`concorrencia-e-atomicidade.md`](../02-persistencia/concorrencia-e-atomicidade.md). Sem `save()`, o `EventPublishingRepositoryProxyPostProcessor` nunca é acionado, e um `registerEvent()` no `Product` ficaria enfileirado para sempre.
+
+Daí a porta:
+
+```java
+// domain/DomainEventPublisher.java
+public interface DomainEventPublisher {
+    void publish(Object event);
+}
+```
+
+```java
+// domain/product/StockService.java — serviço de domínio
+if (result.isOutOfStock()) {
+    domainEventPublisher.publish(
+            ProductSoldOutEvent.builder().productId(product.getId()).build());
+}
+```
+
+`ProductSoldOutEvent` e `ProductRestockedEvent` são eventos de domínio como os outros cinco — o que muda é **quem os publica**, e a razão é técnica, não conceitual.
+
+### Transição, não estado
+
+Os dois só saem quando a quantidade **cruza** o zero:
+
+| Antes | Depois | Evento |
+|---|---|---|
+| 50 | 40 | — |
+| 10 | 0 | `ProductSoldOutEvent` |
+| 0 | 0 | — |
+| 0 | 10 | `ProductRestockedEvent` |
+| 40 | 50 | — |
+
+É o mesmo cuidado da guarda `wasEnabled != null` do `setEnabled`: sem a condição sobre o valor anterior, "está zerado" seria verdade a cada operação e viraria uma enxurrada de eventos idênticos. É o que separa um **fato** de uma **leitura de estado**.
+
+> ⚠️ **Este é o único dos três mecanismos que publica sem rede nenhuma.** Não há `save()` transacionando junto, não há `@Async` isolando a falha: o `publish()` acontece logo depois de o estoque já ter mudado no banco. Se a publicação falhar, o estoque baixou e ninguém foi avisado — e não há nada que repare isso depois.
+
+---
+
 ## O consumidor assíncrono
 
 ```java
@@ -263,7 +314,7 @@ ProductPlacedOnSaleEvent: ProductPlacedOnSaleEvent(productId=..., ...)
 
 ## Armadilhas
 
-1. **`registerEvent` não publica.** Só o `save()` por repositório publica. Escrita por `MongoTemplate`/`MongoOperations` é invisível para o mecanismo.
+1. **`registerEvent` não publica.** Só o `save()` por repositório publica. Escrita por `MongoTemplate`/`MongoOperations` é invisível para o mecanismo — foi exatamente por isso que o estoque precisou da terceira porta.
 2. **`@Async` sem `@EnableAsync` é ignorado em silêncio.** Roda síncrono, sem erro nenhum.
 3. **Exceção em `@Async` some.** Sem `AsyncUncaughtExceptionHandler`, um método `void` assíncrono engole a falha.
 4. **`@EventListener` não é transacional.** Se um dia houver transação, o listener rodará dentro dela e um rollback publicaria fato que não aconteceu — aí o certo passa a ser `@TransactionalEventListener(phase = AFTER_COMMIT)`.
@@ -281,6 +332,8 @@ ProductPlacedOnSaleEvent: ProductPlacedOnSaleEvent(productId=..., ...)
 - [ ] **A propagação escapa do `@Version`.** Escrita por `MongoOperations` não incrementa a versão do produto.
 - [ ] **`updateMulti` não usa índice.** Ver [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md).
 - [ ] **Os eventos de domínio não têm consumidor de verdade.** `ProductEventListener` só registra em log — o que é proposital nesta etapa, para tornar visível *quando* cada evento sai.
+- [ ] **Duas portas gêmeas de publicação.** `ApplicationMessagePublisher` e `DomainEventPublisher` têm a mesma assinatura e o mesmo bean por trás; a separação é de camada, e o custo é escolher a errada sem perceber.
+- [ ] **Os eventos de estoque publicam sem rede nenhuma.** Sem transação e sem `@Async`: falha na publicação significa estoque alterado e ninguém avisado, sem reparo posterior.
 - [ ] **Mensageria entre serviços continua não existindo.** Os eventos são internos ao processo, aqui e no `ordering`. Ver [`arquitetura.md`](../00-visao-geral/arquitetura.md).
 
 ---
@@ -297,6 +350,8 @@ ProductPlacedOnSaleEvent: ProductPlacedOnSaleEvent(productId=..., ...)
 - [ ] Sei o que o `@Async` compra e o que ele cobra
 - [ ] Sei apontar, na lista, tudo que falta para isso virar mensageria de verdade
 - [ ] Consigo provocar a janela de inconsistência e observá-la fechando
+- [ ] Sei por que os eventos de estoque não podem usar o `AbstractAggregateRoot`
+- [ ] Sei por que existem duas portas de publicação, e o que se ganharia e se perderia unificando
 
 ---
 
@@ -308,5 +363,6 @@ ProductPlacedOnSaleEvent: ProductPlacedOnSaleEvent(productId=..., ...)
 - [Martin Fowler — Domain Event](https://martinfowler.com/eaaDev/DomainEvent.html)
 - [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md) — a decisão de modelagem que criou a necessidade destes eventos
 - [`ports-hexagonal.md`](./ports-hexagonal.md) — a porta de saída que a `ApplicationMessagePublisher` implementa
+- [`concorrencia-e-atomicidade.md`](../02-persistencia/concorrencia-e-atomicidade.md) — a escrita que não passa pelo repositório, e por que ela exigiu uma terceira porta
 - [`nosql-conceitos.md`](../02-persistencia/nosql-conceitos.md) — BASE, CAP e a consistência eventual em teoria
 - [`arquitetura.md`](../00-visao-geral/arquitetura.md) — a mensageria entre serviços que ainda não existe
