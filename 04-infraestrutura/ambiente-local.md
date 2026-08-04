@@ -86,7 +86,8 @@ Isso exige que as imagens já existam localmente (`algashop/ordering:dev` e `alg
 
 ```bash
 docker compose -f docker-compose.tools.yml ps         # o que está de pé
-docker compose -f docker-compose.tools.yml logs -f algashop-mongodb
+docker compose -f docker-compose.tools.yml logs algashop-mongodb-init   # o rs.initiate
+docker compose -f docker-compose.tools.yml logs -f algashop-mongodb-1
 docker compose -f docker-compose.tools.yml down       # parar (mantém os dados)
 docker compose -f docker-compose.tools.yml down -v    # parar E APAGAR os volumes
 ```
@@ -104,7 +105,9 @@ A tabela que evita 90% dos problemas de "não conecta":
 | `product-catalog` | **8083** | 8083 | MongoDB |
 | `billing-scheduler` | — | — | sem porta HTTP (só jobs) |
 | PostgreSQL | **5433** | 5432 | ⚠️ deslocada de propósito |
-| MongoDB | **27017** | 27017 | |
+| MongoDB nó 1 | **27017** | 27017 | primário — `priority: 2` |
+| MongoDB nó 2 | **27018** | 27017 | secundário — `priority: 0` |
+| MongoDB nó 3 | **27019** | 27017 | secundário — `priority: 0` |
 | WireMock | **8787** | 8080 | mock de APIs externas |
 | FastPay | **9995** | 9995 | gateway de pagamento simulado |
 
@@ -144,29 +147,52 @@ psql -h localhost -p 5433 -U postgres -d ordering
 
 ### MongoDB — `product-catalog`
 
+Desde a Fase 14 **não é uma instância só: são três nós formando o replica set `rs0`.** A razão é uma só, e não é disponibilidade — **transação no MongoDB não existe fora de um replica set**, e o `product-catalog` passou a precisar de uma. Ver [`transacoes-mongo.md`](../02-persistencia/transacoes-mongo.md).
+
 ```yaml
-algashop-mongodb:
+algashop-mongodb-1:                # e -2 na 27018, e -3 na 27019
   image: mongo:8
+  command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
   ports:
     - 27017:27017
-  environment:
-    MONGO_INITDB_ROOT_USERNAME: root
-    MONGO_INITDB_ROOT_PASSWORD: algashop
   healthcheck:
     test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+
+algashop-mongodb-init:             # efêmero: configura o conjunto e morre
+  image: mongo:8
+  depends_on:                      # os três precisam estar healthy antes
+    algashop-mongodb-1: { condition: service_healthy }
+  command: >
+    mongosh --host algashop-mongodb-1 --eval 'rs.initiate({...})' || true;
 ```
+
+O nó 1 tem `priority: 2` e os outros dois têm `priority: 0` — ou seja, **não há failover, de propósito**: o primário é sempre a `27017`. Num cluster de produção seria erro; aqui é o que torna o ambiente previsível.
+
+> ⚠️ **A autenticação foi removida junto com o nó único.** As variáveis `MONGO_INITDB_ROOT_*` saíram, e com elas o `-u root -p algashop` e o `?authSource=admin`. Comandos e URIs antigos com credenciais agora recebem `Authentication failed`.
+
+#### O arquivo `hosts` — passo obrigatório
+
+Os três nós se anunciam no replica set pelos nomes `algashop-mongodb-1/2/3`, que só existem dentro da rede do Docker. Como a aplicação roda **fora** dela, sua máquina precisa saber resolver esses nomes:
+
+```
+127.0.0.1       algashop-mongodb-1
+127.0.0.1       algashop-mongodb-2
+127.0.0.1       algashop-mongodb-3
+```
+
+O conteúdo está em `etc/hostnames/hostnames`, e o passo a passo por sistema operacional — inclusive o `sudo` do macOS/Linux e o Bloco de Notas como administrador no Windows — em `etc/hostnames/editando-arquivo-hosts.md`.
 
 Conectando:
 
 ```bash
-docker exec -it $(docker ps -qf name=mongodb) mongosh -u root -p algashop --authenticationDatabase admin
+docker exec -it algashop-meta-algashop-mongodb-1-1 mongosh
 
 use product_catalog
 db.products.find().pretty()
-db.categories.find().pretty()
-```
+db.stock_movements.find().pretty()
 
-O `--authenticationDatabase admin` (equivalente ao `?authSource=admin` da URI) é obrigatório: o usuário `root` foi criado no banco `admin`, mas os dados vivem em `product_catalog`. Sem isso, o Mongo procura as credenciais no banco errado e recusa a conexão.
+rs.status()      # confere o conjunto: quem é PRIMARY, quem é SECONDARY
+```
 
 Diferente do Postgres, **não há script de criação** — o Mongo cria o banco e as coleções no primeiro insert.
 
@@ -181,6 +207,8 @@ db.products.getIndexes()
 ```
 
 Devem aparecer cinco: o `_id_` automático, o `idx_product_by_brand`, o índice de texto e dois `pidx_*` compostos.
+
+A terceira coleção, `stock_movements`, aparece na primeira entrada ou saída de estoque — e é a única que **não** é gerenciada pelo `DataLoader`: ela não está nas `sources` do YAML, então o `auto-drop` não a alcança e os movimentos acumulam entre execuções.
 
 > Detalhes de modelagem: [`product-catalog-mongo.md`](../02-persistencia/product-catalog-mongo.md).
 > Como a carga funciona: [`carga-de-dados-mongo.md`](./carga-de-dados-mongo.md).
@@ -261,9 +289,23 @@ Cada serviço roda sua suíte contra um banco **próprio**, nunca contra o de de
 | Serviço | Desenvolvimento | Testes |
 |---|---|---|
 | `ordering`, `billing` | `ordering`, `billing` | `*_test` (PostgreSQL) |
-| `product-catalog` | `product_catalog` | `product_catalog_test` (MongoDB) |
+| `product-catalog` | `product_catalog` | um Mongo **descartável**, via Testcontainers |
 
-No `product-catalog` isso é feito por um grupo de perfis em `src/test/resources`:
+No `product-catalog` a separação mudou de natureza na Fase 14. Antes era um banco diferente no **mesmo** servidor; hoje os testes de integração sobem o **próprio** Mongo:
+
+```java
+// src/test/java/.../TestContainerMongoDBConfig.java
+private static final MongoDBContainer mongoDBContainer =
+        new MongoDBContainer("mongo:8").withReplicaSet();
+```
+
+O `withReplicaSet()` não é detalhe: sem ele o container roda como nó único e o teste de transação morre com `error 20 (IllegalOperation)`. No Testcontainers 1.x o replica set era o padrão; no 2.x virou opt-in.
+
+`@ServiceConnection` faz o Boot ler a porta sorteada do container e sobrescrever a URI configurada — nenhum `@DynamicPropertySource` é necessário. E `./gradlew integrationTest` deixou de exigir o `docker-compose` de pé; só o Docker.
+
+> ⚠️ **Todo `*IT` precisa importar essa configuração.** Foi exatamente assim que os três testes de concorrência ficaram órfãos: eles não a tinham, caíram na URI do `application-test-env.yml` e morreram no `Authentication failed` quando o cluster perdeu a autenticação.
+
+O grupo de perfis abaixo continua valendo — é ele que decide contra qual banco roda um teste **sem** Testcontainers:
 
 ```yaml
 # src/test/resources/application.yml — sombreia o de src/main durante os testes
@@ -276,13 +318,11 @@ spring:
         - test-env    # só a URI, apontando para product_catalog_test
 ```
 
-> ⚠️ **Não é preciosismo.** A suíte roda com `algashop.data-load.auto-drop: true`, que **apaga as coleções** antes de recarregar a massa. Apontar os testes para `product_catalog` destruiria os dados de desenvolvimento a cada `./gradlew integrationTest`. Para conferir que a separação está funcionando, compare os dois bancos depois de rodar a suíte:
+> ⚠️ **Não é preciosismo.** A suíte roda com `algashop.data-load.auto-drop: true`, que **apaga as coleções** antes de recarregar a massa. Apontar os testes para `product_catalog` destruiria os dados de desenvolvimento a cada `./gradlew integrationTest`. Com Testcontainers isso deixou de ser possível — mas a conferência continua valendo, e é barata:
 >
 > ```javascript
 > use product_catalog
-> db.products.countDocuments({})      // intacto
-> use product_catalog_test
-> db.products.countDocuments({})      // recarregado pela suíte
+> db.products.countDocuments({})      // tem que estar intacto depois da suíte
 > ```
 
 ---
@@ -294,7 +334,10 @@ spring:
 | `Connection refused` na 5432 | Apontando para a porta errada | O host expõe **5433**, não 5432 |
 | `database "ordering" does not exist` | O `init-user-db.sh` não rodou | `down -v` e suba de novo (apaga os dados) |
 | Mongo conecta mas a coleção está sempre vazia | Propriedade errada no Boot 4 | É `spring.mongodb.uri`, não `spring.data.mongodb.uri` |
-| `Authentication failed` no Mongo | Falta o `authSource` | Acrescente `?authSource=admin` na URI |
+| `Authentication failed` no Mongo | URI antiga com `root:algashop` | O cluster da Fase 14 sobe **sem auth** — tire as credenciais e o `authSource` da URI |
+| `Transaction numbers are only allowed on a replica set member` | Mongo rodando como nó único | Suba os três nós do compose; em teste, `withReplicaSet()` no `MongoDBContainer` |
+| Driver não resolve `algashop-mongodb-2` | Arquivo `hosts` não editado | Acrescente as três linhas de `etc/hostnames/hostnames` |
+| `rs.initiate` falha no segundo `up` | Conjunto já iniciado | Esperado e inofensivo — o `\|\| true` do serviço de init existe para isso |
 | Serviço não acha o `product-catalog` | Nada respondendo na URL configurada | Suba o WireMock ou o Stub Runner |
 | Pastas de submódulo vazias | Clone sem `--recurse-submodules` | `git submodule update --init --recursive` |
 | Alterações de um serviço somem | `git submodule update` sem `--remote` | Sempre cheque o status antes |
@@ -304,7 +347,7 @@ spring:
 | Busca por termo não acha por marca | `$text` cobre só `name` e `description` | Comportamento atual, registrado como pendência em [`indices-mongo.md`](../02-persistencia/indices-mongo.md) |
 | Listagem lenta mesmo com índice criado | Índice parcial ignorado sem `enabled: true` | Rode `.explain("executionStats")` e compare `IXSCAN`/`COLLSCAN` — [detalhes](../02-persistencia/indices-mongo.md) |
 | `./gradlew test` falha por falta de banco | Teste `*IT` rodando na suíte errada | `*IT` sai em `integrationTest`; confira o sufixo da classe |
-| Dados de desenvolvimento sumiram depois de rodar testes | A suíte apontando para o banco errado | Confira `src/test/resources/application-test-env.yaml` — tem que ser `product_catalog_test` |
+| Dados de desenvolvimento sumiram depois de rodar testes | Um `*IT` sem `TestContainerMongoDBConfig` | Todo `*IT` precisa importá-lo; sem isso ele cai na URI do `application-test-env.yml` |
 | Teste de concorrência passa sempre, mesmo com código errado | As threads não chegaram a se sobrepor | O `CountDownLatch` é o que solta todas juntas — sem ele o teste não prova nada |
 | Container reiniciando sem parar | Falta memória | Os limites do compose são apertados (256M–512M) |
 
@@ -326,6 +369,7 @@ Coisas quebradas ou inconsistentes na configuração, encontradas ao documentar:
 - [ ] `git submodule foreach 'git log -1 --oneline'` lista todos os cinco
 - [ ] `docker compose -f docker-compose.tools.yml ps` mostra tudo `healthy`
 - [ ] `psql -h localhost -p 5433 -U postgres -l` lista os cinco bancos
-- [ ] `mongosh` conecta com `--authenticationDatabase admin`
+- [ ] `rs.status()` mostra um `PRIMARY` e dois `SECONDARY` com `health: 1`
+- [ ] O arquivo `hosts` tem as três entradas `algashop-mongodb-*`
 - [ ] `curl localhost:8787/__admin/mappings` devolve os stubs do WireMock
 - [ ] `./gradlew test` passa em cada microsserviço

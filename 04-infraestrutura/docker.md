@@ -69,8 +69,36 @@ docker buildx build \
   .
 ```
 
+## Um container que só existe para configurar outros
+
+Nem todo serviço do compose precisa continuar de pé. O `algashop-mongodb-init` sobe, roda um comando e morre — é o que transforma três `mongod` isolados num replica set:
+
+```yaml
+algashop-mongodb-init:
+  image: mongo:8
+  depends_on:
+    algashop-mongodb-1: { condition: service_healthy }
+    algashop-mongodb-2: { condition: service_healthy }
+    algashop-mongodb-3: { condition: service_healthy }
+  entrypoint: ["bash", "-c"]
+  command: >
+    "mongosh --host algashop-mongodb-1 --eval 'rs.initiate({...})' || true;"
+  restart: "no"
+```
+
+Três detalhes carregam o peso todo:
+
+- **`condition: service_healthy`** — sem isso o `rs.initiate` correria contra um `mongod` ainda subindo. `depends_on` sozinho só espera o container **iniciar**, não ficar pronto; é o `healthcheck` que dá sentido à condição.
+- **`|| true`** — `rs.initiate` num conjunto já iniciado retorna erro. Sem isso, todo `docker compose up` a partir do segundo terminaria em falha.
+- **`restart: "no"`** — este container **deve** terminar. Sem a diretiva, a política padrão o reiniciaria em loop depois de cada saída bem-sucedida.
+
+O padrão vale além do Mongo: sempre que a configuração de um serviço precisa acontecer *de fora* dele, um container efêmero com `depends_on` + `healthcheck` é mais simples que um script de entrypoint em cada nó — e fica visível no `compose ps` como um passo que rodou.
+
+Detalhes de por que o replica set existe: [`../02-persistencia/transacoes-mongo.md`](../02-persistencia/transacoes-mongo.md).
+
 ## Dicas e problemas comuns
 
 - **Tag da base `eclipse-temurin`**: use `eclipse-temurin:21-jre` (com hífen). A variante `21.jre` não existe no Docker Hub.
 - **JAR não encontrado**: rode `./gradlew clean bootJar` antes do `docker build` — o Dockerfile espera o artefato em `build/libs/`.
 - **Limpar builders**: `docker buildx rm algashop-builder` remove o builder criado.
+- **Container de init aparece como `Exited (0)`**: é o esperado. `docker compose logs algashop-mongodb-init` mostra o resultado do `rs.initiate`.

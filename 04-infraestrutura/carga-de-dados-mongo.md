@@ -56,7 +56,7 @@ Por que não `@PostConstruct`: ele roda durante a inicialização do bean, quand
 O que carregar não está no código:
 
 ```yaml
-# application.yml
+# application-development-env.yml
 algashop:
   data-load:
     enabled: true
@@ -179,25 +179,27 @@ return mongoOperations.insert(mongoDocs, collectionName).size();
 
 Para estudar, é exatamente o que se quer: toda inicialização parte do mesmo estado conhecido, o teste manual de ontem não contamina o de hoje, e não existe erro de chave duplicada.
 
-O problema é onde essa configuração está hoje: no **`application.yml` default**, o que vale para todo perfil. Qualquer ambiente que suba com essa configuração perde `products` e `categories` no startup.
+Por muito tempo o problema foi **onde** essa configuração morava: no `application.yml` default, valendo para todo perfil. Qualquer ambiente que subisse com ela perdia `products` e `categories` no startup.
 
 Diferença de fundo em relação ao Flyway: migration é **incremental e idempotente** — roda uma vez e registra na `flyway_schema_history`. Esta carga é **destrutiva e repetida** — roda toda vez, do zero. São ferramentas para propósitos diferentes; o risco aparece quando a segunda é confundida com a primeira.
 
-Correção sugerida (registrada como pendência, não aplicada):
+> 🔧 **Resolvido na Fase 14**, e exatamente pela correção que estava sugerida aqui. A configuração foi quebrada em arquivos por perfil, e o default virou o valor **seguro**:
 
 ```yaml
-# application.yml — seguro por padrão
+# application-base.yml — vale em qualquer ambiente, e é seguro por padrão
 algashop:
   data-load:
     enabled: false
     auto-drop: false
 
-# application-development.yml — só aqui liga
+# application-development-env.yml — só aqui liga
 algashop:
   data-load:
     enabled: true
     auto-drop: true
 ```
+
+O ganho não é só o valor: é a direção do erro. Antes, esquecer de sobrescrever apagava dados; agora, esquecer apenas não carrega a massa. **Default seguro é o que decide o que acontece quando alguém esquece** — e alguém sempre esquece.
 
 ### `deleteMany({})` e não `drop()`
 
@@ -300,7 +302,8 @@ A última linha é a consulta que o filtro `hasDiscount` gera — ver [`consulta
 
 ## Pendências registradas
 
-- [ ] **`enabled: true` e `auto-drop: true` estão no `application.yml` default.** Deveriam viver num perfil de desenvolvimento; do jeito que está, qualquer ambiente apaga as coleções ao subir.
+- [x] ~~**`enabled: true` e `auto-drop: true` estão no `application.yml` default.**~~ Resolvido na Fase 14: o `application-base.yml` traz `false` nos dois, e só o `application-development-env.yml` liga a carga.
+- [ ] **`stock_movements` não é gerenciada pelo `DataLoader`.** A coleção não está nas `sources` do YAML, então o `auto-drop` não a alcança: os movimentos **acumulam** entre execuções, inclusive apontando para produtos que já foram apagados e recriados. Um teste que dependa de contagem precisa limpá-la à mão.
 - [ ] **Log do driver Mongo em `DEBUG` no perfil default** (`org.mongodb.driver.protocol.command`). Útil para ver a query gerada pelos `Criteria`, barulhento demais para ficar ligado sempre.
 - [ ] **A carga não valida o que insere.** Documentos vão crus para a coleção, sem passar pelas invariantes do agregado — um produto com `salePrice > regularPrice` no JSON entra sem reclamar, mesmo sendo estado que o `Product` proíbe.
 - [ ] **A cópia da categoria pode nascer dessincronizada.** Cada produto traz `category.name` escrito à mão no JSON, e nada confere contra `categories.json` — o `ProductCategory.of(...)` não participa da carga. Ver [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md).
@@ -308,7 +311,7 @@ A última linha é a consulta que o filtro `hasDiscount` gera — ver [`consulta
 - [x] ~~**Nenhum índice é criado.**~~ Resolvido por fora daqui: os índices são declarados por anotação no agregado e criados pelo `auto-index-creation` — ver [`../02-persistencia/indices-mongo.md`](../02-persistencia/indices-mongo.md). Foi por causa disso que o `drop()` virou `deleteMany({})`.
 - [ ] **A massa grande não está referenciada.** `products-large.json` está no repositório, mas a entrada no `sources` está comentada — quem clonar e rodar o `explain` vai medir sobre dezenas de documentos e não ver diferença.
 - [ ] **Sem teste.** `parseJsonToDocuments` é uma função pura sobre `String` — daria um teste unitário barato, sem Mongo de pé.
-- [x] ~~**O `auto-drop` é perigoso demais para conviver com a suíte de testes.**~~ Resolvido na Fase 13: os testes rodam contra `product_catalog_test`, um banco separado, definido em `src/test/resources/application-test-env.yaml`. O `DataLoader` passou a ser usado **dentro** dos testes (`dataLoader.run(...)` no `@BeforeEach`), onde apagar e recarregar deixa de ser risco e vira exatamente o que se quer — cada cenário começando do mesmo estado. Ver [`ambiente-local.md`](./ambiente-local.md).
+- [x] ~~**O `auto-drop` é perigoso demais para conviver com a suíte de testes.**~~ Resolvido na Fase 13 e reforçado na Fase 14. Primeiro veio um banco separado (`product_catalog_test`, em `src/test/resources/application-test-env.yml`); depois, um **Mongo separado**, subido pelos próprios testes via Testcontainers — o que tira a possibilidade de acidente em vez de apenas evitá-la. O `DataLoader` passou a ser usado **dentro** dos testes (`dataLoader.run(...)` no `@BeforeEach`), onde apagar e recarregar deixa de ser risco e vira exatamente o que se quer: cada cenário começando do mesmo estado. Ver [`ambiente-local.md`](./ambiente-local.md).
 
 ---
 
@@ -318,7 +321,8 @@ A última linha é a consulta que o filtro `hasDiscount` gera — ver [`consulta
 - [ ] Sei o que `@ConfigurationProperties` + `@Validated` garantem, e quando derrubam a aplicação
 - [ ] Sei por que os JSONs usam `$uuid`, `$date` e `$numberDecimal`
 - [ ] Sei por que o `_class` precisa estar escrito no arquivo
-- [ ] Entendo o risco do `auto-drop` no `application.yml` default
+- [ ] Entendo por que o default de `auto-drop` precisa ser o valor seguro, e não o conveniente
+- [ ] Sei que `stock_movements` fica de fora da carga, e o que isso implica em teste
 - [ ] Sei por que `deleteMany({})` e não `drop()` quando existem índices
 - [ ] Sei explicar por que este mecanismo **não** substitui o Flyway
 

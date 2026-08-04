@@ -61,6 +61,21 @@ Comparando com o mundo JPA do `ordering`:
 
 O `@EqualsAndHashCode(onlyExplicitlyIncluded = true)` com `@EqualsAndHashCode.Include` só no `id` mantém a regra de DDD: **duas entidades são iguais quando têm a mesma identidade**, não quando têm os mesmos atributos.
 
+> ⚠️ **`onlyExplicitlyIncluded` sem nenhum `@Include` é pior que não anotar nada.** Lombok gera um `equals` que compara zero campos: **todo objeto passa a ser igual a todo outro**, e um `Set` deles guarda exatamente um. Foi o que aconteceu com o `StockMovement` recém-criado, e não custou nada porque nada o colocava em coleção — até custar. O par de anotações só funciona junto.
+
+### Uma segunda coleção: `stock_movements`
+
+A Fase 14 acrescentou `StockMovement`, o extrato de entradas e saídas de estoque. Ele vive no mesmo pacote do `Product` e é deliberadamente o oposto dele:
+
+| | `Product` | `StockMovement` |
+|---|---|---|
+| `AbstractAggregateRoot` | sim — registra eventos | **não** |
+| `@Version` | sim — lock otimista | **não** |
+| Auditoria (`@CreatedDate`…) | sim | **não** — `occurredAt` é o dado, não metadado |
+| Alterado depois de criado | sim | **nunca** |
+
+Nada disso é economia de esforço. **Um registro imutável de fato consumado não tem invariante para proteger** — toda a maquinaria do agregado existe para defender regra sobre estado que muda, e aqui não há estado que mude. Copiar o desenho do `Product` por simetria seria cerimônia sem função. Ver [`transacoes-mongo.md`](./transacoes-mongo.md).
+
 ---
 
 ## 2. Relacionamento por referência — `@DocumentReference`
@@ -427,21 +442,19 @@ O truque é o `Normalizer.Form.NFD`: ele **decompõe** `"ç"` em `"c"` + cedilha
 ## 10. Configuração — atenção ao Spring Boot 4
 
 ```yaml
-# src/main/resources/application.yml
-server.port: 8083
-
+# src/main/resources/application-development-env.yml
 spring:
-  application:
-    name: product-catalog
   mongodb:
-    uri: mongodb://root:algashop@localhost:27017/product_catalog?authSource=admin
+    uri: mongodb://localhost:27017,localhost:27018,localhost:27019/product_catalog?replicaSet=rs0
 ```
+
+> 🔧 **Duas mudanças na Fase 14.** A configuração foi quebrada em três arquivos — `application.yml` (só os grupos de perfil), `application-base.yml` (o que vale em qualquer ambiente) e `application-development-env.yml` (só a URI e a carga). E a URI virou multi-seed com `replicaSet=rs0`, sem credenciais: o cluster local passou a rodar sem autenticação. O porquê dos três nós está em [`transacoes-mongo.md`](./transacoes-mongo.md).
 
 > ⚠️ **Armadilha de versão.** O projeto usa **Spring Boot 4.0**, onde a autoconfiguração do MongoDB saiu de `spring-boot-autoconfigure` para o módulo `spring-boot-mongodb` (pacote `org.springframework.boot.mongodb.autoconfigure`) e a propriedade passou de `spring.data.mongodb.uri` para **`spring.mongodb.uri`**.
 >
 > Praticamente todo tutorial e resposta de fórum ainda usa `spring.data.mongodb.*`. Se copiar de lá, a propriedade é silenciosamente ignorada e a aplicação conecta no default (`localhost:27017/test`, sem autenticação) — o sintoma é "conecta, mas a coleção está sempre vazia".
 
-O `authSource=admin` é necessário porque o usuário `root` foi criado no banco `admin` (ver `MONGO_INITDB_ROOT_USERNAME` no compose), enquanto os dados vivem em `product_catalog`. Sem isso, o Mongo procura as credenciais no banco errado e recusa a conexão.
+Enquanto o Mongo teve autenticação, a URI precisava de `?authSource=admin`: o usuário `root` era criado no banco `admin` (`MONGO_INITDB_ROOT_USERNAME` no compose), mas os dados vivem em `product_catalog` — sem isso o Mongo procura as credenciais no banco errado e recusa a conexão. Vale conhecer o sintoma, porque ele reaparece em qualquer ambiente com auth ligada.
 
 Para subir o Mongo local: [`../04-infraestrutura/ambiente-local.md`](../04-infraestrutura/ambiente-local.md).
 

@@ -300,7 +300,7 @@ done; wait
 # 10 respostas 204 e 10 respostas 422 — em qualquer ordem
 ```
 
-> **Os testes rodam em outro banco.** `src/test/resources/application-test-env.yaml` aponta para `product_catalog_test`, e não para `product_catalog`. Não é preciosismo: a suíte roda com `auto-drop: true`, que **apaga as coleções** antes de recarregar a massa. Ver [`carga-de-dados-mongo.md`](../04-infraestrutura/carga-de-dados-mongo.md).
+> **Os testes rodam em outro Mongo.** Desde a Fase 14 os `*IT` sobem o próprio container (`TestContainerMongoDBConfig`), então nem chegam perto do banco de desenvolvimento. Antes disso a separação vinha do `src/test/resources/application-test-env.yml`, apontando para `product_catalog_test` — e foi por ficar de fora dessa migração que este teste de concorrência parou de rodar sem que ninguém notasse. Ver [`transacoes-mongo.md`](./transacoes-mongo.md) e [`carga-de-dados-mongo.md`](../04-infraestrutura/carga-de-dados-mongo.md).
 
 ---
 
@@ -313,13 +313,13 @@ done; wait
 5. **`findAndModify` não passa pelo `AbstractAggregateRoot`.** Nenhum evento enfileirado no agregado é publicado por este caminho.
 6. **A auditoria não acompanha.** `updatedAt` é setado à mão; `@LastModifiedDate` e `lastModifiedByUserId` não participam de escrita por `MongoOperations`.
 7. **`null` do `findAndModify` tem dois significados.** "Não existe" e "não casou a condição" chegam iguais, e separá-los custa uma consulta a mais.
-8. **Não há transação.** O evento é publicado depois do ajuste; se algo falhar entre uma coisa e outra, o estoque mudou e ninguém foi avisado.
+8. ~~**Não há transação.**~~ **Resolvido na Fase 14.** O ajuste passou a rodar dentro de um `@Transactional`, junto com o registro em `stock_movements` — e os listeners, por serem síncronos, entraram no mesmo commit. Isso exigiu trocar o Mongo de nó único por um replica set: ver [`transacoes-mongo.md`](./transacoes-mongo.md).
 
 ---
 
 ## Pendências registradas
 
-- [ ] **Publicação de evento sem transação.** O ajuste grava e o evento sai em seguida, sem nada que garanta os dois. Um `ProductSoldOutEvent` perdido não é reparado por ninguém — a rede de segurança seria um outbox, mesma pendência da propagação de categoria.
+- [x] ~~**Publicação de evento sem transação.**~~ Resolvido na Fase 14: os listeners de estoque são síncronos, portanto rodam **dentro** da transação — uma exceção no listener desfaz o ajuste. O que continua aberto é o degrau seguinte: um evento que precise sair para **fora** do serviço ainda não tem outbox. Ver [`transacoes-mongo.md`](./transacoes-mongo.md).
 - [ ] **Transição é detectada por operação, não globalmente.** Duas instâncias da aplicação podem produzir transições concorrentes; o `Result` de cada uma é correto isoladamente, mas nada coordena os eventos entre processos.
 - [ ] **A auditoria fica desatualizada no ajuste de estoque.** `lastModifiedByUserId` não é tocado; `updatedAt` é escrito à mão em vez de vir do `@LastModifiedDate`.
 - [ ] **Sem contrato para `/restock` e `/withdraw`.** O OpenAPI declara os dois endpoints, mas não há contrato Spring Cloud Contract exercitando-os — diferente do resto da API.

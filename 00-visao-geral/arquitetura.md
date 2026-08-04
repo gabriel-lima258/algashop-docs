@@ -90,11 +90,13 @@ A infraestrutura de pagamento tem duas implementações — `payment/fastpay/` (
 
 Produtos e categorias. O único serviço em MongoDB — e a razão é o padrão de acesso: muito mais leitura que escrita, atributos que variam por tipo de produto, nenhuma transação com dinheiro.
 
+> 🔧 **A última parte dessa justificativa envelheceu, e de um jeito interessante.** "Nenhuma transação com dinheiro" continua verdade — o catálogo não cobra ninguém. Mas na Fase 14 o serviço passou a precisar de transação assim mesmo, para que o ajuste de estoque e o registro da movimentação caíssem juntos. A lição é que **"não preciso de transação" raramente é propriedade do domínio; costuma ser propriedade da modelagem atual dele.** Bastou uma segunda coleção para a premissa mudar. Ver [`transacoes-mongo.md`](../02-persistencia/transacoes-mongo.md).
+
 | | |
 |---|---|
 | **Porta** | 8083 |
-| **Banco** | MongoDB (`product_catalog`) |
-| **Destaques** | Modelagem documental e desnormalização, eventos de domínio, controle de concorrência atômico, Spring Boot 4, REST Docs, contract-driven development |
+| **Banco** | MongoDB — replica set `rs0` de três nós (`product_catalog`) |
+| **Destaques** | Modelagem documental e desnormalização, eventos de domínio, concorrência atômica, transação multi-coleção, Spring Boot 4, REST Docs, contract-driven development |
 | **Pacote** | `com.algaworks.algashop.product.catalog` |
 
 > [`product-catalog-mongo.md`](../02-persistencia/product-catalog-mongo.md) · [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md) · [`concorrencia-e-atomicidade.md`](../02-persistencia/concorrencia-e-atomicidade.md) · [`eventos-e-listeners.md`](../01-arquitetura-design/eventos-e-listeners.md) · [`tratamento-erros-api.md`](../03-testes-integracao/tratamento-erros-api.md)
@@ -113,7 +115,7 @@ O menor dos quatro. Cancela faturas expiradas periodicamente. Existe separado do
 |---|---|---|
 | `ordering` | PostgreSQL | Transações, invariantes fortes, dinheiro |
 | `billing` | PostgreSQL | Idem — fatura errada é problema sério |
-| `product-catalog` | MongoDB | Leitura dominante, schema flexível, volume |
+| `product-catalog` | MongoDB (replica set) | Leitura dominante, schema flexível, volume — e, desde a Fase 14, transação entre duas coleções |
 
 Isso só é possível porque **cada serviço é dono do seu banco**. Nenhum serviço lê a tabela do outro — a comunicação é sempre pela API. Se dois serviços compartilhassem banco, mudar um schema quebraria o outro, e a independência de deploy iria embora.
 
@@ -146,7 +148,7 @@ Mensageria (RabbitMQ/Kafka) entre serviços. Os eventos hoje são **internos ao 
 | Onde | Como |
 |---|---|
 | `ordering` | domain events publicados e consumidos via `ApplicationEventPublisher` do Spring |
-| `product-catalog` | o mesmo mecanismo, por **duas** portas de saída — `ApplicationMessagePublisher` (aplicação) e `DomainEventPublisher` (domínio) —, com o consumidor da categoria rodando `@Async` |
+| `product-catalog` | o mesmo mecanismo, por **duas** portas de saída — `ApplicationMessagePublisher` (aplicação) e `DomainEventPublisher` (domínio) —, com o consumidor da categoria rodando `@Async` e os de estoque **dentro da transação** |
 
 O `product-catalog` é o caso mais interessante dos dois, porque lá o evento não é acessório: ele é o que mantém a cópia desnormalizada da categoria em dia. Um evento perdido não é só uma notificação a menos — é dado desatualizado que ninguém corrige. Ver [`eventos-e-listeners.md`](../01-arquitetura-design/eventos-e-listeners.md).
 

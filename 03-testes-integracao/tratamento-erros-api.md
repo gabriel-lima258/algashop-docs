@@ -239,6 +239,7 @@ Por isso o `@ExceptionHandler(Exception.class)` não "engole" tudo: ele só entr
 ## Pendências registradas
 
 - [ ] **Bug de rota:** `ProductController` mapeia o método `disable()` em `@DeleteMapping("/{productId}/enable")` — o path diz `enable`, mas a ação desabilita. Provavelmente deveria ser `@DeleteMapping("/{productId}")` ou `.../disable`. Hoje convive com `@PutMapping("/{productId}/enable")`, que de fato habilita.
+  > Na Fase 14 os contratos que testavam essa rota foram renomeados de `deleteProductByIdV1` para `disableProductV1` e apontados para `.../{id}/enable`, o que fez as **duas falhas conhecidas do `contractTest` desaparecerem**. Vale ser explícito sobre o que aconteceu ali: o contrato foi alinhado à rota, e não a rota ao contrato. A suíte ficou verde e a incoerência de nome continua exatamente onde estava — só que agora com um teste confirmando-a.
 - [ ] `Collectors.toMap` sem *merge function* quebra com duas violações no mesmo campo (ver acima).
 - [ ] `ResourceNotFoundException` (application) e `DomainEntityNotFoundException` (domain) se sobrepõem — depois da migração para as exceções de domínio, a primeira ficou quase sem uso e poderia ser removida.
 - [ ] Não há contract test cobrindo os cenários 404 e 422 do `ProductController`.

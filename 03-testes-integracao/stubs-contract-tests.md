@@ -60,6 +60,27 @@ Contract.make {
 }
 ```
 
+> ⚠️ **`request` e `response` são irmãos — e errar isso não dá erro.** Dois contratos deste projeto (`findProductsV1` e `findCategoriesV1`) tinham o bloco `response` aninhado **dentro** do `request`:
+>
+> ```groovy
+> Contract.make {
+>     request {
+>         method GET()
+>         url("/api/v1/products")
+>         response {         // ← ERRADO: dentro do request
+>             status 200
+>             body([...])    // nunca foi verificado
+>         }
+>     }
+> }
+> ```
+>
+> O Groovy aceita, o build passa, o teste é gerado e fica **verde** — porque um contrato sem `response` não afirma nada sobre a resposta. Os dois endpoints de listagem ficaram assim desde que foram escritos: o teste existia, rodava, e não verificava coisa alguma.
+>
+> O sintoma de ter consertado é revelador: assim que o `response` saiu para fora, o `findProductsV1` **falhou** — o `ProductDetailOutputTestDataBuilder` devolvia `inStock: true` para um produto que o contrato descrevia com `inStock: false`. A divergência sempre esteve lá; só não havia quem a olhasse.
+>
+> **Um teste que nunca foi visto falhando não é um teste** — vale para contrato tanto quanto para rollback e concorrência.
+
 Este arquivo serve dois propósitos ao mesmo tempo:
 
 | Para quem | O que gera | Onde roda |

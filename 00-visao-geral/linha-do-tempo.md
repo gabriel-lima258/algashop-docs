@@ -219,7 +219,7 @@ E a terceira, involuntária: mover um invariante é onde ele se perde. A regra d
 
 ---
 
-## Fase 13 — Concorrência e atomicidade no estoque (ago/2026) ← etapa atual
+## Fase 13 — Concorrência e atomicidade no estoque (ago/2026)
 
 Uma pendência aberta desde a Fase 8 dizia que `quantityInStock` não tinha operação pública de entrada ou saída — produto criado pela API ficava travado em `0`. Resolvê-la parecia trivial: um `withdraw()` no agregado. A fase escolheu o caminho difícil, e é aí que está a lição: **carregar o agregado para alterar estoque é exatamente o que não se pode fazer**, porque entre ler, conferir e gravar cabe a requisição inteira de outra pessoa.
 
@@ -245,6 +245,33 @@ E a terceira, que voltou pela segunda vez seguida: mover uma responsabilidade é
 
 ---
 
+## Fase 14 — Replica set, transações e histórico (ago/2026) ← etapa atual
+
+A Fase 13 deixou o saldo correto e **sem memória**: o estoque dizia `40` e nada explicava como saiu de `50`. A resposta — uma coleção de movimentações — criou um problema que não existia: agora são **duas** escritas, em coleções diferentes, e o Mongo só garante atomicidade de uma por vez.
+
+| Marco | O que se aprende |
+|---|---|
+| Mongo de nó único → replica set `rs0` | Transação no Mongo **não existe** fora de um replica set — é o oplog que a sustenta |
+| `MongoTransactionManager` | Sem o bean, `@Transactional` não falha: ele não faz nada |
+| `@Transactional` só em `restock`/`withdraw` | Escrita de **um** documento já é atômica; transação ali seria custo sem benefício |
+| `findAndModify` entrando na transação sem mudar de código | Depender de `MongoOperations`, e não do driver, fez o comportamento novo chegar por baixo |
+| `StockMovement` sem `@Version` nem `AbstractAggregateRoot` | Registro imutável de fato consumado não tem invariante para proteger |
+| Listeners síncronos dentro do commit | O evento deixou de ser um "depois" — e um `@Async` o tiraria do rollback em silêncio |
+| `priority: 0` nos secundários | Failover desligado **de propósito**: aqui o cluster existe para habilitar transação, não para disponibilidade |
+| `withReplicaSet()` no Testcontainers | No 1.x era padrão; no 2.x virou opt-in, e sem ele o teste de transação nem sobe |
+| Três testes de concorrência mortos por uma mudança de compose | Infraestrutura que muda invalida configuração de teste **sem avisar** |
+| `response` aninhado dentro de `request` | Dois contratos verdes que não verificavam resposta nenhuma |
+
+**A lição da fase:** um requisito de domínio atravessou o sistema inteiro até a infraestrutura. "Quero saber como o estoque chegou aqui" virou uma coleção nova, virou transação, e transação virou três containers no `docker-compose`. Não foi escolha de tecnologia procurando problema — foi a única forma de atender o requisito, e o caminho inverso do que se costuma ver. **Às vezes a camada mais baixa muda porque a mais alta pediu.**
+
+A segunda lição é sobre falha silenciosa, e ela apareceu três vezes na mesma leva: `@Transactional` sem gerenciador não avisa; `@Async` saindo do rollback não avisa; `response` dentro de `request` não avisa. As três passam em revisão de código porque **o código está sintaticamente perfeito** — o que falta é uma garantia que nada declara e nada verifica. Só teste que já foi visto falhando distingue esses casos de código correto.
+
+E a terceira: as credenciais que sumiram do compose mataram os três testes de concorrência da fase anterior, e ninguém notou porque a suíte de integração não chegou a ser executada depois da mudança. **A rede de testes só protege se rodar.**
+
+> [`transacoes-mongo.md`](../02-persistencia/transacoes-mongo.md) · [`ambiente-local.md`](../04-infraestrutura/ambiente-local.md) · [`stubs-contract-tests.md`](../03-testes-integracao/stubs-contract-tests.md)
+
+---
+
 ## Onde o projeto está
 
 **Consolidado:**
@@ -260,11 +287,17 @@ E a terceira, que voltou pela segunda vez seguida: mover uma responsabilidade é
 - Categoria desnormalizada no produto, com propagação por evento assíncrono
 - Eventos de domínio no `Product` via `AbstractAggregateRoot`
 - Estoque com atualização condicional atômica, coberto por teste de concorrência
+- Replica set local e transação multi-coleção, coberta por teste de rollback
+- Histórico de movimentação de estoque (`stock_movements`)
+- Suíte de integração sobre Testcontainers — não depende mais de infraestrutura de pé
 
 **Próximos passos naturais:**
 - Mensageria real entre serviços (hoje os eventos são internos ao processo, aqui e no `ordering`)
 - Retentativa, dead letter e reconciliação para a propagação da categoria e para os eventos de estoque
+- Outbox para o evento que precisar sair do serviço — a transação resolve as escritas locais, não a integração
+- Endpoint de histórico de movimentação (a coleção existe e ninguém a lê)
 - Contratos Spring Cloud Contract para `/restock` e `/withdraw`
+- Perfis `docker-env` e `production-env`, hoje referenciados e inexistentes
 - Reordenar os estágios do pipeline: paginar **antes** do `$project`
 - Índices na coleção `categories` (hoje a busca por nome é varredura com regex)
 - Devolver `brand` à busca por termo (`@TextIndexed`) e tirar o índice que ficou órfão
@@ -277,10 +310,12 @@ E a terceira, que voltou pela segunda vez seguida: mover uma responsabilidade é
 
 ## O padrão que se repete
 
-Olhando as treze fases em conjunto, a ordem foi sempre a mesma:
+Olhando as quatorze fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração
 ```
 
 Nunca o contrário. A tecnologia entrou depois que o problema estava entendido, e cada refatoração grande só aconteceu com rede de testes por baixo.
+
+A Fase 14 é a primeira em que a seta chegou até o fim da linha: o requisito de domínio não parou na persistência, foi até o `docker-compose`. E foi lá que a segunda metade da frase cobrou o preço — a rede de testes existia, mas a mudança de infraestrutura a desligou sem avisar. **Ter teste e rodar teste são coisas diferentes**, e a diferença só aparece quando o chão se move.

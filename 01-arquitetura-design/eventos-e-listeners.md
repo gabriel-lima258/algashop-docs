@@ -39,8 +39,8 @@ O serviço tem **três** famílias de evento, e elas não são a mesma coisa com
 | Quando é publicado | no `productRepository.save()` | na chamada a `send()` | na chamada a `publish()` |
 | Quem publica | `EventPublishingRepositoryProxyPostProcessor` (Spring Data) | `ApplicationMessagePublisher` | `DomainEventPublisher` |
 | Onde mora a classe | `domain/product/` | `application/category/event/` | `domain/product/` |
-| Listener | `ProductEventListener`, **síncrono** | `CategoryEventListener`, **`@Async`** | `ProductEventListener`, **síncrono** |
-| Se o listener falhar | a exceção sobe para quem salvou | vira log, e a cópia fica velha | a exceção sobe para quem ajustou o estoque |
+| Listener | `ProductEventListener`, **síncrono** (exceto `PriceChanged`) | `CategoryEventListener`, **`@Async`** | `ProductEventListener`, **síncrono** |
+| Se o listener falhar | a exceção sobe para quem salvou | vira log, e a cópia fica velha | **o rollback desfaz o ajuste de estoque** |
 
 A distinção entre os dois primeiros: **um evento de domínio é um fato que o agregado descobriu sozinho** ("este produto entrou em promoção"). Um evento de aplicação é uma **notificação que alguém decidiu emitir** porque outro pedaço do sistema tem interesse. Fazer a `Category` emitir `CategoryUpdatedEvent` seria dar a ela conhecimento de um problema que é do vizinho — quem tem cópia de categoria é o produto, e a categoria não precisa saber disso.
 
@@ -220,7 +220,11 @@ Os dois só saem quando a quantidade **cruza** o zero:
 
 É o mesmo cuidado da guarda `wasEnabled != null` do `setEnabled`: sem a condição sobre o valor anterior, "está zerado" seria verdade a cada operação e viraria uma enxurrada de eventos idênticos. É o que separa um **fato** de uma **leitura de estado**.
 
-> ⚠️ **Este é o único dos três mecanismos que publica sem rede nenhuma.** Não há `save()` transacionando junto, não há `@Async` isolando a falha: o `publish()` acontece logo depois de o estoque já ter mudado no banco. Se a publicação falhar, o estoque baixou e ninguém foi avisado — e não há nada que repare isso depois.
+> 🔧 **Isto mudou na Fase 14.** Até então este era o único dos três mecanismos que publicava sem rede nenhuma: o `publish()` acontecia depois de o estoque já ter mudado, e uma falha ali deixava o estoque baixado sem que ninguém fosse avisado.
+>
+> Hoje `restock` e `withdraw` são `@Transactional`, e estes listeners são **síncronos** — então eles rodam **dentro** do commit. Uma exceção no listener desfaz o ajuste de estoque junto: o evento deixou de ser um "depois" e virou parte da mesma operação.
+>
+> A garantia, porém, está a **uma anotação** de distância do fim. Um `@Async` em qualquer um destes handlers o tiraria do rollback — outra thread significa fora da sessão transacional —, e ele passaria a ler o estado anterior ao commit. Nada quebraria, nada avisaria. Ver [`transacoes-mongo.md`](../02-persistencia/transacoes-mongo.md).
 
 ---
 
@@ -250,6 +254,12 @@ mongoOperations.updateMulti(query, update, Product.class);
 `updateMulti` pede ao Mongo que percorra e altere no servidor, em vez de carregar N produtos para a JVM, chamar `setCategory` em cada um e salvar de volta.
 
 O `@Async` depende de `@EnableAsync`, que mora em `infrastructure/async/AsyncConfig.java`. **Sem essa anotação o `@Async` é silenciosamente ignorado** — o método roda na mesma thread, sem nenhum erro, e a única pista seria a propagação acontecer síncrona.
+
+> #### Nota de estudo: `@Async` deixou de ser uma decisão local
+>
+> Na Fase 14 o handler de `ProductPriceChangedEvent` — no `ProductEventListener`, não neste — também ganhou `@Async`. Hoje é inofensivo: `changePrice` sai pelo `update()`, que não é transacional.
+>
+> Mas a régua mudou. Enquanto nenhum fluxo tinha transação, `@Async` era uma escolha sobre **latência**: quem espera o quê. Com `@Transactional` em cena, ele passou a ser também uma escolha sobre **atomicidade**, porque a thread nova não enxerga a sessão transacional. A mesma anotação, no mesmo arquivo, significa duas coisas diferentes dependendo de o método que publicou o evento ser transacional ou não — e nada no código diz qual dos dois casos você está lendo.
 
 ---
 
