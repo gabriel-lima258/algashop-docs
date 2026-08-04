@@ -96,9 +96,39 @@ O padrão vale além do Mongo: sempre que a configuração de um serviço precis
 
 Detalhes de por que o replica set existe: [`../02-persistencia/transacoes-mongo.md`](../02-persistencia/transacoes-mongo.md).
 
+## ⚠️ A imagem base e o toolchain andam juntos
+
+O `Dockerfile` e o `build.gradle` guardam a mesma informação em dois lugares, e nada os amarra:
+
+```dockerfile
+FROM eclipse-temurin:25-jre      # Dockerfile
+```
+```gradle
+languageVersion = JavaLanguageVersion.of(25)   // build.gradle
+```
+
+Quando o toolchain sobe e a imagem não, o build continua **verde** — o Gradle compila normalmente. A falha só aparece no `docker run`:
+
+```
+Exception in thread "main" java.lang.UnsupportedClassVersionError:
+  ... has been compiled by a more recent version of the Java Runtime
+  (class file version 69.0), this version of the Java Runtime only
+  recognizes class file versions up to 65.0
+```
+
+A tradução do número: **69 = Java 25**, **65 = Java 21**. É a soma `44 + versão`, e vale decorar — ela aparece em toda migração de JDK.
+
+Foi exatamente o que aconteceu aqui: os quatro serviços migraram para Java 25 e os quatro `Dockerfile` continuaram em `21-jre`. O build passava, a suíte passava, e nenhuma imagem subia.
+
+Para conferir contra o que foi realmente compilado, sem depender do que o `build.gradle` promete:
+
+```bash
+javap -v build/classes/java/main/.../Application.class | grep major
+```
+
 ## Dicas e problemas comuns
 
-- **Tag da base `eclipse-temurin`**: use `eclipse-temurin:21-jre` (com hífen). A variante `21.jre` não existe no Docker Hub.
+- **Tag da base `eclipse-temurin`**: use `eclipse-temurin:25-jre` (com hífen). A variante `25.jre` não existe no Docker Hub. E a versão precisa acompanhar o toolchain — ver a seção acima.
 - **JAR não encontrado**: rode `./gradlew clean bootJar` antes do `docker build` — o Dockerfile espera o artefato em `build/libs/`.
 - **Limpar builders**: `docker buildx rm algashop-builder` remove o builder criado.
 - **Container de init aparece como `Exited (0)`**: é o esperado. `docker compose logs algashop-mongodb-init` mostra o resultado do `rs.initiate`.

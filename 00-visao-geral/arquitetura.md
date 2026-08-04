@@ -117,7 +117,30 @@ O menor dos quatro. Cancela faturas expiradas periodicamente. Existe separado do
 | `billing` | PostgreSQL | Idem — fatura errada é problema sério |
 | `product-catalog` | MongoDB (replica set) | Leitura dominante, schema flexível, volume — e, desde a Fase 14, transação entre duas coleções |
 
-Isso só é possível porque **cada serviço é dono do seu banco**. Nenhum serviço lê a tabela do outro — a comunicação é sempre pela API. Se dois serviços compartilhassem banco, mudar um schema quebraria o outro, e a independência de deploy iria embora.
+Isso só é possível porque **cada serviço é dono do seu banco**. Se dois serviços compartilhassem banco, mudar um schema quebraria o outro, e a independência de deploy iria embora.
+
+> #### Nota de estudo: a regra tem uma exceção, e ela está no código
+>
+> Seria confortável escrever aqui que nenhum serviço lê a tabela do outro. Não é verdade: o **`billing-scheduler` acessa o banco do `billing` diretamente**, por SQL, sem passar pela API daquele serviço.
+>
+> ```sql
+> select i.id, ps.gateway_code
+> from invoice i
+> inner join payment_settings ps on i.payment_settings_id = ps.id
+> where i.expires_at <= now() - interval '1 days' and i.status = ?
+> for update skip locked
+> ```
+>
+> Ele lê **e escreve** — o `UPDATE` marca as faturas como `CANCELED`. O custo é concreto, e vale enumerar em vez de esconder:
+>
+> - contorna `Invoice.cancel()`, então a regra de negócio do agregado não é consultada
+> - não dispara `InvoiceCanceledEvent` — quem escutaria esse evento não é avisado
+> - o `UPDATE` não incrementa a coluna `version`, então o lock otimista do `billing` não enxerga a alteração
+> - o schema do `billing` vira **contrato implícito**: renomear uma coluna lá quebra o scheduler sem que nada acuse
+>
+> O que se compra com isso é simplicidade: uma varredura em lote resolvida por uma consulta, com `FOR UPDATE SKIP LOCKED` permitindo várias instâncias concorrerem, em vez de N chamadas HTTP e um endpoint novo no `billing`.
+>
+> A alternativa correta seria o `billing` expor algo como `POST /invoices/expired/cancel` e o scheduler apenas disparar. Vale conhecer as duas pontas — e vale mais ainda perceber que **a regra "banco por serviço" costuma ser descrita como absoluta e quase sempre tem uma exceção assim**, que ninguém documenta.
 
 > [`nosql-conceitos.md`](../02-persistencia/nosql-conceitos.md)
 

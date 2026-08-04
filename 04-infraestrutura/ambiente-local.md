@@ -6,7 +6,7 @@
 
 ## 1. Clonar o projeto (com submódulos)
 
-O `algashop-meta` **não contém código** — ele agrega cinco repositórios independentes como submódulos Git:
+O `algashop-meta` **não contém código** — ele agrega seis repositórios independentes como submódulos Git:
 
 ```
 algashop-meta/
@@ -366,7 +366,7 @@ Coisas quebradas ou inconsistentes na configuração, encontradas ao documentar:
 
 ## Checklist — ambiente pronto
 
-- [ ] `git submodule foreach 'git log -1 --oneline'` lista todos os cinco
+- [ ] `git submodule foreach 'git log -1 --oneline'` lista todos os seis
 - [ ] `docker compose -f docker-compose.tools.yml ps` mostra tudo `healthy`
 - [ ] `psql -h localhost -p 5433 -U postgres -l` lista os cinco bancos
 - [ ] `rs.status()` mostra um `PRIMARY` e dois `SECONDARY` com `health: 1`

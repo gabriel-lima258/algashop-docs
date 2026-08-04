@@ -1,6 +1,6 @@
 # AlgaShop — Portfólio de Estudos
 
-E-commerce construído em microsserviços com **Java 21 + Spring Boot**, como projeto de estudo de arquitetura de software.
+E-commerce construído em microsserviços com **Java 25 + Spring Boot 4**, como projeto de estudo de arquitetura de software.
 
 Este repositório é o caderno do projeto: cada documento registra um conceito aplicado, o problema que ele resolve, o código real onde ele aparece e as armadilhas encontradas no caminho.
 
@@ -149,7 +149,7 @@ Passo a passo completo, mapa de portas e solução de problemas: **[Ambiente loc
 
 ## Stack
 
-**Java 21** (`ordering`, `billing`, `billing-scheduler`) e **25** (`product-catalog`) · **Spring Boot 3.5** e **4.0** (`product-catalog`) · Spring Data JPA · Spring Data MongoDB · PostgreSQL 17 · MongoDB 8 em replica set · Flyway · Gradle 9 · Spring Cloud Contract · WireMock · Testcontainers · JUnit 5 · AssertJ · ModelMapper · Lombok · Docker Compose
+**Java 25** · **Spring Boot 4.0** · Spring Data JPA · Spring Data MongoDB · PostgreSQL 17 · MongoDB 8 em replica set · Flyway · Gradle 9 · Spring Cloud Contract · WireMock · Testcontainers · JUnit 5 · AssertJ · ModelMapper · Lombok · Docker Compose
 
 ---
 
