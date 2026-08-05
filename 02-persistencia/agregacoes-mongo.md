@@ -211,6 +211,24 @@ Origem `Product` (de onde ler), destino `ProductSummaryOutput` (em que materiali
 
 O `ProductDetailOutput` continua no caminho antigo (`findById` → `find()` → mapper). Os dois convivem de propósito, e a diferença entre eles é exatamente o assunto deste doc.
 
+### Derivar o `$project` do DTO — e a pegadinha
+
+Na Fase 15 os 15 campos listados à mão no `$project` deram lugar a uma linha:
+
+```java
+return project(ProductSummaryOutput.class)
+        .andExpression("salePrice < regularPrice").as("hasDiscount")
+        // ...
+```
+
+`project(Class)` monta a lista de campos a partir das propriedades da classe. É bom: um campo novo no DTO passa a sair do pipeline sem ninguém precisar lembrar de acrescentá-lo.
+
+> ⚠️ **A classe tem que ser a MESMA que o pipeline materializa.** A primeira versão dessa mudança escreveu `project(ProductDetailOutput.class)`, enquanto o `aggregate(...)` materializava em `ProductSummaryOutput`. Compila, roda, não erra — e os campos que só existem no destino voltam `null`.
+>
+> No caso, o campo perdido foi o **`score`**, a relevância do `$text`. A ordenação por relevância continuou funcionando (o `$sort` roda **antes** do `$project`, e ali o campo ainda existe); o que sumiu foi o valor no payload. Nenhum contrato e nenhum teste afirmam nada sobre `score`, então nada acusou.
+>
+> É o preço da conveniência: derivar do DTO tira a duplicação e, em troca, transforma "qual classe está escrita aqui" numa decisão silenciosa. Os dois DTOs têm nomes parecidos e vivem no mesmo pacote.
+
 ---
 
 ## ⚠️ A ordem dos estágios é o custo

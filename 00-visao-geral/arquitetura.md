@@ -116,6 +116,9 @@ O menor dos quatro. Cancela faturas expiradas periodicamente. Existe separado do
 | `ordering` | PostgreSQL | Transações, invariantes fortes, dinheiro |
 | `billing` | PostgreSQL | Idem — fatura errada é problema sério |
 | `product-catalog` | MongoDB (replica set) | Leitura dominante, schema flexível, volume — e, desde a Fase 14, transação entre duas coleções |
+| `product-catalog`, `ordering` | Redis | **Cache**, não banco: nada ali é exclusivo, e perder tudo custa misses, não dado |
+
+O Redis é a exceção que confirma a regra do banco por serviço: ele é **compartilhado** pelos dois, em bancos lógicos separados (0 e 1). Isso é aceitável porque nenhum dos dois guarda ali informação que não exista em outro lugar — mas bancos lógicos separam namespace, não memória. Ver [`redis.md`](../04-infraestrutura/redis.md).
 
 Isso só é possível porque **cada serviço é dono do seu banco**. Se dois serviços compartilhassem banco, mudar um schema quebraria o outro, e a independência de deploy iria embora.
 
@@ -153,6 +156,8 @@ Isso só é possível porque **cada serviço é dono do seu banco**. Se dois ser
 `ordering` → `product-catalog` para buscar dados de produto ao montar um pedido.
 
 O acoplamento aqui é real: se o catálogo cair, o pedido não é criado. O que reduz o risco é o **contrato explícito** — o `product-catalog` publica um contrato, e o `ordering` testa contra o stub gerado a partir dele. Nenhum dos dois precisa do outro de pé para rodar os testes.
+
+Desde a Fase 15 há uma camada no meio: o `ordering` **cacheia a resposta** do catálogo por um TTL curto. Isso reduz a chamada de rede, e não reduz o acoplamento — um miss ainda depende do catálogo estar de pé. O que ele compra é fôlego, não independência. E vale saber o efeito colateral: o `ordering` não fica sabendo quando um produto muda no catálogo, então o TTL é a única invalidação possível. Ver [`cache.md`](../01-arquitetura-design/cache.md).
 
 ```
 product-catalog  --define-->  contrato  --gera-->  stub

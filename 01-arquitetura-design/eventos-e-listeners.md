@@ -253,6 +253,12 @@ mongoOperations.updateMulti(query, update, Product.class);
 
 `updateMulti` pede ao Mongo que percorra e altere no servidor, em vez de carregar N produtos para a JVM, chamar `setCategory` em cada um e salvar de volta.
 
+> ⚠️ **Desde a Fase 15, esta propagação tem um consumidor que ela não alcança: o cache.** O `updateMulti` reescreve a cópia da categoria dentro dos produtos **no Mongo** — e nada invalida as entradas de `algashop:products:v1` no Redis. Um produto em cache continua servindo o nome antigo da categoria até o TTL de 1 minuto expirar.
+>
+> O detalhe que torna isso fácil de não ver: o `@CacheEvict` do `CategoryManagementApplicationService` funciona e limpa os caches **de categoria**. O que fica velho é o cache de **produto**, atualizado por um caminho completamente diferente — assíncrono, em outra thread, sem passar por nenhum método anotado.
+>
+> A resposta escolhida foi encurtar o TTL em vez de acoplar o listener ao cache. A troca inteira está em [`cache.md`](./cache.md#o-que-não-existe-invalidação-por-evento).
+
 O `@Async` depende de `@EnableAsync`, que mora em `infrastructure/async/AsyncConfig.java`. **Sem essa anotação o `@Async` é silenciosamente ignorado** — o método roda na mesma thread, sem nenhum erro, e a única pista seria a propagação acontecer síncrona.
 
 > #### Nota de estudo: `@Async` deixou de ser uma decisão local

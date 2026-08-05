@@ -245,7 +245,7 @@ E a terceira, que voltou pela segunda vez seguida: mover uma responsabilidade é
 
 ---
 
-## Fase 14 — Replica set, transações e histórico (ago/2026) ← etapa atual
+## Fase 14 — Replica set, transações e histórico (ago/2026)
 
 A Fase 13 deixou o saldo correto e **sem memória**: o estoque dizia `40` e nada explicava como saiu de `50`. A resposta — uma coleção de movimentações — criou um problema que não existia: agora são **duas** escritas, em coleções diferentes, e o Mongo só garante atomicidade de uma por vez.
 
@@ -272,6 +272,34 @@ E a terceira: as credenciais que sumiram do compose mataram os três testes de c
 
 ---
 
+## Fase 15 — Cache com Redis, dos dois lados (ago/2026) ← etapa atual
+
+Até aqui o catálogo respondia sempre indo ao Mongo. Esta fase põe cache — e o que a torna interessante é que ele entrou nos **dois lados da mesma chamada**: o `product-catalog` cacheia as próprias respostas, e o `ordering` cacheia o que recebe do `product-catalog`. Somando os cabeçalhos HTTP, o mesmo produto passa a existir em quatro lugares.
+
+| Marco | O que se aprende |
+|---|---|
+| `@Cacheable` × `@CachePut` | Cache-aside popula na leitura; write-through popula na escrita |
+| `create` devolvendo `ProductDetailOutput` | `@CachePut` cacheia o **retorno** — uma decisão de cache mudou a assinatura de um método |
+| `@Cacheable` na interface do `@HttpExchange` | O proxy do cache envelopa o proxy HTTP: dá para cachear uma chamada de rede sem tocar em quem a faz |
+| Client-side sem `@CacheEvict` | Quem cacheia dado dos outros não fica sabendo quando ele muda — sobra o TTL, e não por escolha |
+| `ETag` derivado do `@Version` | O validador certo já existia no documento; hash do corpo daria o mesmo por mais trabalho |
+| `checkNotModified` → `304` | Resposta sem corpo, e a consulta ao banco nem acontece |
+| `isCacheable()` só no filtro default | Cachear filtro livre é armadilha de cardinalidade: chaves demais, reuso nenhum |
+| `implements Serializable` transitivo | O serializador default é o do Java, não JSON — e a exigência contamina todos os campos |
+| `CacheErrorHandler` fail-open | Cache fora do ar tem que significar "vou à origem", não "desisti" |
+| `--requirepass ${REDIS_PASSWORD}` vazio | `${VAR}` no compose vem do `.env`, nunca do `environment:` do próprio serviço |
+| `--appendonly no` + `allkeys-lru` | É cache, não banco: perder tudo custa misses, não dado |
+
+**A lição da fase:** cache mal configurado **não quebra nada**. O Redis subiu sem senha, as duas aplicações mandavam senha, a conexão falhava, o `CacheErrorHandler` engolia — e tudo respondia certo, o tempo todo, indo ao banco. O `DBSIZE` ficou em zero por horas sem um alerta. É o oposto de um banco mal configurado, que falha alto e imediatamente. **A evidência de que um cache funciona não é o serviço responder; é haver chave nele.**
+
+A segunda lição é sobre a soma das camadas. Cada TTL parece uma decisão local — um minuto aqui, cinco ali —, mas o dado que chega ao usuário tem a idade **somada**: Redis do catálogo, mais Redis do ordering, mais o `max-age` do navegador. Quem configura uma camada sem olhar as outras acha que está entregando frescor de um minuto e está entregando o de sete.
+
+E a terceira, que veio de graça: `restock` e `withdraw` não carregam nem salvam o produto — ajustam o estoque direto no banco. Nada neles *parece* mexer no agregado, e por isso foram os últimos a receber `@CacheEvict`. **O método que muda estado sem tocar no objeto é o que mais facilmente esquece o cache.**
+
+> [`cache.md`](../01-arquitetura-design/cache.md) · [`redis.md`](../04-infraestrutura/redis.md)
+
+---
+
 ## Onde o projeto está
 
 **Consolidado:**
@@ -290,8 +318,12 @@ E a terceira: as credenciais que sumiram do compose mataram os três testes de c
 - Replica set local e transação multi-coleção, coberta por teste de rollback
 - Histórico de movimentação de estoque (`stock_movements`)
 - Suíte de integração sobre Testcontainers — não depende mais de infraestrutura de pé
+- Cache Redis server-side no catálogo e client-side no `ordering`, com cabeçalhos HTTP e `304`
 
 **Próximos passos naturais:**
+- **Teste automatizado do cache** — hoje nenhum `*IT` exercita `@Cacheable`/`@CacheEvict`, e a corretude depende de leitura de código
+- Métrica de taxa de acerto do cache (`keyspace_hits`/`keyspace_misses` existem e ninguém coleta)
+- Cache nos perfis `docker` e `production`, que hoje rodam sem nenhum
 - Mensageria real entre serviços (hoje os eventos são internos ao processo, aqui e no `ordering`)
 - Retentativa, dead letter e reconciliação para a propagação da categoria e para os eventos de estoque
 - Outbox para o evento que precisar sair do serviço — a transação resolve as escritas locais, não a integração
@@ -310,7 +342,7 @@ E a terceira: as credenciais que sumiram do compose mataram os três testes de c
 
 ## O padrão que se repete
 
-Olhando as quatorze fases em conjunto, a ordem foi sempre a mesma:
+Olhando as quinze fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

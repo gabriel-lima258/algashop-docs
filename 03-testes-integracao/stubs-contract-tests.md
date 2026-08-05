@@ -237,6 +237,12 @@ Isso faz o stub retornar o mesmo ID que foi passado na URL, tornando a resposta 
 - Quando você precisa de controle total sobre o stub, incluindo cenários de erro, delays, e comportamentos especiais
 - Para simular serviços que você não controla
 
+> 🔧 **Em desenvolvimento, o `ordering` deixou de falar com o WireMock.** Na Fase 15 a propriedade `algashop.integrations.product-catalog.url` saiu de `http://localhost:8787` (WireMock) para `http://localhost:8083` — o `product-catalog` de verdade.
+>
+> A troca vale ser notada porque muda o que se está exercitando. Contra o WireMock, a resposta é fixa e o catálogo não precisa estar de pé; contra a 8083, é integração real — e é ela que permite ver o cache client-side funcionando, já que só há o que cachear se houver uma chamada de verdade acontecendo.
+>
+> **Nos testes nada mudou:** o perfil `test` continua apontando para o WireMock local (8781/8780), e é isso que mantém a suíte rodando sem nenhum serviço externo.
+
 ---
 
 ### Abordagem B: Stub Runner (comentado no projeto, mas configurado)

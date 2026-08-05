@@ -74,6 +74,8 @@ Sobe só a infraestrutura; os serviços você roda pela IDE ou por `./gradlew bo
 docker compose -f docker-compose.tools.yml up -d
 ```
 
+> ⚠️ **O `.env` na raiz do meta não é opcional.** É de lá que o Compose lê `REDIS_PASSWORD` para montar o `--requirepass` do Redis. Sem o arquivo, a variável resolve para string vazia, o Redis sobe **sem autenticação**, e as aplicações — que mandam senha — são recusadas. O sintoma é traiçoeiro: tudo responde normalmente, e o cache simplesmente nunca funciona. Ver [`redis.md`](./redis.md).
+
 ### Cenário B — tudo em container
 
 ```bash
@@ -108,6 +110,7 @@ A tabela que evita 90% dos problemas de "não conecta":
 | MongoDB nó 1 | **27017** | 27017 | primário — `priority: 2` |
 | MongoDB nó 2 | **27018** | 27017 | secundário — `priority: 0` |
 | MongoDB nó 3 | **27019** | 27017 | secundário — `priority: 0` |
+| Redis | **6379** | 6379 | cache do catálogo (db 0) e do `ordering` (db 1) |
 | WireMock | **8787** | 8080 | mock de APIs externas |
 | FastPay | **9995** | 9995 | gateway de pagamento simulado |
 
@@ -338,6 +341,10 @@ spring:
 | `Transaction numbers are only allowed on a replica set member` | Mongo rodando como nó único | Suba os três nós do compose; em teste, `withReplicaSet()` no `MongoDBContainer` |
 | Driver não resolve `algashop-mongodb-2` | Arquivo `hosts` não editado | Acrescente as três linhas de `etc/hostnames/hostnames` |
 | `rs.initiate` falha no segundo `up` | Conjunto já iniciado | Esperado e inofensivo — o `\|\| true` do serviço de init existe para isso |
+| `ERR AUTH ... without any password configured` | Redis subiu sem senha | Falta o `.env` na raiz do meta — [detalhes](./redis.md) |
+| Cache nunca popula (`DBSIZE` sempre 0) | Conexão com o Redis falhando em silêncio | O `CacheErrorHandler` engole o erro; confira o log por `Cache GET error` |
+| `NotSerializableException` ao cachear | DTO sem `implements Serializable` | O serializador é o do Java; a exigência é transitiva a todos os campos |
+| Anotações de cache não fazem nada | `spring.cache.type` não é `redis` | Sem ela o `RedisCacheConfig` não é registrado, e o `@EnableCaching` não acontece |
 | Serviço não acha o `product-catalog` | Nada respondendo na URL configurada | Suba o WireMock ou o Stub Runner |
 | Pastas de submódulo vazias | Clone sem `--recurse-submodules` | `git submodule update --init --recursive` |
 | Alterações de um serviço somem | `git submodule update` sem `--remote` | Sempre cheque o status antes |
@@ -357,7 +364,7 @@ spring:
 
 Coisas quebradas ou inconsistentes na configuração, encontradas ao documentar:
 
-- [ ] `algashop-ordering/src/main/resources/application.yaml` tem o bloco `spring.profiles.group` **malformado** — a linha `development: development` seguida de uma lista indentada não é YAML válido. Os grupos de perfil provavelmente não estão sendo aplicados como o esperado.
+- [x] ~~`algashop-ordering/src/main/resources/application.yaml` tem o bloco `spring.profiles.group` **malformado**.~~ Resolvido na Fase 15: a linha `development: development` virou `development:` com a lista abaixo, e o grupo passou a carregar `base` + `development-env` como os outros dois já faziam.
 - [ ] `application-docker-env.yaml` do `ordering`: o `datasource` aponta para `algashop-postgres:5432`, mas o `flyway.url` aponta para `algashop-postgres:5433` — dentro da rede Docker a porta correta é **5432** nos dois casos.
 - [ ] `docker-compose.services.yml` não inclui o `product-catalog` nem o `billing-scheduler` — só `ordering` e `billing`.
 - [ ] O `product-catalog` não tem serviço no compose, então o Cenário B não cobre o catálogo.
