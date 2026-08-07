@@ -159,6 +159,17 @@ O acoplamento aqui é real: se o catálogo cair, o pedido não é criado. O que 
 
 Desde a Fase 15 há uma camada no meio: o `ordering` **cacheia a resposta** do catálogo por um TTL curto. Isso reduz a chamada de rede, e não reduz o acoplamento — um miss ainda depende do catálogo estar de pé. O que ele compra é fôlego, não independência. E vale saber o efeito colateral: o `ordering` não fica sabendo quando um produto muda no catálogo, então o TTL é a única invalidação possível. Ver [`cache.md`](../01-arquitetura-design/cache.md).
 
+E desde a Fase 16 há mais uma: **timeout, retry, bulkhead e circuit breaker** em volta da chamada. O acoplamento continua exatamente o mesmo — se o catálogo cair, o pedido não é criado. **O que mudou foi como ele falha:** em vez de threads penduradas até o serviço inteiro parar, a falha vira `502` ou `504` em segundos, com no máximo 10 threads ocupadas.
+
+A diferença entre as duas chamadas de saída do `ordering` merece ser dita aqui, porque é uma decisão de produto e não de infraestrutura:
+
+| Chamada | Se a dependência cair |
+|---|---|
+| `ordering → product-catalog` | **falha** — 502/504, o pedido não é criado |
+| `ordering → Rapidex` (frete) | **degrada** — devolve um frete estimado, e o cliente não sabe |
+
+Não dá para inventar o preço de um produto; dá para estimar um frete. Ver [`resiliencia.md`](../01-arquitetura-design/resiliencia.md).
+
 ```
 product-catalog  --define-->  contrato  --gera-->  stub
                                                      ↓

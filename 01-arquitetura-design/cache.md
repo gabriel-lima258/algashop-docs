@@ -146,6 +146,21 @@ ProductResponse getById(@PathVariable UUID productId);
 
 O `ordering` cacheia a **resposta HTTP** do catálogo. Funciona porque o bean é um proxy JDK criado por `HttpServiceProxyFactory`, e o auto-proxy do `@EnableCaching` o envelopa lendo a anotação da interface.
 
+> #### Nota de estudo: onde o cache entra na pilha de resiliência
+>
+> Na Fase 16 esse mesmo método ganhou bulkhead e circuit breaker em volta, e a ordem real dos proxies **não** é a ordem das anotações:
+>
+> ```
+> @ConcurrencyLimit → @Cacheable → getById → circuitBreaker.run → retry → HTTP
+> ```
+>
+> O bulkhead fica **por fora** do cache (ele usa `setBeforeExistingAdvisors(true)`), e o circuito **por dentro**. Duas consequências que só aparecem lendo nessa ordem:
+>
+> - **Cache hit não toca o circuito.** Uma resposta servida do Redis não conta como sucesso nem como falha — o circuito só enxerga o que sai para a rede. Um circuito fechado não prova que a dependência está viva; prova que a última chamada real deu certo.
+> - **Cache hit ainda ocupa uma vaga do bulkhead.** As 10 permissões são consumidas por qualquer chamada ao método, inclusive as que nem saem da JVM. Sob carga com taxa de acerto alta, o limite pode ser atingido sem uma única ida ao catálogo.
+>
+> Ver [`resiliencia.md`](./resiliencia.md).
+
 > #### Nota de estudo: quem cacheia dado dos outros só tem TTL
 >
 > Esta é a diferença que define o lado cliente. No catálogo, quem escreve o produto é quem o cacheia — então dá para evictar no momento exato da mudança.

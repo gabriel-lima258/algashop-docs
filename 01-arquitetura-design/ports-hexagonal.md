@@ -56,6 +56,12 @@ Existem dois tipos:
 | **Port IN** (`ports/in`) | Driving port, Inbound port, API | A camada de aplicação | Adaptadores primários (Controllers, Listeners, CLI) |
 | **Port OUT** (`ports/out`) | Driven port, Outbound port, SPI | Adaptadores secundários (JPA, HTTP client) | A camada de aplicação |
 
+> 🔧 **O código só passou a concordar com esta tabela na Fase 16.** Até então os clients HTTP do `product-catalog` e da Rapidex moravam em `infrastructure/adapters/**in**/web/…`, ao lado dos controllers — implementando portas de **saída** a partir da pasta de **entrada**.
+>
+> Compilava e funcionava; o que se perdia era a única coisa que a estrutura de pastas oferece de graça, que é responder "quem chama quem" sem abrir arquivo. Um leitor novo olhava `adapters/in` e via, juntos, o que o mundo pede ao domínio e o que o domínio pede ao mundo — exatamente a distinção que a arquitetura existe para tornar óbvia.
+>
+> Hoje estão em `adapters/out/web/{product,shipping}/client/`, ao lado de `adapters/out/persistence/`. A regra é simples: **quem inicia a chamada decide a pasta.** Controller recebe (`in`); client HTTP chama (`out`), mesmo falando o mesmo protocolo.
+
 A diferença está em **quem dirige a conversa**:
 
 - Em uma porta **IN**, o mundo externo **dirige** a aplicação. Um Controller diz: "execute este caso de uso".

@@ -237,6 +237,25 @@ Isso faz o stub retornar o mesmo ID que foi passado na URL, tornando a resposta 
 - Quando você precisa de controle total sobre o stub, incluindo cenários de erro, delays, e comportamentos especiais
 - Para simular serviços que você não controla
 
+### Injetar falha: o que o stub faz e o código não deveria
+
+Um contrato descreve o caminho feliz. Para testar **resiliência** é preciso o contrário — e é aqui que o WireMock deixa de ser só um substituto e vira ferramenta de caos:
+
+| Configuração | Simula | Testa |
+|---|---|---|
+| `"status": 500` | erro do servidor | retry (5xx está no `includes`) |
+| `"status": 401` | não autorizado | **ausência** de retry (4xx não repete) |
+| `"status": 204` | corpo vazio | resposta inválida ≠ recurso inexistente |
+| `"fault": "EMPTY_RESPONSE"` | conexão derrubada no meio | timeout → 504 |
+| `"fault": "CONNECTION_RESET_BY_PEER"` | reset de conexão | idem |
+| `"fixedDelayMilliseconds": 15000` | **dependência lenta** | o caso que mais derruba serviço na prática |
+
+O `fault` é o que um stub comum não consegue fazer: ele não responde HTTP, ele **quebra a conexão** — que é como uma rede ruim se comporta de verdade, e é o cenário que o timeout existe para transformar em falha.
+
+> ⚠️ **Caos vai no stub, nunca no código.** Durante o desenvolvimento da leva de resiliência, o `ProductController` do `product-catalog` chegou a ganhar um bloco que devolvia 400 para um UUID específico e dormia 20 segundos em 90% das chamadas. Funcionou para exercitar o circuito — e foi removido.
+>
+> As razões, em ordem de importância: o stub roda em **CI** e o caos no controller só roda na máquina de quem o escreveu; o stub afeta **um teste** e o controller afeta todo mundo que usa aquele ambiente; e código de caos comentado num controller de produção é exatamente o tipo de coisa que sobrevive a várias revisões e um dia é descomentada por engano.
+
 > 🔧 **Em desenvolvimento, o `ordering` deixou de falar com o WireMock.** Na Fase 15 a propriedade `algashop.integrations.product-catalog.url` saiu de `http://localhost:8787` (WireMock) para `http://localhost:8083` — o `product-catalog` de verdade.
 >
 > A troca vale ser notada porque muda o que se está exercitando. Contra o WireMock, a resposta é fixa e o catálogo não precisa estar de pé; contra a 8083, é integração real — e é ela que permite ver o cache client-side funcionando, já que só há o que cachear se houver uma chamada de verdade acontecendo.

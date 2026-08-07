@@ -42,6 +42,10 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
     get:
       tags:
         - Order Invoice
@@ -111,6 +115,10 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
   /api/v1/customers/{customerId}/credit-cards/{creditCardId}:
     get:
       tags:
@@ -158,6 +166,10 @@ paths:
           description: OK
         "404":
           $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
 
 components:
   responses:
@@ -175,6 +187,24 @@ components:
             $ref: "#/components/schemas/ProblemDetail"
     InternalError:
       description: Internal server error
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    BadGateway:
+      description: >
+        O gateway de pagamento respondeu de forma inválida. A fatura fica pendente para
+        conciliação — não é cancelada, porque uma falha de integração não prova que a
+        cobrança deixou de acontecer.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    GatewayTimeout:
+      description: >
+        O gateway de pagamento não respondeu dentro do tempo limite. Este é o caso mais
+        delicado: não se sabe se a cobrança foi efetivada do outro lado, e por isso a
+        operação NÃO é repetida automaticamente. A fatura fica pendente para conciliação.
       content:
         application/problem+json:
           schema:

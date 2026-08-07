@@ -166,6 +166,34 @@ Compare com o 404 e o 422, que **usam** `e.getMessage()` — ali a mensagem foi 
 
 ---
 
+### 502 e 504 — a falha que não é sua
+
+Estes dois existem para não deixar problema de terceiro virar 500. A distinção entre eles é a mais útil de todo o conjunto:
+
+| | Significa | O que se sabe |
+|---|---|---|
+| **502** Bad Gateway | a dependência **respondeu**, e a resposta não serve | a operação não aconteceu |
+| **504** Gateway Timeout | a dependência **não respondeu** a tempo | **não se sabe** se aconteceu |
+
+O 504 é o mais desconfortável dos dois, e é por isso que ele importa. Num `POST` que cobra dinheiro, timeout **não cancela** a autorização do outro lado — significa "não sei se cobrou". Devolver 500 ali apagaria essa informação; devolver 504 a preserva para quem for reconciliar depois.
+
+> **Por que isso não pode ser 500.** O 5xx genérico diz "eu falhei". O 502/504 diz "quem eu chamei falhou" — e essa diferença é o que separa um alerta acionável de uma madrugada perdida procurando bug onde não há.
+
+Na Fase 16 o `BadGatewayException` ganhou duas subclasses, e a razão é de resiliência, não de HTTP:
+
+```java
+public class BadGatewayException extends RuntimeException {
+    public static class ServerErrorException extends BadGatewayException { }   // 5xx
+    public static class ClientErrorException extends BadGatewayException { }   // 4xx
+}
+```
+
+A `RetryPolicy` decide o que retentar por **assignability**, listando apenas `ServerErrorException`. Sem as subclasses não haveria como dizer "repita 5xx, não repita 4xx" — os dois seriam o mesmo tipo, e repetir um 401 daria 401 quatro vezes.
+
+As três formas continuam virando 502 para o cliente: a distinção é interna, e só o retry a enxerga. Ver [`resiliencia.md`](../01-arquitetura-design/resiliencia.md).
+
+---
+
 ## O caso interessante: 404 ou 422?
 
 Este trecho do `ProductController` é o mais didático de todo o desenho:
@@ -206,6 +234,8 @@ Note também que a causa original é preservada — `new UnprocessableContentExc
 | `ResourceNotFoundException` | 404 | `/errors/not-found` | mensagem da exceção |
 | `DomainException` | 422 | `/errors/unprocessable-content` | mensagem da exceção |
 | `UnprocessableContentException` | 422 | `/errors/unprocessable-content` | mensagem da exceção |
+| `BadGatewayException` (e as duas filhas) | 502 | `/errors/bad-gateway` | dependência respondeu inválido |
+| `GatewayTimeoutException` | 504 | `/errors/gateway-timeout` | dependência não respondeu a tempo |
 | `Exception` (qualquer outra) | 500 | `/errors/internal` | genérico — stacktrace só no log |
 
 Exemplo de resposta 422:

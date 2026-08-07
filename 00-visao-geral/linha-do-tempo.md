@@ -272,7 +272,7 @@ E a terceira: as credenciais que sumiram do compose mataram os três testes de c
 
 ---
 
-## Fase 15 — Cache com Redis, dos dois lados (ago/2026) ← etapa atual
+## Fase 15 — Cache com Redis, dos dois lados (ago/2026)
 
 Até aqui o catálogo respondia sempre indo ao Mongo. Esta fase põe cache — e o que a torna interessante é que ele entrou nos **dois lados da mesma chamada**: o `product-catalog` cacheia as próprias respostas, e o `ordering` cacheia o que recebe do `product-catalog`. Somando os cabeçalhos HTTP, o mesmo produto passa a existir em quatro lugares.
 
@@ -300,6 +300,34 @@ E a terceira, que veio de graça: `restock` e `withdraw` não carregam nem salva
 
 ---
 
+## Fase 16 — Resiliência entre serviços (ago/2026) ← etapa atual
+
+Até aqui as chamadas entre serviços eram otimistas: nenhuma tinha timeout, e uma dependência lenta prendia a thread até desistir — o que nunca acontecia. Esta fase coloca as cinco proteções clássicas. O que a torna rica é que **o `ordering` e o `billing` chegaram a decisões opostas** com a mesma biblioteca, na mesma leva.
+
+| Marco | O que se aprende |
+|---|---|
+| Timeout no `RestClient` | É o padrão que **habilita** os outros: sem ele o circuito nunca abre, porque só reage a falhas que terminaram |
+| `RetryPolicy.includes(...)` | Retentar 4xx é desperdício garantido; a lista do que repetir é decisão de negócio |
+| Backoff exponencial | Retentar imediatamente soma carga a quem já está mal |
+| `@ConcurrencyLimit` | Bulkhead **bloqueante**: a thread excedente espera, não falha rápido |
+| Circuito **programático**, sem anotação | E sem limiar de falhas: **uma** exceção leva CLOSED → OPEN |
+| Fallback no frete, nenhum no produto | A pergunta não é "dá para ter fallback", é "existe resposta aproximada **aceitável**" |
+| `fastpayCB` × `fastpayWriteCB` | Dois circuitos para o **mesmo host**, separados por idempotência |
+| `maxRetries(0)` no `capture` | Timeout num POST de cobrança não cancela nada do outro lado — repetir é cobrança dupla |
+| `InvoicePaymentTransactions` | Chamada HTTP fora de transação: nenhum breaker corrige pool de conexões esgotado |
+| Clients movidos para `adapters/out` | O doc de hexagonal sempre descreveu assim; agora o código concorda |
+| `fault: EMPTY_RESPONSE` no WireMock | Caos no stub, não no controller — o stub roda em CI |
+
+**A lição da fase:** os cinco padrões não são cinco escolhas independentes — eles se aninham, e a ordem é o que os torna úteis. Timeout por dentro de retry, retry por dentro do circuito, circuito por dentro do bulkhead. Cada um sozinho protege pouco: **timeout sem circuito faz o serviço morrer devagar em vez de rápido; circuito sem timeout nunca abre.**
+
+A segunda lição é a assimetria dos dois clients. O mesmo desenvolvedor, na mesma tarde, deu fallback ao frete e negou ao produto — e estava certo nas duas vezes. Frete estimado por baixo custa margem; preço de produto inventado custa a venda e a confiança. **A pergunta que decide um fallback é do negócio, não da engenharia** — e o custo de acertar essa pergunta é que o sistema passa a mentir em silêncio quando a resposta é "sim".
+
+E a terceira, que veio de graça e é a mais transferível: a mudança mais importante do `billing` **não é nenhum dos cinco padrões**. É ter tirado a chamada HTTP de dentro da transação. Nenhum circuit breaker corrige um pool de conexões esgotado, porque quando a chamada chega ao breaker o recurso já foi tomado acima dele. **Resiliência não é uma camada que se adiciona por cima — é uma propriedade de como recursos escassos são adquiridos.**
+
+> [`resiliencia.md`](../01-arquitetura-design/resiliencia.md) · [`resiliencia-config.md`](../04-infraestrutura/resiliencia-config.md)
+
+---
+
 ## Onde o projeto está
 
 **Consolidado:**
@@ -319,6 +347,7 @@ E a terceira, que veio de graça: `restock` e `withdraw` não carregam nem salva
 - Histórico de movimentação de estoque (`stock_movements`)
 - Suíte de integração sobre Testcontainers — não depende mais de infraestrutura de pé
 - Cache Redis server-side no catálogo e client-side no `ordering`, com cabeçalhos HTTP e `304`
+- Timeout, retry, bulkhead, circuit breaker e fallback nas três integrações de saída
 
 **Próximos passos naturais:**
 - **Teste automatizado do cache** — hoje nenhum `*IT` exercita `@Cacheable`/`@CacheEvict`, e a corretude depende de leitura de código
@@ -336,13 +365,12 @@ E a terceira, que veio de graça: `restock` e `withdraw` não carregam nem salva
 - Testes do pipeline e um que afirme `IXSCAN` no `explain` (o agregado `Product` já tem o seu)
 - Autenticação (a auditoria usa um `UUID` aleatório como placeholder)
 - Observabilidade — tracing distribuído, métricas, log estruturado
-- Resiliência — circuit breaker e retry nas chamadas entre serviços
 
 ---
 
 ## O padrão que se repete
 
-Olhando as quinze fases em conjunto, a ordem foi sempre a mesma:
+Olhando as dezesseis fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

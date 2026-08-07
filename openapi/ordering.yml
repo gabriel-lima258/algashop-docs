@@ -185,6 +185,10 @@ paths:
           $ref: "#/components/responses/UnprocessableEntity"
         500:
           $ref: "#/components/responses/InternalError"
+        502:
+          $ref: "#/components/responses/BadGateway"
+        504:
+          $ref: "#/components/responses/GatewayTimeout"
     get:
       description: List orders
       tags:
@@ -416,6 +420,39 @@ paths:
       responses:
         204:
           description: OK
+  /api/v1/shipping-cost-previews:
+    post:
+      summary: Preview shipping cost
+      description: Calculates a preview of the shipping cost and expected delivery date based on the destination zip code.
+      tags:
+        - Shipping
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShippingCostPreviewInput'
+      responses:
+        200:
+          description: Shipping cost preview calculated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShippingCostPreviewOutput'
+        400:
+          $ref: "#/components/responses/BadRequest"
+        409:
+          $ref: "#/components/responses/Conflict"
+        422:
+          $ref: "#/components/responses/UnprocessableEntity"
+        500:
+          $ref: "#/components/responses/InternalError"
+        502:
+          $ref: "#/components/responses/BadGateway"
+        504:
+          $ref: "#/components/responses/GatewayTimeout"
+
+
 
 components:
   parameters:
@@ -474,6 +511,22 @@ components:
             $ref: "#/components/schemas/ProblemDetail"
     InternalError:
       description: Internal Server Error
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    BadGateway:
+      description: >
+        Uma dependência externa respondeu de forma inválida. O pedido não foi processado,
+        e repetir a chamada pode funcionar se a causa for transitória.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    GatewayTimeout:
+      description: >
+        Uma dependência externa não respondeu dentro do tempo limite. Diferente do 502,
+        aqui não se sabe se a operação chegou a acontecer do outro lado.
       content:
         application/problem+json:
           schema:
@@ -1137,3 +1190,28 @@ components:
         customerId:
           type: string
           example: '6a6ca34c-e65c-496e-adaf-f872e1784003'
+    ShippingCostPreviewInput:
+      type: object
+      required:
+        - zipCode
+      properties:
+        zipCode:
+          type: string
+          description: Destination ZIP code
+          example: "12345"
+    ShippingCostPreviewOutput:
+      type: object
+      required:
+        - cost
+        - expectedDate
+      properties:
+        cost:
+          type: number
+          format: decimal
+          description: Calculated shipping cost
+          example: 29.90
+        expectedDate:
+          type: string
+          format: date
+          description: Expected delivery date
+          example: "2026-02-01"
