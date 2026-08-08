@@ -234,7 +234,7 @@ Pelo mesmo motivo, o `CreditCardManagementService` perdeu o `@Transactional` de 
 - [ ] **`@ConcurrencyLimit` é por método, não por dependência.** No `billing` são 7 limitadores independentes de 10 permits cada — não um bulkhead de 10 para o FastPay. Duas operações diferentes podem, somadas, ocupar 20 threads.
 - [ ] **Dois circuitos abrem separados para o mesmo host.** Uma queda total do FastPay custa no mínimo duas falhas reais antes de qualquer proteção.
 - [ ] **O teste de bulkhead não satura o bulkhead.** O `ProductCatalogServiceIT` faz 6 chamadas contra um limite de 10 — nenhuma thread chega a esperar.
-- [ ] **Nenhuma métrica observa os circuitos.** Não há Actuator, não há contador de aberturas; o estado só aparece em `log.info`.
+- [x] ~~**Nenhuma métrica observa os circuitos.**~~ Resolvido na Fase 17: o `/actuator/health` passou a expor o estado de cada circuito, verificado abrindo um de verdade. Continua sem **contador** de aberturas — o endpoint mostra o estado agora, não o histórico —, e o status `DEGRADED` que ele produz devolve **HTTP 200**, então um probe automático não distingue circuito aberto de serviço saudável. Ver [`health-checks.md`](../04-infraestrutura/health-checks.md).
 - [ ] **Sem outbox nem reconciliação automática.** A fatura pendente depende do webhook do gateway ou de alguém consultar.
 
 ---

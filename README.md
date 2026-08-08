@@ -26,7 +26,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 16 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 17 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -69,6 +69,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Carga de dados no MongoDB](./04-infraestrutura/carga-de-dados-mongo.md) | `ApplicationRunner`, Extended JSON e por que isso **não** substitui o Flyway |
 | [Redis na prática](./04-infraestrutura/redis.md) | Cache sem persistência, política de eviction, inspeção — e a interpolação do Compose que deixou tudo sem senha |
 | [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) | Os parâmetros por cliente, a biblioteca que quase ninguém documenta, e como testar retry por contagem de requests |
+| [Health check e degradação](./04-infraestrutura/health-checks.md) | Liveness × readiness, um status `DEGRADED` inventado — e um indicador que funciona ao lado de outro que mente |
 | [Docker](./04-infraestrutura/docker.md) | Build de imagem, multi-arquitetura com Buildx e publicação em registry |
 | [Jobs agendados](./04-infraestrutura/scheduled-jobs.md) | `@Scheduled`, execução em ambiente distribuído e controle de concorrência |
 
@@ -95,7 +96,7 @@ Para revisar o conteúdo do zero, nesta ordem:
 [Flyway](./02-persistencia/flyway.md) → [Paginação](./02-persistencia/paginacao.md) → [NoSQL conceitos](./02-persistencia/nosql-conceitos.md) → [MongoDB na prática](./02-persistencia/product-catalog-mongo.md) → [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) → [Índices](./02-persistencia/indices-mongo.md) → [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) → [Normalizado × desnormalizado](./02-persistencia/desnormalizacao-mongo.md) → [Eventos e listeners](./01-arquitetura-design/eventos-e-listeners.md) → [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) → [Transações e replica set](./02-persistencia/transacoes-mongo.md) → [Cache](./01-arquitetura-design/cache.md) → [Redis na prática](./04-infraestrutura/redis.md)
 
 **4. Como os serviços conversam e falham**
-[Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) → [Resiliência](./01-arquitetura-design/resiliencia.md) → [Resiliência na prática](./04-infraestrutura/resiliencia-config.md)
+[Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) → [Resiliência](./01-arquitetura-design/resiliencia.md) → [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) → [Health check](./04-infraestrutura/health-checks.md)
 
 **5. Como tudo roda**
 [Carga de dados](./04-infraestrutura/carga-de-dados-mongo.md) → [Docker](./04-infraestrutura/docker.md) → [Jobs agendados](./04-infraestrutura/scheduled-jobs.md)
@@ -125,6 +126,9 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Decidir o que vale retentar (e o que não vale) | [Resiliência](./01-arquitetura-design/resiliencia.md) |
 | Saber quando um fallback é honesto | [Resiliência](./01-arquitetura-design/resiliencia.md) |
 | Escrever um teste que prova retry e circuito | [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) |
+| Saber se o serviço pode receber tráfego | [Health check e degradação](./04-infraestrutura/health-checks.md) |
+| Diferença entre liveness e readiness | [Health check e degradação](./04-infraestrutura/health-checks.md) |
+| Dependência opcional fora sem derrubar o serviço | [Health check e degradação](./04-infraestrutura/health-checks.md) |
 | Dar baixa em estoque sem vender o que não tem | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) |
 | Fazer duas escritas caírem juntas, ou nenhuma | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
 | Por que `@Transactional` no Mongo pode não fazer nada | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
@@ -161,7 +165,7 @@ Passo a passo completo, mapa de portas e solução de problemas: **[Ambiente loc
 
 ## Stack
 
-**Java 25** · **Spring Boot 4.0** · Spring Data JPA · Spring Data MongoDB · PostgreSQL 17 · MongoDB 8 em replica set · Redis 8 · Flyway · Gradle 9 · Spring Cloud Contract · Spring Cloud CircuitBreaker · WireMock · Testcontainers · JUnit 5 · AssertJ · ModelMapper · Lombok · Docker Compose
+**Java 25** · **Spring Boot 4.0** · Spring Data JPA · Spring Data MongoDB · PostgreSQL 17 · MongoDB 8 em replica set · Redis 8 · Flyway · Gradle 9 · Spring Cloud Contract · Spring Cloud CircuitBreaker · Spring Boot Actuator · WireMock · Testcontainers · JUnit 5 · AssertJ · ModelMapper · Lombok · Docker Compose
 
 ---
 

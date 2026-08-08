@@ -131,4 +131,9 @@ javap -v build/classes/java/main/.../Application.class | grep major
 - **Tag da base `eclipse-temurin`**: use `eclipse-temurin:25-jre` (com hífen). A variante `25.jre` não existe no Docker Hub. E a versão precisa acompanhar o toolchain — ver a seção acima.
 - **JAR não encontrado**: rode `./gradlew clean bootJar` antes do `docker build` — o Dockerfile espera o artefato em `build/libs/`.
 - **Limpar builders**: `docker buildx rm algashop-builder` remove o builder criado.
+- **O `product-catalog` só ganhou Dockerfile na Fase 17** — era o único dos quatro sem imagem. Junto vieram o `bootJar { archiveFileName = 'product-catalog.jar' }` e a task `dockerBuild`, e o serviço entrou no `docker-compose.services.yml`.
+- **O `JAR_NAME` do Dockerfile tem que casar com o `archiveFileName` do `build.gradle`.** O `ADD` copia `build/libs/$JAR_NAME`; divergir quebra o build da imagem com um erro que não diz isso.
+- **As imagens são publicadas em `gabriel58221/*`**, e o compose passou a apontar para lá. Antes ele referenciava `algashop/*`, que nenhuma task publicava — `docker compose up` puxava (ou não achava) uma imagem que ninguém construía.
+
+> ⚠️ **Nenhum dos quatro Dockerfiles tem `HEALTHCHECK`**, mesmo depois de os serviços passarem a expor `/actuator/health/readiness`. O Docker considera o container saudável assim que o processo sobe. Fechar isso exigiria `curl` ou `wget` na imagem — a base `eclipse-temurin:25-jre` não traz nenhum dos dois — ou um bloco `healthcheck:` no compose. Ver [`health-checks.md`](./health-checks.md).
 - **Container de init aparece como `Exited (0)`**: é o esperado. `docker compose logs algashop-mongodb-init` mostra o resultado do `rs.initiate`.

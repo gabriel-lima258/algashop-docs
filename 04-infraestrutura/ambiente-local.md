@@ -82,7 +82,9 @@ docker compose -f docker-compose.tools.yml up -d
 docker compose -f docker-compose.services.yml up -d
 ```
 
-Isso exige que as imagens já existam localmente (`algashop/ordering:dev` e `algashop/billing:dev`) — ver [`docker.md`](./docker.md) para gerá-las.
+Isso sobe `ordering` (8081), `billing` (8082) e — desde a Fase 17 — `product-catalog` (8083). Exige que as imagens já existam localmente (`gabriel58221/ordering:dev`, `gabriel58221/billing:dev`, `gabriel58221/product-catalog:dev`) — ver [`docker.md`](./docker.md) para gerá-las com `./gradlew dockerBuild`.
+
+O `billing-scheduler` **não** está no compose: é um job efêmero que roda uma vez e encerra, não um serviço que fica de pé.
 
 ### Comandos úteis
 
@@ -121,6 +123,20 @@ A tabela que evita 90% dos problemas de "não conecta":
 > - De dentro de um container (perfil `docker`): `jdbc:postgresql://algashop-postgres:5432/ordering`
 
 O mesmo raciocínio vale para o WireMock: `http://localhost:8787` de fora, `http://wiremock:8080` de dentro.
+
+### Conferindo se um serviço está saudável
+
+Desde a Fase 17 os três serviços com HTTP expõem Actuator:
+
+```bash
+curl -s localhost:8081/actuator/health | jq            # tudo: banco, cache, circuitos
+curl -s localhost:8081/actuator/health/readiness | jq  # só o essencial para atender
+curl -s localhost:8081/actuator/info | jq
+```
+
+O `readiness` inclui **só o banco** — cache e circuitos fora do ar não tiram a instância de rotação. Ver [`health-checks.md`](./health-checks.md).
+
+> ⚠️ **Um `/actuator/health` com status `DEGRADED` ainda devolve HTTP 200.** Se você estiver testando com `curl -o /dev/null -w "%{http_code}"`, vai ver 200 mesmo com um circuito aberto. Olhe o corpo.
 
 ---
 
@@ -345,6 +361,9 @@ spring:
 | Cache nunca popula (`DBSIZE` sempre 0) | Conexão com o Redis falhando em silêncio | O `CacheErrorHandler` engole o erro; confira o log por `Cache GET error` |
 | `NotSerializableException` ao cachear | DTO sem `implements Serializable` | O serializador é o do Java; a exigência é transitiva a todos os campos |
 | Anotações de cache não fazem nada | `spring.cache.type` não é `redis` | Sem ela o `RedisCacheConfig` não é registrado, e o `@EnableCaching` não acontece |
+| `/actuator/health` sempre `UNKNOWN` | Indicador de service discovery registrado por dependência transitiva | `spring.cloud.discovery.client.health-indicator.enabled: false` — [detalhes](./health-checks.md) |
+| `/actuator/health` devolve 200 mesmo degradado | `DEGRADED` não é mapeado para 503 | Comportamento conhecido; olhe o corpo, não o código |
+| `cache` reporta `UP` com o Redis parado | Defeito conhecido no indicador | Registrado em [`health-checks.md`](./health-checks.md) |
 | Serviço não acha o `product-catalog` | Nada respondendo na URL configurada | Suba o WireMock ou o Stub Runner |
 | Pastas de submódulo vazias | Clone sem `--recurse-submodules` | `git submodule update --init --recursive` |
 | Alterações de um serviço somem | `git submodule update` sem `--remote` | Sempre cheque o status antes |
@@ -366,8 +385,8 @@ Coisas quebradas ou inconsistentes na configuração, encontradas ao documentar:
 
 - [x] ~~`algashop-ordering/src/main/resources/application.yaml` tem o bloco `spring.profiles.group` **malformado**.~~ Resolvido na Fase 15: a linha `development: development` virou `development:` com a lista abaixo, e o grupo passou a carregar `base` + `development-env` como os outros dois já faziam.
 - [ ] `application-docker-env.yaml` do `ordering`: o `datasource` aponta para `algashop-postgres:5432`, mas o `flyway.url` aponta para `algashop-postgres:5433` — dentro da rede Docker a porta correta é **5432** nos dois casos.
-- [ ] `docker-compose.services.yml` não inclui o `product-catalog` nem o `billing-scheduler` — só `ordering` e `billing`.
-- [ ] O `product-catalog` não tem serviço no compose, então o Cenário B não cobre o catálogo.
+- [x] ~~`docker-compose.services.yml` não inclui o `product-catalog`.~~ Resolvido na Fase 17: ele entrou junto com o Dockerfile que lhe faltava, esperando o `algashop-mongodb-init` com `condition: service_completed_successfully` — os nós ficam *healthy* antes de o replica set existir, então esperar por eles não bastaria.
+- [ ] **O `billing-scheduler` continua fora do compose**, e entrar exige uma decisão: sendo um job efêmero que roda uma vez e encerra, ele não é um serviço que "sobe". Entraria como job pontual, não como container permanente.
 
 ---
 

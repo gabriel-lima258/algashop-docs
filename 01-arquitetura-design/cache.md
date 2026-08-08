@@ -332,6 +332,25 @@ A aplicação **não chega a abrir conexão** com o Redis. O que já foi descart
 
 O último item é o que derruba a explicação mais provável. A infraestrutura de cache está montada, o interceptador existe, e ainda assim nenhum método anotado é interceptado.
 
+### A Fase 17 acrescentou uma evidência — e ela reformula o problema
+
+O health check trouxe um `CustomRedisCacheHealthIndicator` que faz um `ping()` explícito no Redis. Ele deveria ser o teste mais simples possível de conectividade. Medido com o `ordering` no ar:
+
+```
+1. Redis PARADO, três leituras seguidas do /actuator/health:
+   cache = UP, UP, UP
+
+2. CONFIG RESETSTAT, dois GET /actuator/health, e o servidor contando comandos:
+   PINGs vindos da aplicação: 0
+
+3. CLIENT LIST no Redis, com o serviço rodando:
+   1 cliente — o próprio redis-cli. A aplicação: nenhuma conexão.
+```
+
+Ou seja: **um `ping()` explícito também não abre conexão, e também não falha.** Isso muda a hipótese. O problema não parece estar no proxy de cache nem nas anotações — está mais embaixo, no cliente Redis desta aplicação, que retorna sucesso sem falar com o servidor.
+
+Continua sem causa raiz identificada, mas agora com duas evidências apontando para o mesmo lugar, e um caminho de investigação bem mais estreito que o da Fase 15. Ver [`health-checks.md`](../04-infraestrutura/health-checks.md).
+
 > **Isto fica em aberto, e é a razão de a pendência seguinte ser a mais importante da lista.** Um teste automatizado teria pegado isso no minuto zero — e a ausência dele é o que permitiu a leva inteira ser escrita, revisada e documentada com o cache desligado o tempo todo.
 >
 > Vale também como caso exemplar do que este documento já dizia em outro lugar: **cache mal configurado não quebra nada**. A API responde certo, os 56 testes passam, e o único sintoma é uma performance que nunca melhorou.

@@ -300,7 +300,7 @@ E a terceira, que veio de graça: `restock` e `withdraw` não carregam nem salva
 
 ---
 
-## Fase 16 — Resiliência entre serviços (ago/2026) ← etapa atual
+## Fase 16 — Resiliência entre serviços (ago/2026)
 
 Até aqui as chamadas entre serviços eram otimistas: nenhuma tinha timeout, e uma dependência lenta prendia a thread até desistir — o que nunca acontecia. Esta fase coloca as cinco proteções clássicas. O que a torna rica é que **o `ordering` e o `billing` chegaram a decisões opostas** com a mesma biblioteca, na mesma leva.
 
@@ -328,6 +328,31 @@ E a terceira, que veio de graça e é a mais transferível: a mudança mais impo
 
 ---
 
+## Fase 17 — Health check, readiness e degradação (ago/2026) ← etapa atual
+
+A Fase 16 protegeu as chamadas e deixou uma pendência: **ninguém sabia se um circuito tinha aberto** — o estado só existia em `log.info`. Esta fase expõe isso, e no caminho descobre que a pergunta "o serviço está bem?" é mal formulada.
+
+| Marco | O que se aprende |
+|---|---|
+| Liveness × readiness | Reiniciar não conserta dependência externa; tirar de rotação, sim |
+| Status `DEGRADED` inventado | `Status` não é enum — qualquer string vira status, e o `status.order` é que lhe dá significado |
+| `readiness` só com o banco | Cache e circuito fora **não** tiram a instância de rotação; foi verificado |
+| Indicador nativo do Redis desligado | Ele reportaria `DOWN`; para cache isso é grave demais |
+| `@Component("cache")` | O nome do bean é o nome no endpoint — renomear a classe muda o contrato |
+| `discovery.client.health-indicator: false` | Uma dependência transitiva registrava um indicador `UNKNOWN` eterno que envenenava o agregado |
+| `DEGRADED` devolvendo **HTTP 200** | Só `DOWN` e `OUT_OF_SERVICE` viram 503 — para um probe, degradado e saudável são iguais |
+| Dockerfile do `product-catalog` | O último serviço sem imagem passou a ter uma, e entrou no compose |
+
+**A lição da fase:** o vocabulário de estados é uma decisão de arquitetura, não de configuração. `UP` e `DOWN` só têm dois valores porque a maioria dos sistemas nunca precisou de um terceiro — e o terceiro é justamente o caso mais comum em microsserviços: **uma dependência caiu e o serviço continua útil**. Inventar `DEGRADED` foi barato; o difícil foi decidir o que entra no `readiness`, porque essa lista é a definição operacional de "essencial".
+
+A segunda lição veio da verificação, e é sobre confiança. Os dois indicadores foram escritos no mesmo dia, com a mesma estrutura, e **um funciona e o outro não**. O de circuitos reporta o estado real — provado abrindo um circuito e vendo o endpoint virar `DEGRADED`. O de cache reporta `UP` **sem abrir conexão com o Redis** — provado por `CLIENT LIST` e por contagem de comandos no servidor. Os dois parecem igualmente corretos lendo o código. **Health check é a única categoria de código em que "parece certo" não vale nada: ele existe justamente para ser acreditado.**
+
+E a terceira: `DEGRADED` devolve 200. O status foi criado, ordenado e reportado com esmero — e, para qualquer probe que olhe o código HTTP, ele não existe. **Boa parte do trabalho de observabilidade se perde no último centímetro**, entre o que o sistema sabe e o que ele consegue contar a quem pergunta.
+
+> [`health-checks.md`](../04-infraestrutura/health-checks.md)
+
+---
+
 ## Onde o projeto está
 
 **Consolidado:**
@@ -348,6 +373,7 @@ E a terceira, que veio de graça e é a mais transferível: a mudança mais impo
 - Suíte de integração sobre Testcontainers — não depende mais de infraestrutura de pé
 - Cache Redis server-side no catálogo e client-side no `ordering`, com cabeçalhos HTTP e `304`
 - Timeout, retry, bulkhead, circuit breaker e fallback nas três integrações de saída
+- Health check com Actuator, readiness por dependência essencial e status `DEGRADED`
 
 **Próximos passos naturais:**
 - **Teste automatizado do cache** — hoje nenhum `*IT` exercita `@Cacheable`/`@CacheEvict`, e a corretude depende de leitura de código
@@ -370,7 +396,7 @@ E a terceira, que veio de graça e é a mais transferível: a mudança mais impo
 
 ## O padrão que se repete
 
-Olhando as dezesseis fases em conjunto, a ordem foi sempre a mesma:
+Olhando as dezessete fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

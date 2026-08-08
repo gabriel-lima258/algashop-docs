@@ -208,7 +208,14 @@ Todos os testes de resiliência são `*IT`, e a task `test` filtra `excludeTests
 
 ## Pendências registradas
 
-- [ ] **Nenhuma observabilidade dos circuitos.** Sem Actuator, sem métrica de abertura, sem contador de retentativas. O estado só aparece em `log.info` antes de cada chamada — o suficiente para depurar um caso, insuficiente para saber se o circuito abre em produção.
+- [x] ~~**Nenhuma observabilidade dos circuitos.**~~ Resolvido na Fase 17. O `/actuator/health` ganhou um componente `circuitbreakers` que reporta o estado de cada circuito e a última exceção:
+  ```json
+  "circuitbreakers": { "status": "DEGRADED",
+    "details": { "rapidexAPICB": { "state": "OPEN",
+                                   "lastException": "Rapidex API Bad Gateway" },
+                 "productCatalogCB": { "state": "CLOSED" } } }
+  ```
+  O que **continua faltando**: contador de aberturas e de retentativas — o endpoint mostra o estado agora, não o histórico. Ver [`health-checks.md`](./health-checks.md).
 - [ ] **`FastpayResilienceIT` em porta fixa 8788**, compartilhando JVM com os outros ITs de FastPay.
 - [ ] **`openTimeout` de 5s contra 21s de backoff** — ver [`resiliencia.md`](../01-arquitetura-design/resiliencia.md#pendências-registradas).
 - [ ] **Timeouts HTTP hardcoded.** Diferente dos parâmetros do circuito, os `Duration.ofSeconds(...)` dos clientes não vêm de property — mudá-los exige recompilar.

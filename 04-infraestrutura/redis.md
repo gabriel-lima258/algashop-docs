@@ -207,7 +207,7 @@ Duas coisas para não errar:
 - [ ] **Sem TLS e sem ACL.** Senha única compartilhada, em texto no `.env` versionado. Aceitável localmente; num ambiente real seriam usuários por serviço com ACL restringindo comandos, e TLS no transporte.
 - [ ] **`--requirepass` continua interpolado do `.env`.** Funciona, mas o `environment:` do serviço ficou lá sem uso — duas fontes para a mesma informação é o que causou o problema original.
 - [ ] **Cache configurado só em `development`.** Nem `docker` nem `production` definem `spring.cache.type`.
-- [ ] **Sem métrica de taxa de acerto.** `keyspace_hits`/`keyspace_misses` existem no `INFO`, mas nada os coleta — não há como saber se o cache está valendo a pena.
+- [ ] **Sem métrica de taxa de acerto.** `keyspace_hits`/`keyspace_misses` existem no `INFO`, mas nada os coleta — não há como saber se o cache está valendo a pena. A Fase 17 acrescentou um componente `cache` ao `/actuator/health`, mas ele responde outra pergunta (está no ar?) e, pior, **responde errado**: reporta `UP` com o Redis parado. Ver [`health-checks.md`](./health-checks.md).
 - [ ] **`billing` e `billing-scheduler` não usam cache.** Nada decidiu que não devem; simplesmente não foi avaliado.
 
 ---
