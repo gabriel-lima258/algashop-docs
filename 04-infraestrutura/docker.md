@@ -69,6 +69,46 @@ docker buildx build \
   .
 ```
 
+## A cadeia de `include`
+
+São três arquivos, em dois saltos:
+
+```
+docker-compose.yml  ->  docker-compose.services.yml  ->  docker-compose.tools.yml
+```
+
+`docker compose up -d`, sem argumento nenhum, sobe tudo. Incluir os dois no arquivo raiz seria erro — o Compose recusa serviço declarado duas vezes.
+
+```bash
+docker compose up -d                                  # tudo
+docker compose -f docker-compose.tools.yml up -d      # só a infraestrutura
+```
+
+## Limite de memória não é detalhe de arrumação
+
+```yaml
+deploy:
+  resources:
+    limits:
+      memory: 512M
+```
+
+Parece configuração cosmética até o dia em que o container **desaparece**:
+
+```
+ExitCode=137  OOMKilled=true
+```
+
+Foi o que aconteceu com o `ordering` a 256M, por volta de **1600 req/s** — medido, não estimado. Não houve stack trace nem log de erro da aplicação: o kernel matou o processo e o cliente passou a receber conexão recusada.
+
+Para conferir a causa de um container que sumiu:
+
+```bash
+docker inspect <container> --format '{{.State.ExitCode}} {{.State.OOMKilled}}'
+```
+
+O `product-catalog` já rodava em 512M pelo mesmo motivo, sem que ninguém tivesse registrado o porquê. Agora está registrado — e vale a regra geral: **um limite que aperta antes esconde todos os outros.** Enquanto a memória estourava, era impossível medir qualquer coisa sobre threads. Ver [`threads-e-concorrencia.md`](./threads-e-concorrencia.md).
+
 ## Um container que só existe para configurar outros
 
 Nem todo serviço do compose precisa continuar de pé. O `algashop-mongodb-init` sobe, roda um comando e morre — é o que transforma três `mongod` isolados num replica set:
@@ -136,4 +176,4 @@ javap -v build/classes/java/main/.../Application.class | grep major
 - **As imagens são publicadas em `gabriel58221/*`**, e o compose passou a apontar para lá. Antes ele referenciava `algashop/*`, que nenhuma task publicava — `docker compose up` puxava (ou não achava) uma imagem que ninguém construía.
 
 > ⚠️ **Nenhum dos quatro Dockerfiles tem `HEALTHCHECK`**, mesmo depois de os serviços passarem a expor `/actuator/health/readiness`. O Docker considera o container saudável assim que o processo sobe. Fechar isso exigiria `curl` ou `wget` na imagem — a base `eclipse-temurin:25-jre` não traz nenhum dos dois — ou um bloco `healthcheck:` no compose. Ver [`health-checks.md`](./health-checks.md).
-- **Container de init aparece como `Exited (0)`**: é o esperado. `docker compose logs algashop-mongodb-init` mostra o resultado do `rs.initiate`.
+- **Container de init aparece como `Exited (0)`**: é o esperado. `docker compose logs algashop-mongodb-init` mostra o resultado do `rs.initiate`. O mesmo vale para o `algashop-billing-scheduler`, que entrou no compose na Fase 18: ele é um job, roda uma vez e encerra.

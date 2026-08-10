@@ -535,6 +535,34 @@ Comparar com o `@WebMvcTest` que o `ProductBase` usa para os contract tests: mes
 
 ---
 
+## Quando o stub deixa de servir
+
+Todo este documento é sobre **substituir** o serviço externo. Vale enquanto a pergunta é de correção: "o meu código lida certo com esta resposta?". Para isso, um stub é melhor que o serviço real — determinístico, rápido, e capaz de produzir o 502 que ninguém consegue provocar de propósito.
+
+Mas ele responde em microssegundos, sempre, sem banco, sem cache, sem concorrência. Quando a pergunta muda de "está certo?" para **"aguenta quanto?"**, o stub passa a ser o objeto medido — e a resposta deixa de significar coisa alguma.
+
+Foi por isso que, na Fase 18, o perfil `docker` do `ordering` deixou de apontar para o WireMock:
+
+```yaml
+algashop:
+  integrations:
+    rapidex.url: "http://wiremock:8080"
+    product-catalog.url: "http://algashop-product-catalog:8083"   # antes: wiremock
+```
+
+O catálogo passou a ser o serviço de verdade — com Mongo, Redis e as suas próprias latências. A Rapidex continua no WireMock, e a assimetria é deliberada: ela é um terceiro que não existe neste projeto, então não há o que subir.
+
+| Pergunta | O que usar |
+|---|---|
+| meu código lida certo com esta resposta? | stub |
+| o contrato entre os dois serviços continua válido? | stub gerado pelo provider |
+| quanto o sistema aguenta? | **serviço real** |
+| como o sistema se comporta quando o outro falha? | stub com cenário de erro |
+
+Ver [`testes-de-carga-k6.md`](./testes-de-carga-k6.md).
+
+---
+
 ## Resumo mental
 
 > **Contrato** = acordo escrito em `.groovy` que vive no **provider**.

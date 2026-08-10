@@ -328,7 +328,7 @@ E a terceira, que veio de graça e é a mais transferível: a mudança mais impo
 
 ---
 
-## Fase 17 — Health check, readiness e degradação (ago/2026) ← etapa atual
+## Fase 17 — Health check, readiness e degradação (ago/2026)
 
 A Fase 16 protegeu as chamadas e deixou uma pendência: **ninguém sabia se um circuito tinha aberto** — o estado só existia em `log.info`. Esta fase expõe isso, e no caminho descobre que a pergunta "o serviço está bem?" é mal formulada.
 
@@ -353,6 +353,34 @@ E a terceira: `DEGRADED` devolve 200. O status foi criado, ordenado e reportado 
 
 ---
 
+## Fase 18 — Teste de carga e o teto de threads (ago/2026) ← etapa atual
+
+Dezessete fases mediram **correção**. Esta é a primeira a medir **capacidade** — e a primeira em que a medição contrariou a expectativa três vezes seguidas.
+
+| Marco | O que se aprende |
+|---|---|
+| k6 com cenários e executores | VU é **concorrência**, arrival rate é **taxa**. Só o segundo mede capacidade |
+| `sleep()` em `constant-arrival-rate` | Não segura nada — só multiplica a demanda de VUs e faz o k6 descartar iterações em silêncio |
+| `check()` × threshold | `check` só conta; **só threshold reprova**. O teste de compra passava com a API errando 100% |
+| Thresholds por `{scenario:...}` | Sem o filtro, o smoke de 1 VU dilui o percentil do teste de carga |
+| Perfil `volume` sem threshold | Num teste que existe para achar o ponto de quebra, um limite de latência não mede nada |
+| **OOM antes do gargalo de thread** | Com 256M o container morria (exit 137) por volta de 1600 req/s |
+| Lei de Little, medida | 10 threads ÷ 8,6ms ≈ **1156 req/s** — foi exatamente a vazão observada |
+| **Threads virtuais pioraram 9×** | 1156 → 127 req/s, e o serviço travou de vez |
+| `server.tomcat.threads.max` ignorado | Ligar threads virtuais faz a linha virar letra morta, sem aviso nenhum |
+
+**A lição da fase:** o pool de threads era o único **controle de admissão** do sistema. Enquanto ele existia, o excesso de carga esperava *fora* da aplicação, na fila do TCP — e a saturação era bem-comportada: `p(95)` de 2,44s e **zero erros**. Threads virtuais removeram esse teto, milhares de requisições entraram de uma vez, e cada uma passou a segurar uma conexão do Hikari enquanto bloqueava num `@ConcurrencyLimit(10)` que não rejeita ninguém. A fila mudou de lugar — de barata para cara.
+
+**Threads virtuais não deixam nada mais rápido. Elas deixam mais coisas esperarem ao mesmo tempo.** Se o que está adiante tem capacidade 10, deixar 5.000 requisições chegarem lá não é ganho, é dano.
+
+A segunda lição é sobre o sistema, não sobre a tecnologia: havia **quatro limitadores de valor 10** — threads do Tomcat, pool do Hikari (default, nunca declarado), e os dois bulkheads da Fase 16 — configurados em três fases diferentes, por três motivos diferentes, sem que ninguém tivesse olhado os quatro juntos. Os bulkheads eram **código morto** enquanto o Tomcat tinha 10 threads: não existiam 11 threads para limitar. A primeira vez que dispararam, derrubaram o serviço.
+
+A terceira fecha o ciclo com a fase anterior: o serviço travado continuava `Up` para o Docker, e o `/actuator/health` **também não respondia** — ele depende das mesmas threads. Um health check que compartilha o pool da aplicação não consegue reportar a exaustão desse pool. **Quando a resposta mais importa, ela não chega.**
+
+> [`testes-de-carga-k6.md`](../03-testes-integracao/testes-de-carga-k6.md) · [`threads-e-concorrencia.md`](../04-infraestrutura/threads-e-concorrencia.md)
+
+---
+
 ## Onde o projeto está
 
 **Consolidado:**
@@ -374,8 +402,11 @@ E a terceira: `DEGRADED` devolve 200. O status foi criado, ordenado e reportado 
 - Cache Redis server-side no catálogo e client-side no `ordering`, com cabeçalhos HTTP e `304`
 - Timeout, retry, bulkhead, circuit breaker e fallback nas três integrações de saída
 - Health check com Actuator, readiness por dependência essencial e status `DEGRADED`
+- Ambiente de teste de carga com k6 — smoke, load e volume, com o compose subindo os quatro serviços
 
 **Próximos passos naturais:**
+- **Tirar as duas chamadas HTTP de dentro da `@Transactional` do `buyNow`** — o `billing` já fez o equivalente na Fase 16
+- **Declarar o pool do Hikari** e redimensionar os `@ConcurrencyLimit` a partir de medição, não do default
 - **Teste automatizado do cache** — hoje nenhum `*IT` exercita `@Cacheable`/`@CacheEvict`, e a corretude depende de leitura de código
 - Métrica de taxa de acerto do cache (`keyspace_hits`/`keyspace_misses` existem e ninguém coleta)
 - Cache nos perfis `docker` e `production`, que hoje rodam sem nenhum
@@ -390,13 +421,13 @@ E a terceira: `DEGRADED` devolve 200. O status foi criado, ordenado e reportado 
 - Devolver `brand` à busca por termo (`@TextIndexed`) e tirar o índice que ficou órfão
 - Testes do pipeline e um que afirme `IXSCAN` no `explain` (o agregado `Product` já tem o seu)
 - Autenticação (a auditoria usa um `UUID` aleatório como placeholder)
-- Observabilidade — tracing distribuído, métricas, log estruturado
+- Observabilidade — tracing distribuído, métricas (a começar por `hikaricp.connections.pending` e `tomcat.threads.busy`), log estruturado
 
 ---
 
 ## O padrão que se repete
 
-Olhando as dezessete fases em conjunto, a ordem foi sempre a mesma:
+Olhando as dezoito fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

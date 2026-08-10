@@ -206,6 +206,22 @@ Todos os testes de resiliência são `*IT`, e a task `test` filtra `excludeTests
 
 ---
 
+## O que a carga revelou sobre esta configuração
+
+A Fase 18 mediu o `ordering` sob carga e três coisas desta configuração ficaram diferentes do que pareciam:
+
+| Parâmetro | O que parecia | O que a medição mostrou |
+|---|---|---|
+| `@ConcurrencyLimit(10)` no catálogo | protege o serviço | **inalcançável** enquanto o Tomcat tinha 10 threads — código morto por duas fases |
+| `@ConcurrencyLimit(15)` na Rapidex | idem | idem |
+| `delay: 3s` + `multiplier: 2` | espera antes de tentar de novo | **21s segurando uma conexão do Hikari**, porque o `buyNow` chama o catálogo dentro da `@Transactional` |
+
+Quando os bulkheads finalmente dispararam — com threads virtuais ligadas, removendo o teto de 10 —, o serviço travou de forma permanente. O `ConcurrencyThrottleInterceptor` bloqueia sem limite de fila e sem timeout de espera, então a fila cresceu até ninguém mais ser atendido, e não drenou depois que a carga parou.
+
+Números e thread dump em [`threads-e-concorrencia.md`](./threads-e-concorrencia.md).
+
+---
+
 ## Pendências registradas
 
 - [x] ~~**Nenhuma observabilidade dos circuitos.**~~ Resolvido na Fase 17. O `/actuator/health` ganhou um componente `circuitbreakers` que reporta o estado de cada circuito e a última exceção:

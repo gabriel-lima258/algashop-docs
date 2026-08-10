@@ -26,7 +26,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 17 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 18 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -60,6 +60,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 |---|---|
 | [Stubs e contract tests](./03-testes-integracao/stubs-contract-tests.md) | Testar integração entre serviços sem subir todos: Spring Cloud Contract, WireMock, Stub Runner |
 | [Tratamento de erros na API](./03-testes-integracao/tratamento-erros-api.md) | `ProblemDetail` (RFC 9457), hierarquia de exceções e quando usar 404, 422 ou 500 |
+| [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) | Cenários, executores e thresholds — e as três armadilhas que fazem um teste de carga medir menos do que promete |
 
 ### 04 — Infraestrutura
 
@@ -71,6 +72,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) | Os parâmetros por cliente, a biblioteca que quase ninguém documenta, e como testar retry por contagem de requests |
 | [Health check e degradação](./04-infraestrutura/health-checks.md) | Liveness × readiness, um status `DEGRADED` inventado — e um indicador que funciona ao lado de outro que mente |
 | [Docker](./04-infraestrutura/docker.md) | Build de imagem, multi-arquitetura com Buildx e publicação em registry |
+| [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) | Onde o sistema realmente satura — e por que ligar threads virtuais o deixou **9× pior** |
 | [Jobs agendados](./04-infraestrutura/scheduled-jobs.md) | `@Scheduled`, execução em ambiente distribuído e controle de concorrência |
 
 ### Artefatos
@@ -97,6 +99,9 @@ Para revisar o conteúdo do zero, nesta ordem:
 
 **4. Como os serviços conversam e falham**
 [Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) → [Resiliência](./01-arquitetura-design/resiliencia.md) → [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) → [Health check](./04-infraestrutura/health-checks.md)
+
+**4b. Quanto o sistema aguenta**
+[Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) → [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md)
 
 **5. Como tudo roda**
 [Carga de dados](./04-infraestrutura/carga-de-dados-mongo.md) → [Docker](./04-infraestrutura/docker.md) → [Jobs agendados](./04-infraestrutura/scheduled-jobs.md)
@@ -129,6 +134,12 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Saber se o serviço pode receber tráfego | [Health check e degradação](./04-infraestrutura/health-checks.md) |
 | Diferença entre liveness e readiness | [Health check e degradação](./04-infraestrutura/health-checks.md) |
 | Dependência opcional fora sem derrubar o serviço | [Health check e degradação](./04-infraestrutura/health-checks.md) |
+| Saber quanto o sistema aguenta | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
+| Escolher entre VUs fixos e taxa fixa no k6 | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
+| Fazer um teste de carga reprovar de verdade | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
+| Decidir se vale ligar threads virtuais | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) |
+| Descobrir qual recurso satura primeiro | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) |
+| Entender por que o container morreu com exit 137 | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md), [Docker](./04-infraestrutura/docker.md) |
 | Dar baixa em estoque sem vender o que não tem | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) |
 | Fazer duas escritas caírem juntas, ou nenhuma | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
 | Por que `@Transactional` no Mongo pode não fazer nada | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |

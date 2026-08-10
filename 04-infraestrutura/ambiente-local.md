@@ -78,13 +78,29 @@ docker compose -f docker-compose.tools.yml up -d
 
 ### Cenário B — tudo em container
 
+Desde a Fase 18 o comando é o mais curto possível:
+
 ```bash
-docker compose -f docker-compose.services.yml up -d
+docker compose up -d
 ```
 
-Isso sobe `ordering` (8081), `billing` (8082) e — desde a Fase 17 — `product-catalog` (8083). Exige que as imagens já existam localmente (`gabriel58221/ordering:dev`, `gabriel58221/billing:dev`, `gabriel58221/product-catalog:dev`) — ver [`docker.md`](./docker.md) para gerá-las com `./gradlew dockerBuild`.
+O `docker-compose.yml` inclui o de serviços, que por sua vez inclui o de tools — um `up` sobe **tudo**: infraestrutura, `ordering` (8081), `billing` (8082), `product-catalog` (8083) e o `billing-scheduler`. Exige que as imagens já existam localmente (`gabriel58221/*:dev`) — ver [`docker.md`](./docker.md).
 
-O `billing-scheduler` **não** está no compose: é um job efêmero que roda uma vez e encerra, não um serviço que fica de pé.
+O `billing-scheduler` entrou como o que ele é: um job efêmero. Ele sobe, cancela as faturas vencidas e **encerra com código 0** — por isso `restart: no` e nenhuma porta publicada. Vê-lo como `Exited (0)` no `compose ps` é o comportamento correto, não uma falha. Em produção quem o reexecuta seria um CronJob; aqui, um `docker compose up algashop-billing-scheduler` quando quiser.
+
+Para subir só a infraestrutura, sem os quatro serviços:
+
+```bash
+docker compose -f docker-compose.tools.yml up -d
+```
+
+> 🔬 **O `ordering` sobe com o Tomcat limitado a 10 threads de propósito**, para que o teste de carga encontre um gargalo numa máquina de desenvolvimento. Para virar a chave das threads virtuais sem editar o compose:
+>
+> ```bash
+> VIRTUAL_THREADS=true docker compose up -d --force-recreate algashop-ordering
+> ```
+>
+> Cuidado: sob carga alta, essa configuração **trava o serviço de forma permanente** neste projeto. O porquê está em [`threads-e-concorrencia.md`](./threads-e-concorrencia.md).
 
 ### Comandos úteis
 
@@ -376,6 +392,11 @@ spring:
 | Dados de desenvolvimento sumiram depois de rodar testes | Um `*IT` sem `TestContainerMongoDBConfig` | Todo `*IT` precisa importá-lo; sem isso ele cai na URI do `application-test-env.yml` |
 | Teste de concorrência passa sempre, mesmo com código errado | As threads não chegaram a se sobrepor | O `CountDownLatch` é o que solta todas juntas — sem ele o teste não prova nada |
 | Container reiniciando sem parar | Falta memória | Os limites do compose são apertados (256M–512M) |
+| Container some sob carga, `Exited (137)` | OOM kill — o limite de memória do compose | `docker inspect <c> --format '{{.State.OOMKilled}}'`. O `ordering` precisou de 512M; 256M morria por volta de 1600 req/s |
+| `billing-scheduler` aparece como `Exited (0)` | É o esperado | É um job, não um serviço — roda uma vez e encerra |
+| Serviço para de responder e não volta, container `Up` | Fila ilimitada num `@ConcurrencyLimit` sob threads virtuais | Reinicie o container; a explicação está em [`threads-e-concorrencia.md`](./threads-e-concorrencia.md) |
+| `/actuator/health` não responde (nem timeout útil) | O endpoint usa o mesmo pool de threads da aplicação | Se o pool saturou, o health também está na fila — olhe `docker stats` e o log |
+| k6 roda o perfil errado sem avisar | `__ENV` não recebeu a variável | Use `-e PROFILE=volume`, e nunca o prefixo `K6_` — [detalhes](../03-testes-integracao/testes-de-carga-k6.md) |
 
 ---
 
@@ -386,7 +407,9 @@ Coisas quebradas ou inconsistentes na configuração, encontradas ao documentar:
 - [x] ~~`algashop-ordering/src/main/resources/application.yaml` tem o bloco `spring.profiles.group` **malformado**.~~ Resolvido na Fase 15: a linha `development: development` virou `development:` com a lista abaixo, e o grupo passou a carregar `base` + `development-env` como os outros dois já faziam.
 - [ ] `application-docker-env.yaml` do `ordering`: o `datasource` aponta para `algashop-postgres:5432`, mas o `flyway.url` aponta para `algashop-postgres:5433` — dentro da rede Docker a porta correta é **5432** nos dois casos.
 - [x] ~~`docker-compose.services.yml` não inclui o `product-catalog`.~~ Resolvido na Fase 17: ele entrou junto com o Dockerfile que lhe faltava, esperando o `algashop-mongodb-init` com `condition: service_completed_successfully` — os nós ficam *healthy* antes de o replica set existir, então esperar por eles não bastaria.
-- [ ] **O `billing-scheduler` continua fora do compose**, e entrar exige uma decisão: sendo um job efêmero que roda uma vez e encerra, ele não é um serviço que "sobe". Entraria como job pontual, não como container permanente.
+- [x] ~~**O `billing-scheduler` continua fora do compose.**~~ Resolvido na Fase 18: entrou como job pontual, com `restart: no`, sem portas, esperando o Postgres saudável e o `fastpay` apenas iniciado (`service_started` — o fastpay não declara healthcheck).
+- [ ] **O pool do Hikari nunca foi declarado** em nenhum dos serviços. O default de 10 governa o caminho de compra inteiro e não está escrito em lugar nenhum — a Fase 18 mostrou que ele é um dos quatro limitadores de valor 10 empilhados. Ver [`threads-e-concorrencia.md`](./threads-e-concorrencia.md).
+- [ ] **Nenhum Dockerfile tem `HEALTHCHECK` e o compose não tem `healthcheck:` nos serviços.** Aberto desde a Fase 17 e cobrado na Fase 18: um serviço completamente travado continuou aparecendo como `Up`.
 
 ---
 

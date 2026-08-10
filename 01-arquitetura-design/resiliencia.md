@@ -106,6 +106,10 @@ Limita quantas threads podem estar dentro daquele método ao mesmo tempo. Se o c
 
 E vale saber a conta do pior caso: 4 tentativas × 7s de read timeout + 21s de backoff ≈ **49 segundos** com uma vaga ocupada.
 
+> 🔬 **A Fase 18 mediu, e o resultado é desconfortável.** Enquanto o Tomcat esteve com `threads.max: 10`, **nenhum dos dois bulkheads podia disparar** — não existiam 11 threads para limitar. Eles eram código morto. Ligando threads virtuais, o teto sumiu, milhares de requisições entraram, o `@ConcurrencyLimit(10)` do catálogo finalmente engajou — e **derrubou o serviço**. O thread dump mostra as requisições paradas em `ConcurrencyThrottleInterceptor.invoke`, e a vazão caiu de 1156 para 127 req/s, sem recuperação depois que a carga cessou.
+>
+> O aviso acima sobre "protege só até a fila crescer" não era teórico. A fila é **ilimitada**, e a primeira vez que o bulkhead agiu foi para transformar degradação em travamento. Detalhes e números em [`threads-e-concorrencia.md`](../04-infraestrutura/threads-e-concorrencia.md).
+
 ### Circuit breaker — o único que age antes de a chamada sair
 
 Os outros quatro reagem depois de tentar. O circuito é o único que decide **não tentar**.
@@ -233,7 +237,9 @@ Pelo mesmo motivo, o `CreditCardManagementService` perdeu o `@Transactional` de 
 - [ ] **O fallback do frete nunca deixa a falha virar erro.** Nenhuma métrica conta quantas respostas foram estimadas.
 - [ ] **`@ConcurrencyLimit` é por método, não por dependência.** No `billing` são 7 limitadores independentes de 10 permits cada — não um bulkhead de 10 para o FastPay. Duas operações diferentes podem, somadas, ocupar 20 threads.
 - [ ] **Dois circuitos abrem separados para o mesmo host.** Uma queda total do FastPay custa no mínimo duas falhas reais antes de qualquer proteção.
-- [ ] **O teste de bulkhead não satura o bulkhead.** O `ProductCatalogServiceIT` faz 6 chamadas contra um limite de 10 — nenhuma thread chega a esperar.
+- [ ] **O teste de bulkhead não satura o bulkhead.** O `ProductCatalogServiceIT` faz 6 chamadas contra um limite de 10 — nenhuma thread chega a esperar. A Fase 18 saturou pela primeira vez, sob carga real, e o resultado foi travamento permanente.
+- [ ] **Os limites de 10 e 15 foram escolhidos sem medição**, e ficaram inalcançáveis por duas fases. Um bulkhead com timeout de espera (`tryAcquire`) seria mais honesto que um que bloqueia para sempre.
+- [ ] **O retry segura conexão de banco.** No `ordering`, o `buyNow` chama o catálogo **dentro** da `@Transactional`: um ciclo de backoff de 21s mantém uma das 10 conexões do Hikari ocupada o tempo todo. O `billing` já resolveu isso tirando o I/O da transação; o `ordering` não.
 - [x] ~~**Nenhuma métrica observa os circuitos.**~~ Resolvido na Fase 17: o `/actuator/health` passou a expor o estado de cada circuito, verificado abrindo um de verdade. Continua sem **contador** de aberturas — o endpoint mostra o estado agora, não o histórico —, e o status `DEGRADED` que ele produz devolve **HTTP 200**, então um probe automático não distingue circuito aberto de serviço saudável. Ver [`health-checks.md`](../04-infraestrutura/health-checks.md).
 - [ ] **Sem outbox nem reconciliação automática.** A fatura pendente depende do webhook do gateway ou de alguém consultar.
 
