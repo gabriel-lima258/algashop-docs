@@ -26,7 +26,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 19 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 20 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -76,6 +76,13 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) | Onde o sistema realmente satura — e por que ligar threads virtuais o deixou **9× pior** |
 | [Jobs agendados](./04-infraestrutura/scheduled-jobs.md) | `@Scheduled`, execução em ambiente distribuído e controle de concorrência |
 
+### 05 — Segurança
+
+| Documento | O que você aprende |
+|---|---|
+| [Identidade e fundamentos do OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) | Senha × certificado × token, IdP e IAM, os quatro papéis, grants e por que escopo é **teto** e não papel |
+| [Authorization Server](./05-seguranca/authorization-server.md) | Os dois clientes do projeto, token **opaco × JWT**, quem guarda as chaves — e por que isto ainda não protege nada |
+
 ### Artefatos
 
 | Pasta | Conteúdo |
@@ -100,6 +107,9 @@ Para revisar o conteúdo do zero, nesta ordem:
 
 **4. Como os serviços conversam e falham**
 [Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) → [Resiliência](./01-arquitetura-design/resiliencia.md) → [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) → [Health check](./04-infraestrutura/health-checks.md)
+
+**4a. Quem pode chamar**
+[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md)
 
 **4b. Quanto o sistema aguenta**
 [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) → [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md)
@@ -145,6 +155,12 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Saber o que uma URL pré-assinada garante (e o que não) | [Armazenamento de arquivos](./02-persistencia/armazenamento-de-arquivos.md) |
 | Emular a AWS localmente | [Armazenamento de arquivos](./02-persistencia/armazenamento-de-arquivos.md), [Ambiente local](./04-infraestrutura/ambiente-local.md) |
 | Ter dois adapters para a mesma porta | [Ports & Adapters](./01-arquitetura-design/ports-hexagonal.md) |
+| Diferença entre autenticar e autorizar | [Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) |
+| Escolher entre token opaco e JWT | [Authorization Server](./05-seguranca/authorization-server.md) |
+| Entender por que um JWT não se revoga | [Authorization Server](./05-seguranca/authorization-server.md) |
+| Saber o que é escopo (e o que ele **não** é) | [Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) |
+| Escolher o grant type certo | [Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) |
+| Descobrir para que serve o `/oauth2/jwks` | [Authorization Server](./05-seguranca/authorization-server.md) |
 | Dar baixa em estoque sem vender o que não tem | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) |
 | Fazer duas escritas caírem juntas, ou nenhuma | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
 | Por que `@Transactional` no Mongo pode não fazer nada | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |

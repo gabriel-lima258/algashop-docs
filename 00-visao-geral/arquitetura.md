@@ -6,7 +6,7 @@
 
 ## O sistema
 
-O AlgaShop é um e-commerce decomposto em quatro microsserviços, cada um com banco próprio e ciclo de deploy independente.
+O AlgaShop é um e-commerce decomposto em quatro microsserviços, cada um com banco próprio e ciclo de deploy independente — mais um **authorization server**, que não é de negócio: ele existe para emitir credencial.
 
 ```mermaid
 graph TB
@@ -17,6 +17,7 @@ graph TB
         C["<b>product-catalog</b><br/>:8083<br/>produtos e categorias"]
         B["<b>billing</b><br/>:8082<br/>faturas e pagamento"]
         S["<b>billing-scheduler</b><br/>jobs agendados"]
+        A["<b>authorization-server</b><br/>:9000<br/>emite tokens OAuth2"]
     end
 
     subgraph Bancos
@@ -34,6 +35,7 @@ graph TB
     B -->|HTTP| FP
     O -->|HTTP| RX
     S -->|cancela faturas expiradas| B
+    O -.->|pede token| A
 
     O --- PG
     B --- PG
@@ -100,6 +102,14 @@ Produtos e categorias. O único serviço em MongoDB — e a razão é o padrão 
 | **Pacote** | `com.algaworks.algashop.product.catalog` |
 
 > [`product-catalog-mongo.md`](../02-persistencia/product-catalog-mongo.md) · [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md) · [`concorrencia-e-atomicidade.md`](../02-persistencia/concorrencia-e-atomicidade.md) · [`eventos-e-listeners.md`](../01-arquitetura-design/eventos-e-listeners.md) · [`tratamento-erros-api.md`](../03-testes-integracao/tratamento-erros-api.md)
+
+### `authorization-server` — quem emite credencial
+
+O único serviço sem domínio de negócio. Ele não tem banco, não tem entidade, e quase não tem código: uma dependência do Spring Authorization Server e dois clientes declarados em YAML produzem os seis endpoints do protocolo OAuth 2.1.
+
+Ele está separado pela mesma razão que os outros: **emitir credencial e verificar credencial são responsabilidades diferentes**. Concentrar a emissão num serviço significa que o segredo mora num lugar só, e que acrescentar um microsserviço não acrescenta mais um lugar que precisa saber validar senha.
+
+> ⚠️ **Nenhum dos outros serviços exige token ainda.** A seta pontilhada no diagrama é a intenção, não o estado atual — não há resource server configurado. Ver [`authorization-server.md`](../05-seguranca/authorization-server.md).
 
 ### `billing-scheduler` — jobs agendados
 

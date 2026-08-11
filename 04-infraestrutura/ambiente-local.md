@@ -133,6 +133,8 @@ A tabela que evita 90% dos problemas de "não conecta":
 | FastPay | **9995** | 9995 | gateway de pagamento simulado |
 | LocalStack | **4566** | 4566 | a AWS emulada — só S3, bucket `algashop-product-image` |
 
+O `authorization-server` roda em **9000** e **não está no compose** — sobe por `./gradlew bootRun`. A porta era 8081 e foi trocada na Fase 20 justamente porque colidia com a do `ordering`. Ver [`authorization-server.md`](../05-seguranca/authorization-server.md).
+
 > ⚠️ **A porta 5433 não é engano.** O Postgres do projeto é exposto em `5433` no host justamente para não conflitar com uma instalação nativa de PostgreSQL, que ocupa a `5432`. Dentro da rede Docker os containers continuam falando na `5432`.
 >
 > Por isso as URLs mudam conforme de onde você conecta:
@@ -405,6 +407,9 @@ spring:
 | Upload falha no *preflight*, sem mensagem sobre S3 | CORS do bucket não aplicado | `awslocal s3api get-bucket-cors --bucket algashop-product-image`; o `init.sh` aplica na subida |
 | LocalStack morre durante a inicialização | OOM no `s3 sync` das imagens | O limite é 1 GB e o sync roda em processo único — não paralelize |
 | `component 'awsS3' is DEGRADED` | LocalStack parado | Esperado: storage é dependência **opcional**, o `readiness` continua `UP` |
+| `Port 8081 was already in use` ao subir o authorization server | Porta antiga, hoje do `ordering` | Foi corrigida para **9000** na Fase 20 — confira o `application-base.yaml` |
+| `invalid_client` ao pedir token | Cliente inexistente no perfil ativo | Os clientes só estão em `application-development-env.yaml`; o perfil `production` sobe sem nenhum |
+| JWT válido ontem passa a dar `401` hoje | Chave de assinatura não persistida | Sem configuração, o Spring gera par novo a cada subida — reiniciar invalida os tokens |
 
 ---
 

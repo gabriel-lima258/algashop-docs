@@ -381,7 +381,7 @@ A terceira fecha o ciclo com a fase anterior: o serviço travado continuava `Up`
 
 ---
 
-## Fase 19 — Imagens em S3 com URL pré-assinada (ago/2026) ← etapa atual
+## Fase 19 — Imagens em S3 com URL pré-assinada (ago/2026)
 
 O catálogo ganhou imagens. A decisão que organiza tudo é uma só, e é a resposta direta ao que a Fase 18 mediu: **nenhum byte passa pelo backend**.
 
@@ -409,6 +409,35 @@ E uma quarta, de contabilidade: trazer o `mainImage` para a listagem custou o `$
 
 ---
 
+## Fase 20 — Identidade, OAuth 2.1 e o Authorization Server (ago/2026) ← etapa atual
+
+Dezenove fases construíram um sistema que **não sabe quem está do outro lado**. Nasce o sexto repositório — e ele é quase só configuração: uma dependência, uma classe vazia e dois clientes em YAML.
+
+| Marco | O que se aprende |
+|---|---|
+| Senha × certificado × token | Três credenciais, três respostas para "quem valida, quanto dura, e o que acontece se vazar" |
+| Autenticar × autorizar | "Quem é você" e "o que você pode" são perguntas diferentes, e terceirizar a segunda quase nunca é certo |
+| Os quatro papéis do OAuth 2 | E que *client* não é "o app do usuário" — é **quem pede o token** |
+| Emitir × verificar | Quem valida **nunca vê a senha**: o segredo mora num lugar só |
+| `client_credentials` primeiro | Sem usuário no fluxo, é o grant que ensina o vocabulário inteiro sem o ruído do redirecionamento |
+| Escopo é **teto**, não papel | Limita o que o token pode; não substitui a regra de negócio, que decide depois |
+| **Opaco × JWT** | Opaco é referência (valida por introspecção, revoga na hora); JWT é auto-contido (valida local, **não revoga**) |
+| TTL de 5m no JWT | Não é arbitrário: sem revogação, **o tempo de vida é a janela de exposição** |
+| `/oauth2/jwks` e o `kid` | Publicar a chave pública é o que torna a rotação possível sem deploy coordenado |
+| OAuth 2.1 | As mudanças quase todas **retiram** opções — `implicit` e `password` foram removidos |
+
+**A lição da fase:** a mesma propriedade aparece três vezes com nomes diferentes. No certificado, no JWT e no desenho todo do OAuth, **quem valida nunca precisa do segredo**. É isso que permite ter cinco serviços verificando credenciais sem que nenhum deles guarde uma — e é a razão de emitir e verificar serem papéis separados, não uma escolha de arquitetura entre outras.
+
+A segunda lição é o formato do token, que parece detalhe e decide o resto. JWT compra independência (o resource server valida sozinho, e continua funcionando com o emissor fora do ar) e **paga em revogação** — um token vazado vale até expirar. Opaco compra controle e paga uma ida à rede por requisição. Os dois clientes registrados existem para tornar essa troca visível, e os TTLs de 15m e 5m são a consequência aritmética dela.
+
+E a terceira, que precisa ser dita com clareza: **isto ainda não protege nada.** Emitir token não protege recurso enquanto ninguém exigir o token, e nenhum serviço tem uma linha de configuração de resource server. A ordem está certa — não dá para verificar o que não existe —, mas o ciclo está aberto.
+
+O `product-catalog` já ganhou a **dependência** de resource server, sem configuração, e isso bastou para derrubar 4 testes com `401`. Vale como quarta lição: **o starter de segurança tranca a aplicação inteira só por estar no classpath.** É o único starter que faz algo drástico sem ser configurado — e é proposital, porque falhar fechado é a escolha certa quando o assunto é segurança.
+
+> [`fundamentos-identidade-oauth2.md`](../05-seguranca/fundamentos-identidade-oauth2.md) · [`authorization-server.md`](../05-seguranca/authorization-server.md)
+
+---
+
 ## Onde o projeto está
 
 **Consolidado:**
@@ -432,8 +461,12 @@ E uma quarta, de contabilidade: trazer o `mainImage` para a listagem custou o `$
 - Health check com Actuator, readiness por dependência essencial e status `DEGRADED`
 - Ambiente de teste de carga com k6 — smoke, load e volume, com o compose subindo os quatro serviços
 - Imagens de produto em S3 (LocalStack local), com upload direto por URL pré-assinada
+- Authorization server emitindo token por `client_credentials`, nos formatos opaco e JWT
 
 **Próximos passos naturais:**
+- **Configurar os resource servers** — enquanto `ordering`, `billing` e `catalog` não exigirem token, o authorization server não protege nada
+- **Persistir a chave de assinatura** — hoje cada reinício invalida todo JWT emitido
+- **`authorization_code` + PKCE e um usuário de verdade** — o fluxo com pessoa ainda não existe
 - **Testes para imagens e storage** — hoje são zero, e o `StorageProviderFakeImpl` existe exatamente para isso sem ser usado por nenhum
 - **Recolher objetos órfãos no bucket** — entre autorizar e reivindicar, o arquivo pode ficar sem dono
 - **Tirar as duas chamadas HTTP de dentro da `@Transactional` do `buyNow`** — o `billing` já fez o equivalente na Fase 16
@@ -451,14 +484,14 @@ E uma quarta, de contabilidade: trazer o `mainImage` para a listagem custou o `$
 - Índices na coleção `categories` (hoje a busca por nome é varredura com regex)
 - Devolver `brand` à busca por termo (`@TextIndexed`) e tirar o índice que ficou órfão
 - Testes do pipeline e um que afirme `IXSCAN` no `explain` (o agregado `Product` já tem o seu)
-- Autenticação (a auditoria usa um `UUID` aleatório como placeholder)
+- ~~Autenticação~~ — começou na Fase 20; falta o resource server, e só então a auditoria troca o `UUID` aleatório pelo `sub` do token
 - Observabilidade — tracing distribuído, métricas (a começar por `hikaricp.connections.pending` e `tomcat.threads.busy`), log estruturado
 
 ---
 
 ## O padrão que se repete
 
-Olhando as dezenove fases em conjunto, a ordem foi sempre a mesma:
+Olhando as vinte fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

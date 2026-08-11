@@ -355,7 +355,7 @@ Confirmado que o resto sobreviveu à troca: `hasDiscount`, `inStock` e `slug` co
 - [ ] **Nenhum teste cobre imagens ou storage.** Zero. Nem o `Product.addImage`/`removeImage` (que é domínio puro e testável sem infraestrutura nenhuma), nem os application services com o `StorageProviderFakeImpl` — que existe exatamente para isso e não é usado por teste algum.
 - [ ] **Objetos órfãos.** Entre pedir a URL e reivindicar a imagem, o arquivo pode ficar no bucket sem dono, e nada o recolhe. Um *lifecycle rule* no bucket ou uma varredura periódica resolveria.
 - [ ] **Tamanho não é imposto.** Migrar para POST com policy e `content-length-range`, ou aceitar e limitar por cota do bucket.
-- [ ] **Sem autenticação no `/api/v1/upload-requests`** — endpoint aberto que emite permissão de escrita. É o mesmo buraco de todo o projeto, com consequência nova.
+- [ ] **Sem autenticação no `/api/v1/upload-requests`** — endpoint aberto que emite permissão de escrita. É o mesmo buraco de todo o projeto, com consequência nova. A Fase 20 começou a fechá-lo pelo lado do emissor; falta o catálogo virar resource server e exigir escopo aqui. Ver [`authorization-server.md`](../05-seguranca/authorization-server.md).
 - [ ] **Conteúdo nunca é inspecionado.** Nada garante que o objeto seja uma imagem. Exigiria etapa assíncrona pós-upload.
 - [ ] **A listagem voltou a trafegar o documento inteiro**, e o `shortDescription` mudou de 50 para 15 caracteres sem que nenhum contrato notasse.
 - [ ] **`delete` remove do storage antes de salvar o agregado.** Se o `save` falhar depois do `deleteFile`, o arquivo já foi e o produto continua apontando para ele.
