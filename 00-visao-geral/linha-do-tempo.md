@@ -153,7 +153,7 @@ A fase anterior terminou com uma pendência escrita em letras grandes: *nenhum �
 
 | Marco | O que se aprende |
 |---|---|
-| `products-large.json` com 560 mil documentos | Otimização sem massa é palpite; primeiro se cria o cenário onde a diferença aparece |
+| `products-large.json` com 560 mil documentos | Otimização sem massa é palpite; primeiro se cria o cenário onde a diferença aparece *(o arquivo foi removido do repositório na Fase 19)* |
 | `explain("executionStats")` | `COLLSCAN` vs. `IXSCAN`, e os números que dizem se o índice foi mesmo usado |
 | `@CompoundIndex` e a regra **ESR** | A ordem dos campos no índice não é estética — igualdade, ordenação, faixa |
 | Dois índices compostos, não um | Um índice serve bem **uma** ponta por consulta; a outra cairia em ordenação em memória |
@@ -353,7 +353,7 @@ E a terceira: `DEGRADED` devolve 200. O status foi criado, ordenado e reportado 
 
 ---
 
-## Fase 18 — Teste de carga e o teto de threads (ago/2026) ← etapa atual
+## Fase 18 — Teste de carga e o teto de threads (ago/2026)
 
 Dezessete fases mediram **correção**. Esta é a primeira a medir **capacidade** — e a primeira em que a medição contrariou a expectativa três vezes seguidas.
 
@@ -381,6 +381,34 @@ A terceira fecha o ciclo com a fase anterior: o serviço travado continuava `Up`
 
 ---
 
+## Fase 19 — Imagens em S3 com URL pré-assinada (ago/2026) ← etapa atual
+
+O catálogo ganhou imagens. A decisão que organiza tudo é uma só, e é a resposta direta ao que a Fase 18 mediu: **nenhum byte passa pelo backend**.
+
+| Marco | O que se aprende |
+|---|---|
+| Upload em duas fases | O serviço **autoriza**; o cliente envia direto ao S3. O `remoteFileName` é o que amarra as duas pontas |
+| URL pré-assinada | Amarra método, bucket, chave, content-type e prazo — **e nada além disso** |
+| `fileExists` antes de anexar | Como o arquivo não passou por aqui, o catálogo precisa **perguntar** se ele chegou |
+| Nome do cliente descartado | O objeto vira um UUID: resolve colisão, *path traversal* e vazamento pelo nome |
+| Porta em `application/`, adapters em `infrastructure/` | E `@ConditionalOnProperty` como **requisito de inicialização**, não estilo: duas `@Component` na mesma interface e o Spring não sobe |
+| `mainImage` como invariante | A primeira imagem vira principal sozinha; remover a principal promove outra |
+| URL de leitura derivada, não persistida | Endereço não é identidade — trocar de bucket vira configuração, não migração |
+| LocalStack com `ready.d` | Bucket, CORS e massa carregados sozinhos no `docker compose up` |
+| **O tamanho declarado não é imposto** | 391 KB entregues sob autorização de 100 bytes, aceitos sem reclamação |
+
+**A lição da fase:** a arquitetura está declarada na assinatura da porta. `StorageProvider` não tem um único método que receba ou devolva bytes — e é isso, não um comentário, que impede alguém de "só passar o arquivo pelo controller" seis meses depois. **Quando a decisão importante cabe no tipo, ela para de depender de disciplina.**
+
+A segunda lição é sobre o que se perde junto. Sem ver os bytes, o serviço **não pode** validar conteúdo: a checagem de tipo é por extensão do nome, e um executável renomeado para `.png` passa. Não é descuido — é o preço, e ele precisa estar escrito ao lado do benefício.
+
+A terceira é a que só apareceu medindo: a URL assinada **carrega o nome do host** e vai para o navegador. `algashop-localstack` é nome de container, e a máquina de quem desenvolve não resolve — daí três linhas no arquivo `hosts`. É a consequência literal de tirar o backend do caminho: **o cliente precisa alcançar o mesmo endereço que o servidor usou para assinar.**
+
+E uma quarta, de contabilidade: trazer o `mainImage` para a listagem custou o `$project` do pipeline. O documento inteiro voltou a trafegar do Mongo, e o `shortDescription` mudou de 50 para 15 caracteres **sem que nenhum contrato ou teste notasse** — o mesmo tipo de mudança silenciosa que já tinha feito o `score` sumir na Fase 15.
+
+> [`armazenamento-de-arquivos.md`](../02-persistencia/armazenamento-de-arquivos.md)
+
+---
+
 ## Onde o projeto está
 
 **Consolidado:**
@@ -403,8 +431,11 @@ A terceira fecha o ciclo com a fase anterior: o serviço travado continuava `Up`
 - Timeout, retry, bulkhead, circuit breaker e fallback nas três integrações de saída
 - Health check com Actuator, readiness por dependência essencial e status `DEGRADED`
 - Ambiente de teste de carga com k6 — smoke, load e volume, com o compose subindo os quatro serviços
+- Imagens de produto em S3 (LocalStack local), com upload direto por URL pré-assinada
 
 **Próximos passos naturais:**
+- **Testes para imagens e storage** — hoje são zero, e o `StorageProviderFakeImpl` existe exatamente para isso sem ser usado por nenhum
+- **Recolher objetos órfãos no bucket** — entre autorizar e reivindicar, o arquivo pode ficar sem dono
 - **Tirar as duas chamadas HTTP de dentro da `@Transactional` do `buyNow`** — o `billing` já fez o equivalente na Fase 16
 - **Declarar o pool do Hikari** e redimensionar os `@ConcurrencyLimit` a partir de medição, não do default
 - **Teste automatizado do cache** — hoje nenhum `*IT` exercita `@Cacheable`/`@CacheEvict`, e a corretude depende de leitura de código
@@ -427,7 +458,7 @@ A terceira fecha o ciclo com a fase anterior: o serviço travado continuava `Up`
 
 ## O padrão que se repete
 
-Olhando as dezoito fases em conjunto, a ordem foi sempre a mesma:
+Olhando as dezenove fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

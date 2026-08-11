@@ -17,6 +17,8 @@ Esta etapa é a resposta a ela.
 
 O detalhe é que o problema **não dava para ver**. Com o `products.json` de carga — algumas dezenas de documentos — varrer tudo e usar índice levam o mesmo tempo. Foi por isso que entrou o `db/testdata/products-large.json`, com 560 mil produtos: sem massa, não há o que medir, e "otimização" vira palpite.
 
+> ⚠️ **O arquivo foi removido do repositório na Fase 19.** Os números e o raciocínio deste documento continuam válidos — eles foram obtidos com ele —, mas quem quiser reproduzir precisa **regerar a massa**. Com o `products.json` de dezenas de documentos, `COLLSCAN` e `IXSCAN` levam o mesmo tempo e o `explain` não mostra diferença nenhuma.
+
 ---
 
 ## Como o MongoDB decide
@@ -326,7 +328,7 @@ Por isso não se indexa "tudo por via das dúvidas". Indexa-se o que a consulta 
 - [ ] **Os dois pesos do índice de texto são `1`.** Achar no nome deveria valer mais que achar na descrição; hoje valem igual. `weight = 10` em `name` resolveria.
 - [ ] **A coleção `categories` não tem índice nenhum**, e o `CategoryQueryServiceImpl` filtra por `Criteria.where("name").regex(...)` sem âncora — varredura garantida. Hoje são poucas categorias; o padrão é o oposto do que o `Product` acabou de adotar. O `Pattern.quote` também continua faltando ali.
 - [ ] **`auto-index-creation: true` está no `application.yml` default**, não num perfil de desenvolvimento — mesma situação do `data-load.auto-drop`.
-- [ ] **O `products-large.json` não está referenciado** no `sources` do `data-load` (a entrada está comentada). Quem clonar o projeto e rodar o `explain` vai medir sobre dezenas de documentos e não ver diferença nenhuma.
+- [ ] **A massa grande não existe mais.** O `products-large.json` foi removido na Fase 19, e com ele a única forma de reproduzir as medições deste documento. Falta um script que gere massa equivalente sob demanda — versionar 11 MB era caro, mas não ter como medir é pior.
 - [ ] **Nenhum teste verifica o plano de execução.** Um teste de integração que rode `explain` e afirme `IXSCAN` seria a única forma de perceber que um índice parou de ser usado — hoje isso passaria em silêncio.
 - [ ] **A propagação da categoria não usa nenhum dos dois índices.** O `updateMulti` do `ProductCategoryUpdater` filtra só por `category._id`, sem `enabled`, então não casa o `partialFilter` — é varredura, e ainda escreve em campo indexado, mexendo nos dois compostos. Ver [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).
 

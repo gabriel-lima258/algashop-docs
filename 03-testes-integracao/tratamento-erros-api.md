@@ -58,6 +58,8 @@ RuntimeException
 │      (camada de aplicação)
 │
 └── UnprocessableContentException            → 422 Unprocessable Content
+
+StorageProviderException (infrastructure/)   → 422 Unprocessable Content
        (camada de apresentação)
 ```
 
@@ -69,6 +71,9 @@ Duas famílias, três camadas:
 | `DomainEntityNotFoundException` | `domain/` | uma entidade referenciada **não existe** |
 | `ResourceNotFoundException` | `application/` | o recurso pedido pelo caso de uso não existe |
 | `UnprocessableContentException` | `presentation/` | o corpo da requisição é sintaticamente válido, mas semanticamente impossível |
+| `StorageProviderException` | `infrastructure/` | o provedor de arquivos recusou a operação — arquivo ausente, chave já em uso |
+
+> `StorageProviderException` é a única das quatro que nasce na **infraestrutura**, e por isso merece um segundo de atenção. Ela cai em 422 e não em 500 porque o que ela relata quase sempre é decisão de quem chamou — pedir para anexar um arquivo que não está no bucket é entrada inválida, não falha do servidor. O risco embutido é o oposto: uma indisponibilidade real do S3 também vira 422, culpando o cliente por um problema que não é dele. Verificado na Fase 19: anexar `nunca-subiu.jpg` devolve `422` com `ProblemDetail` correto.
 
 As classes base (`DomainException` e `DomainEntityNotFoundException`) reexpõem os cinco construtores de `RuntimeException`. É verboso, mas garante que qualquer subclasse possa escolher entre mensagem, causa ou ambos.
 
@@ -108,7 +113,8 @@ Repare que `ProductNotFoundException` e `CategoryNotFoundException` **não** pre
 ### 422 — conteúdo semanticamente inválido
 
 ```java
-@ExceptionHandler({DomainException.class, UnprocessableContentException.class})
+@ExceptionHandler({DomainException.class, UnprocessableContentException.class,
+                   StorageProviderException.class})
 public ProblemDetail handleUnprocessableContentException(Exception e) {
     ProblemDetail problemDetail = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_CONTENT);
     problemDetail.setTitle("Unprocessable content");

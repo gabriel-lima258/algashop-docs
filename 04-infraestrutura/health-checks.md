@@ -118,6 +118,35 @@ antes:                                    depois da falha:
 
 Três coisas de uma vez: o estado real chega ao endpoint; o agregado vai a `DEGRADED` e **não** a `DOWN`, provando o `status.order`; e `productCatalogCB` segue `CLOSED`, provando que os circuitos são independentes.
 
+### Armazenamento S3 — funciona, e também foi provado
+
+A Fase 19 acrescentou o terceiro indicador, no `product-catalog`:
+
+```java
+@Component("awsS3")
+@ConditionalOnProperty(name = "algashop.storage.provider", havingValue = "s3", matchIfMissing = true)
+public class StorageProviderAwsS3HealthIndicator implements HealthIndicator {
+    public Health health() {
+        return storageProviderAwsS3.healthCheck() ? Health.up().build()
+                                                  : Health.status("DEGRADED").build();
+    }
+}
+```
+
+Verificado parando o LocalStack:
+
+| | de pé | parado |
+|---|---|---|
+| `awsS3` | `UP` | **`DEGRADED`** |
+| agregado | `UP` | `DEGRADED` |
+| `mongo` | `UP` | `UP` |
+| `/actuator/health/readiness` | `UP` | **`UP`** |
+| tempo do `/actuator/health` | 0,011s | 0,30s |
+
+Ele **funciona** — e a razão é a mesma que explica o próximo, que não funciona: `healthCheck()` chama `bucketExists`, uma operação de rede de verdade. Um indicador só vale o que ele efetivamente exercita.
+
+O `readiness` não se mexe, que é o contrato: storage fora não tira a instância de rotação. E o custo de degradar é baixo, 0,3s, porque a conexão é recusada de imediato em vez de esperar timeout — o que não seria verdade se o S3 estivesse *lento* em vez de *fora*.
+
 ### Cache — **não funciona**
 
 ```java
@@ -204,6 +233,8 @@ Sem o nome explícito, o Boot derivaria do nome da classe: `customRedisCache` e 
 ---
 
 ## Pendências registradas
+
+- [ ] **Um indicador lento trava o endpoint.** O `awsS3` custa 0,3s quando o serviço está fora, porque a conexão é recusada na hora. Se o S3 ficasse *lento* em vez de indisponível, o `/actuator/health` herdaria essa latência — não há timeout próprio no indicador.
 
 - [ ] **O indicador de cache não detecta o Redis fora do ar.** Reporta `UP` sem abrir conexão — provado por `CLIENT LIST` e por `commandstats`. Mesma família do problema aberto na Fase 15.
 - [ ] **O ciclo do health check está aberto.** Os três serviços expõem `/actuator/health/readiness` e **nada o consome**: nenhum `HEALTHCHECK` nos Dockerfiles, nenhum `healthcheck:` nos serviços de aplicação do compose. Na prática o Docker considera o container saudável assim que o processo sobe. Fechar exigiria `curl`/`wget` na imagem — a base `eclipse-temurin:25-jre` não tem nenhum dos dois — ou um bloco no compose.

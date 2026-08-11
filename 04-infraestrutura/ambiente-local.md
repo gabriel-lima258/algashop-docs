@@ -131,6 +131,7 @@ A tabela que evita 90% dos problemas de "não conecta":
 | Redis | **6379** | 6379 | cache do catálogo (db 0) e do `ordering` (db 1) |
 | WireMock | **8787** | 8080 | mock de APIs externas |
 | FastPay | **9995** | 9995 | gateway de pagamento simulado |
+| LocalStack | **4566** | 4566 | a AWS emulada — só S3, bucket `algashop-product-image` |
 
 > ⚠️ **A porta 5433 não é engano.** O Postgres do projeto é exposto em `5433` no host justamente para não conflitar com uma instalação nativa de PostgreSQL, que ocupa a `5432`. Dentro da rede Docker os containers continuam falando na `5432`.
 >
@@ -139,6 +140,8 @@ A tabela que evita 90% dos problemas de "não conecta":
 > - De dentro de um container (perfil `docker`): `jdbc:postgresql://algashop-postgres:5432/ordering`
 
 O mesmo raciocínio vale para o WireMock: `http://localhost:8787` de fora, `http://wiremock:8080` de dentro.
+
+O **LocalStack é a exceção**, e vale entender por quê: a URL pré-assinada é gerada com o endereço que o servidor conhece (`algashop-localstack:4566`) e depois usada **pelo navegador**. Não há tradução possível — o mesmo nome tem que valer dos dois lados, e é isso que as entradas no `hosts` compram.
 
 ### Conferindo se um serviço está saudável
 
@@ -397,6 +400,11 @@ spring:
 | Serviço para de responder e não volta, container `Up` | Fila ilimitada num `@ConcurrencyLimit` sob threads virtuais | Reinicie o container; a explicação está em [`threads-e-concorrencia.md`](./threads-e-concorrencia.md) |
 | `/actuator/health` não responde (nem timeout útil) | O endpoint usa o mesmo pool de threads da aplicação | Se o pool saturou, o health também está na fila — olhe `docker stats` e o log |
 | k6 roda o perfil errado sem avisar | `__ENV` não recebeu a variável | Use `-e PROFILE=volume`, e nunca o prefixo `K6_` — [detalhes](../03-testes-integracao/testes-de-carga-k6.md) |
+| `Unable to load region from any of the providers in the chain` | Starter do S3 no classpath sem região configurada | Derruba o contexto **inteiro**, inclusive em teste. `spring.cloud.aws.region.static` resolve |
+| Upload falha no navegador, serviço `UP` | O host da URL assinada não resolve na máquina do cliente | Acrescente as três linhas de LocalStack ao `hosts` |
+| Upload falha no *preflight*, sem mensagem sobre S3 | CORS do bucket não aplicado | `awslocal s3api get-bucket-cors --bucket algashop-product-image`; o `init.sh` aplica na subida |
+| LocalStack morre durante a inicialização | OOM no `s3 sync` das imagens | O limite é 1 GB e o sync roda em processo único — não paralelize |
+| `component 'awsS3' is DEGRADED` | LocalStack parado | Esperado: storage é dependência **opcional**, o `readiness` continua `UP` |
 
 ---
 

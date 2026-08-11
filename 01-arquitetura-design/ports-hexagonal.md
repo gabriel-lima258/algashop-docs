@@ -307,6 +307,42 @@ O Controller só conhece `ports/in`. O `QueryService` só conhece `ports/out`. C
 
 ---
 
+## 9.1 Um caso completo: `StorageProvider`
+
+O exemplo mais limpo de porta de saída do projeto entrou na Fase 19, no `product-catalog`:
+
+```java
+// application/storage/StorageProvider.java  — a porta
+public interface StorageProvider {
+    boolean healthCheck();
+    URL requestUploadUrl(FileReference fileReference);
+    void deleteFile(String remoteFileName);
+    boolean fileExists(String remoteFileName);
+}
+```
+
+```java
+// infrastructure/storage/s3/     — adapter de produção
+@ConditionalOnProperty(name = "algashop.storage.provider", havingValue = "s3", matchIfMissing = true)
+public class StorageProviderAwsS3Impl implements StorageProvider { ... }
+
+// infrastructure/storage/fake/   — adapter para rodar sem AWS
+@ConditionalOnProperty(name = "algashop.storage.provider", havingValue = "fake")
+public class StorageProviderFakeImpl implements StorageProvider { ... }
+```
+
+Três coisas valem ser notadas:
+
+**A interface mora em `application/`, as implementações em `infrastructure/`.** É a inversão de dependência da seção 5.3 em forma concreta: a aplicação declara o que precisa, e a infraestrutura se adapta. Nenhum `import` de infraestrutura aparece num caso de uso.
+
+**A troca de adapter é uma propriedade**, não uma mudança de código. A suíte inteira roda com o `fake` — nenhum teste depende de LocalStack de pé.
+
+> As `@ConditionalOnProperty` aqui não são estilo: são **requisito de inicialização**. Duas `@Component` implementando a mesma interface e o Spring não sabe qual injetar — a aplicação nem sobe. Sempre que houver mais de um adapter para a mesma porta, alguma coisa precisa desempatar.
+
+**A assinatura da porta carrega a decisão de arquitetura.** Nenhum método recebe ou devolve bytes, porque o arquivo nunca passa pelo serviço — o cliente envia direto ao S3 com uma URL assinada. Isso não é um comentário que alguém pode ignorar: é o tipo, e ele impede que a decisão seja desfeita por distração seis meses depois. Ver [armazenamento de arquivos](../02-persistencia/armazenamento-de-arquivos.md).
+
+---
+
 ## 10. O que NÃO confundir
 
 | | Port IN | Port OUT |

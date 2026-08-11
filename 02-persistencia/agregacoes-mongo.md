@@ -307,6 +307,33 @@ O erro comum é escolher aggregation por parecer mais sofisticado. Ele custa mai
 
 ---
 
+## O `$project` saiu na Fase 19 — e vale entender o porquê
+
+Trazer a imagem principal para a listagem custou o `$project` inteiro:
+
+```java
+// antes: o pipeline materializava o DTO direto
+mongoOperations.aggregate(aggregation, Product.class, ProductSummaryOutput.class)
+
+// depois: materializa o agregado e mapeia em Java
+List<Product> products = mongoOperations
+        .aggregate(aggregation, Product.class, Product.class).getMappedResults();
+products.stream().map(p -> mapper.convert(p, ProductSummaryOutput.class)).toList();
+```
+
+O motivo é uma limitação real, não preguiça: o `mainImage` do resumo é um **objeto aninhado** cuja `url` se monta concatenando uma propriedade da aplicação (`algashop.mapping.image-storage-url`) ao nome do arquivo. O `$project` não conhece configuração de Spring. Ou a URL passava a ser persistida no documento — trocando um problema por outro pior —, ou a montagem voltava para Java.
+
+O preço:
+
+- **O documento inteiro volta do Mongo** em toda listagem: `description` completa e o `Set<Image>` inteiro, para exibir um resumo e uma miniatura. Numa página de 20, multiplicado por 20.
+- **O `shortDescription` mudou de formato.** O `$substrCP(0, 50)` cortava em 50 caracteres crus; o `TypeMap` que voltou usa `abbreviate(..., 15)`. Medido na API depois da mudança: `"15-inch lapt..."` — 12 caracteres e reticências.
+
+É a terceira vez que este pipeline muda de estratégia e um campo muda de comportamento sem que nada acuse: o `$lookup` saiu na Fase 12, o `score` sumiu na Fase 15 por causa de um `project(Class)` apontando para o DTO errado, e agora o resumo encolheu. **Nenhum contrato e nenhum teste afirmam nada sobre esses campos**, e é exatamente por isso que eles conseguem mudar em silêncio.
+
+Ver [armazenamento de arquivos](./armazenamento-de-arquivos.md).
+
+---
+
 ## Armadilhas
 
 1. **`$text` precisa ser o primeiro estágio.** Em qualquer outra posição, erro.
@@ -326,7 +353,7 @@ O erro comum é escolher aggregation por parecer mais sofisticado. Ele custa mai
 - [ ] **O `$project` ainda roda antes do `$skip`/`$limit`**, recortando campo sobre todo o conjunto filtrado para devolver 15. A correção é reordenar para `$match` → `$sort` → `$skip` → `$limit` → `$project`. *(Encolheu na Fase 12: a metade cara desta pendência, o `$lookup`, deixou de existir.)*
 - [x] ~~**`count` e pipeline podem divergir** por causa do `$unwind` como inner join.~~ Resolvido pela desnormalização — sem join, não há divergência possível. Ver [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).
 - [ ] **`_id` e `score` aparecem duplicados** no `$project`. Inofensivo (o segundo sobrescreve o primeiro), mas é sinal de código montado por tentativa.
-- [ ] **O resumo mudou de formato sem decisão explícita.** Era `abbreviate(15)`, que corta em 15 e acrescenta `"..."`; virou `$substrCP(0, 50)`, que corta em 50 caracteres crus, sem reticências e podendo cortar palavra ao meio.
+- [ ] **O resumo mudou de formato duas vezes, sem decisão explícita nas duas.** Era `abbreviate(15)`; virou `$substrCP(0, 50)` na Fase 11; e voltou para `abbreviate(15)` na Fase 19, quando o `$project` saiu. Nenhum contrato ou teste afirma nada sobre o campo.
 - [ ] **`fromStringToShortStringConverter` ficou sem uso** no `ModelMapperConfig` — foi mantido como referência do que o mapper fazia, mas é código morto.
 - [~] **O pipeline em si continua sem teste.** O `ProductQueryServiceImplTest` cobre a montagem do `$match` — mocka o `MongoOperations`, faz o `count` devolver zero e inspeciona o `query.getQueryObject()` capturado, o que valida o `$expr` sem precisar de Mongo de pé. Justamente por sair cedo no caminho de zero resultados, ele **não** exercita `$project` nem a ordem dos estágios. Isso pede um teste de integração com `@DataMongoTest`.
 

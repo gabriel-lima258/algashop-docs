@@ -769,6 +769,7 @@ components:
         - contentLength
         - contentType
         - uploadSignedUrl
+        - expiresAt
       properties:
         remoteFileName:
           type: string
@@ -782,6 +783,10 @@ components:
         uploadSignedUrl:
           type: string
           example: "https://images.algashop.com/28fcd9fb-4ce7-44d6-9583-14d8b3dc5aff.png"
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2024-04-04T00:12:45Z"
     ImageInput:
       type: object
       required:

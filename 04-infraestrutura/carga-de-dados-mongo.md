@@ -223,7 +223,7 @@ Com `spring.data.mongodb.auto-index-creation: true`, os índices do `Product` j�
 
 ## Massa grande, para medir índice
 
-Além do `products.json` (algumas dezenas de produtos), existe um `db/testdata/products-large.json` com **560 mil documentos**, ~11 MB.
+Além do `products.json` (algumas dezenas de produtos), existiu um `db/testdata/products-large.json` com **560 mil documentos**, ~11 MB — **removido do repositório na Fase 19**. O mecanismo descrito abaixo continua valendo para qualquer massa grande; o arquivo é que precisa ser regerado.
 
 Ele não serve para desenvolver, e sim para **medir**: com poucas dezenas de documentos, varredura de coleção e busca por índice levam o mesmo tempo, e qualquer conclusão sobre desempenho é palpite. É só com volume que o `explain` mostra diferença.
 
@@ -309,7 +309,7 @@ A última linha é a consulta que o filtro `hasDiscount` gera — ver [`consulta
 - [ ] **A cópia da categoria pode nascer dessincronizada.** Cada produto traz `category.name` escrito à mão no JSON, e nada confere contra `categories.json` — o `ProductCategory.of(...)` não participa da carga. Ver [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md).
 - [x] ~~**`_class` apontando para um pacote inexistente** (`domain.model.product.Product`).~~ Corrigido na Fase 12 — ver a nota de estudo acima.
 - [x] ~~**Nenhum índice é criado.**~~ Resolvido por fora daqui: os índices são declarados por anotação no agregado e criados pelo `auto-index-creation` — ver [`../02-persistencia/indices-mongo.md`](../02-persistencia/indices-mongo.md). Foi por causa disso que o `drop()` virou `deleteMany({})`.
-- [ ] **A massa grande não está referenciada.** `products-large.json` está no repositório, mas a entrada no `sources` está comentada — quem clonar e rodar o `explain` vai medir sobre dezenas de documentos e não ver diferença.
+- [ ] **A massa grande não existe mais.** O `products-large.json` saiu do repositório na Fase 19. Quem clonar e rodar o `explain` vai medir sobre dezenas de documentos e não ver diferença — falta um gerador de massa sob demanda para substituí-lo.
 - [ ] **Sem teste.** `parseJsonToDocuments` é uma função pura sobre `String` — daria um teste unitário barato, sem Mongo de pé.
 - [x] ~~**O `auto-drop` é perigoso demais para conviver com a suíte de testes.**~~ Resolvido na Fase 13 e reforçado na Fase 14. Primeiro veio um banco separado (`product_catalog_test`, em `src/test/resources/application-test-env.yml`); depois, um **Mongo separado**, subido pelos próprios testes via Testcontainers — o que tira a possibilidade de acidente em vez de apenas evitá-la. O `DataLoader` passou a ser usado **dentro** dos testes (`dataLoader.run(...)` no `@BeforeEach`), onde apagar e recarregar deixa de ser risco e vira exatamente o que se quer: cada cenário começando do mesmo estado. Ver [`ambiente-local.md`](./ambiente-local.md).
 

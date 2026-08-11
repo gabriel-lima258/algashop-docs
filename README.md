@@ -26,7 +26,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 18 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 19 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -50,6 +50,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) | O outro jeito de consultar: `$lookup` contra o N+1, campos derivados no `$project` e por que a ordem dos estágios é o custo |
 | [Normalizado × desnormalizado](./02-persistencia/desnormalizacao-mongo.md) | Quando duplicar dado é decisão e não bagunça — a cópia embutida, o que ela cobra e a pegadinha do `category._id` |
 | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) | Lost update, atualização condicional com `findAndModify`, `$inc` como delta e por que teste sequencial não prova nada |
+| [Armazenamento de arquivos](./02-persistencia/armazenamento-de-arquivos.md) | URL pré-assinada, upload que **não passa pelo backend**, LocalStack — e o que a assinatura não garante |
 | [Transações e replica set](./02-persistencia/transacoes-mongo.md) | Por que transação no Mongo exige um cluster, o que o `MongoTransactionManager` liga — e quando transação **não** acrescenta nada |
 | [Paginação](./02-persistencia/paginacao.md) | Paginação com Criteria API, projeção com `builder.construct()` e consulta de contagem |
 | [Flyway](./02-persistencia/flyway.md) | Versionar o schema como código; por que `ddl-auto` não serve para produção |
@@ -95,7 +96,7 @@ Para revisar o conteúdo do zero, nesta ordem:
 [Ports & Adapters](./01-arquitetura-design/ports-hexagonal.md) → [Specification](./01-arquitetura-design/specification.md) → [CQS e CQRS](./01-arquitetura-design/cqrs.md)
 
 **3. Como os dados são guardados e consultados**
-[Flyway](./02-persistencia/flyway.md) → [Paginação](./02-persistencia/paginacao.md) → [NoSQL conceitos](./02-persistencia/nosql-conceitos.md) → [MongoDB na prática](./02-persistencia/product-catalog-mongo.md) → [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) → [Índices](./02-persistencia/indices-mongo.md) → [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) → [Normalizado × desnormalizado](./02-persistencia/desnormalizacao-mongo.md) → [Eventos e listeners](./01-arquitetura-design/eventos-e-listeners.md) → [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) → [Transações e replica set](./02-persistencia/transacoes-mongo.md) → [Cache](./01-arquitetura-design/cache.md) → [Redis na prática](./04-infraestrutura/redis.md)
+[Flyway](./02-persistencia/flyway.md) → [Paginação](./02-persistencia/paginacao.md) → [NoSQL conceitos](./02-persistencia/nosql-conceitos.md) → [MongoDB na prática](./02-persistencia/product-catalog-mongo.md) → [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) → [Índices](./02-persistencia/indices-mongo.md) → [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) → [Normalizado × desnormalizado](./02-persistencia/desnormalizacao-mongo.md) → [Eventos e listeners](./01-arquitetura-design/eventos-e-listeners.md) → [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) → [Transações e replica set](./02-persistencia/transacoes-mongo.md) → [Cache](./01-arquitetura-design/cache.md) → [Redis na prática](./04-infraestrutura/redis.md) → [Armazenamento de arquivos](./02-persistencia/armazenamento-de-arquivos.md)
 
 **4. Como os serviços conversam e falham**
 [Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) → [Resiliência](./01-arquitetura-design/resiliencia.md) → [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) → [Health check](./04-infraestrutura/health-checks.md)
@@ -140,6 +141,10 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Decidir se vale ligar threads virtuais | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) |
 | Descobrir qual recurso satura primeiro | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) |
 | Entender por que o container morreu com exit 137 | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md), [Docker](./04-infraestrutura/docker.md) |
+| Receber upload de arquivo sem passar pelo backend | [Armazenamento de arquivos](./02-persistencia/armazenamento-de-arquivos.md) |
+| Saber o que uma URL pré-assinada garante (e o que não) | [Armazenamento de arquivos](./02-persistencia/armazenamento-de-arquivos.md) |
+| Emular a AWS localmente | [Armazenamento de arquivos](./02-persistencia/armazenamento-de-arquivos.md), [Ambiente local](./04-infraestrutura/ambiente-local.md) |
+| Ter dois adapters para a mesma porta | [Ports & Adapters](./01-arquitetura-design/ports-hexagonal.md) |
 | Dar baixa em estoque sem vender o que não tem | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) |
 | Fazer duas escritas caírem juntas, ou nenhuma | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
 | Por que `@Transactional` no Mongo pode não fazer nada | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
