@@ -107,7 +107,7 @@ Campo a campo:
 >
 > A leitura vale mais que a mudança: **a escolha do formato do token não é do emissor, é do sistema.** Quem valida define o que consegue validar, e o emissor se ajusta. O contraste descrito abaixo continua sendo o raciocínio certo — ele só deixou de estar exercitado aqui.
 
-O cliente de teste carrega os 16 escopos de todos os serviços porque é ele que faz `curl` na mão. O do `ordering` carrega **um**, porque o `ordering` só lê o catálogo — e **o escopo mais estreito que faz o trabalho é o certo**. Um token dele que vaze não escreve nada.
+O cliente de teste carrega os 16 escopos de todos os serviços porque é ele que faz `curl` na mão. O do `ordering` carrega **um** — e desde a Fase 22 ele saiu do papel: o serviço usa esse registro de verdade para pedir token antes de chamar o catálogo (ver [OAuth2 client e token](./oauth2-client-e-token.md)) — porque o `ordering` só lê o catálogo — e **o escopo mais estreito que faz o trabalho é o certo**. Um token dele que vaze não escreve nada.
 
 ---
 

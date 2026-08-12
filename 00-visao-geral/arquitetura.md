@@ -113,7 +113,9 @@ Ele está separado pela mesma razão que os outros: **emitir credencial e verifi
 
 Desde a Fase 21 os três serviços de negócio são **resource servers**: exigem token em toda rota e validam a assinatura com a chave pública que baixam do `/oauth2/jwks`. Cada rota declara o escopo que precisa.
 
-> ⚠️ **A seta `ordering → authorization-server` ainda é intenção.** O `ordering` chama o catálogo por HTTP e **não propaga token** — o catálogo responde 401, e o client mapeia 4xx para vazio, entregando 422 "produto não encontrado" ao usuário. Ver [`resource-server-e-escopos.md`](../05-seguranca/resource-server-e-escopos.md).
+Desde a Fase 22 o `ordering` também é **OAuth2 client**: ele pede token por `client_credentials`, guarda em cache e anexa o `Bearer` ao chamar o catálogo. A seta deixou de ser intenção.
+
+> ⚠️ **No perfil `docker` isso não funciona ainda:** o endereço do issuer é um nome de container e **o authorization server não está no compose**. Ver [`oauth2-client-e-token.md`](../05-seguranca/oauth2-client-e-token.md).
 
 ### `billing-scheduler` — jobs agendados
 

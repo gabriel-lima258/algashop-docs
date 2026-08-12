@@ -438,7 +438,7 @@ O `product-catalog` já ganhou a **dependência** de resource server, sem config
 
 ---
 
-## Fase 21 — Resource servers, escopos e a matriz de autorização (ago/2026) ← etapa atual
+## Fase 21 — Resource servers, escopos e a matriz de autorização (ago/2026)
 
 A fase anterior terminou com "isto ainda não protege nada". Esta constrói **quem verifica** — e mostra que fechar metade de um ciclo pode ser pior que não ter começado.
 
@@ -462,6 +462,31 @@ A segunda lição é sobre **onde a decisão de autorização mora**. Ela parece
 E a terceira é o velho tema deste caderno em roupa nova: `hasAuthority('SCOPE_orders:raed')` **compila**. A segurança de um sistema inteiro apoiada numa string sem verificação de tipo é o mesmo problema do nome de cache da Fase 15 e do `project(Class)` errado da Fase 12 — **o que não é verificado em compilação precisa ser verificado por teste, ou não é verificado.**
 
 > [`resource-server-e-escopos.md`](../05-seguranca/resource-server-e-escopos.md)
+
+---
+
+## Fase 22 — O `ordering` como OAuth2 client (ago/2026) ← etapa atual
+
+A fase anterior deixou o ciclo fechado pela metade, e um sintoma enganoso: 422 "produto não encontrado" onde a causa era 401. Esta fecha a outra ponta — e desfaz um acoplamento que tinha entrado junto.
+
+| Marco | O que se aprende |
+|---|---|
+| Papel duplo | Ser resource server **não** torna um serviço capaz de chamar outro serviço protegido — são configurações independentes |
+| As três peças | O `registration` diz **como**, o manager **executa**, o interceptor **anexa**. Sem a terceira, tudo parece configurado e nenhuma chamada leva header |
+| `AuthorizedClientService...` × `Default...` | O segundo espera uma requisição HTTP em curso; máquina-para-máquina precisa funcionar em job e pool assíncrono |
+| **Principal sintético** | O cache indexa por `(registrationId, principal)`; o principal padrão é o **usuário da requisição**, e cachear token de máquina por usuário fragmenta o cache |
+| **`token-uri` × `issuer-uri`** | `issuer-uri` no lado *client* faz descoberta na **subida do contexto** — e acopla a inicialização ao authorization server |
+| Uma fonte para o endereço | Os dois papéis interpolam do mesmo valor: divergir faz o serviço recusar o token que ele mesmo pediu |
+| `catch` estreitado para `NotFound` | 401 e 403 deixaram de virar "produto não encontrado": agora são **502** |
+| `unless = "#result == null"` | O Spring desembrulha o `Optional` antes do cache — o `unless` vê o valor, não o container |
+
+**A lição da fase** é sobre acoplamento invisível: a configuração que parecia mais conveniente — `issuer-uri`, que descobre tudo sozinho — era a que amarrava a **subida** de um serviço à disponibilidade de outro. E o sintoma não dizia isso: dava um serviço que "não inicia", sem menção a segurança. **Conveniência de configuração e independência de deploy costumam estar em lados opostos**, e o lado certo depende do que se paga quando o outro serviço cai.
+
+A segunda é sobre identidade em cache. O `principalResolver` só nomeia o dono da entrada de cache — misturá-lo com a autenticação da requisição faz um token **que não pertence a ninguém** ser guardado como se pertencesse a alguém, e o custo aparece como carga extra no authorization server, não como erro.
+
+E a terceira já é um padrão, terceira vez seguida: **toda propriedade obrigatória acrescentada ao `development-env` quebra a suíte**, porque `src/test/resources` é uma árvore separada. Fase 19, Fase 21, Fase 22 — e o sintoma nunca aponta para a causa: o erro fala de um bean que falta, não de uma linha de YAML que ninguém copiou.
+
+> [`oauth2-client-e-token.md`](../05-seguranca/oauth2-client-e-token.md)
 
 ---
 
@@ -490,9 +515,10 @@ E a terceira é o velho tema deste caderno em roupa nova: `hasAuthority('SCOPE_o
 - Imagens de produto em S3 (LocalStack local), com upload direto por URL pré-assinada
 - Authorization server emitindo token JWT por `client_credentials`, com 16 escopos granulares
 - Os três serviços como resource servers, com escopo por rota e 142 testes travando a matriz
+- O `ordering` como OAuth2 client: token por `client_credentials`, cacheado e anexado por interceptor
 
 **Próximos passos naturais:**
-- **Propagar token do `ordering` para o catálogo** — sem isso o fluxo de compra está quebrado, e o 422 esconde a causa
+- **Pôr o authorization server no compose** — no perfil `docker` o `ordering` não alcança o issuer
 - **Validar audiência (`aud`)** — hoje um token vale em qualquer um dos três serviços
 - **Verificar a origem do webhook do FastPay** — ele muda estado de fatura sem autenticação nenhuma
 - **Persistir a chave de assinatura** — hoje cada reinício invalida todo JWT emitido
@@ -521,7 +547,7 @@ E a terceira é o velho tema deste caderno em roupa nova: `hasAuthority('SCOPE_o
 
 ## O padrão que se repete
 
-Olhando as vinte e uma fases em conjunto, a ordem foi sempre a mesma:
+Olhando as vinte e duas fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

@@ -217,6 +217,21 @@ Pelo mesmo motivo, o `CreditCardManagementService` perdeu o `@Transactional` de 
 
 ---
 
+## O que o circuito enxerga mudou na Fase 22
+
+O `ResilientProductCatalogAPIClient` engolia **todo** 4xx e devolvia `Optional.empty()`. Com o `catch` estreitado para `HttpClientErrorException.NotFound`, só o 404 continua virando vazio; 401 e 403 passam a ser traduzidos para `BadGatewayException.ClientErrorException` → **502**.
+
+Isso muda duas coisas de resiliência:
+
+- **O que escapa como exceção conta como falha para o circuito.** Antes, um catálogo respondendo 401 a tudo era invisível para o breaker — nenhuma exceção saía. Agora abre o circuito.
+- **Sem retry, e está certo:** 4xx não está no `includes` da `RetryPolicy`. Repetir um 401 dá outro 401.
+
+Vale registrar a tensão, porque ela não tem resposta única: 4xx **é culpa da requisição**, não do serviço chamado — abrir o circuito por causa disso pune o catálogo por um erro do `ordering`. Em compensação, um `ordering` mal configurado martelando o catálogo com requisições que sempre falham é exatamente o que o circuito existe para conter. Hoje ele abre; se isso vier a incomodar, a saída é distinguir os dois casos no `run()` do breaker.
+
+Ver [OAuth2 client e token](../05-seguranca/oauth2-client-e-token.md).
+
+---
+
 ## Armadilhas
 
 1. **Sem timeout, o circuito nunca abre.** É o padrão que habilita os outros.

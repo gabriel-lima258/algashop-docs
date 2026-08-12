@@ -133,7 +133,9 @@ A tabela que evita 90% dos problemas de "não conecta":
 | FastPay | **9995** | 9995 | gateway de pagamento simulado |
 | LocalStack | **4566** | 4566 | a AWS emulada — só S3, bucket `algashop-product-image` |
 
-O `authorization-server` roda em **9000** e **não está no compose** — sobe por `./gradlew bootRun`. Desde a Fase 21 os outros três serviços **dependem dele para subir com segurança funcionando**: o `issuer-uri` aponta para `http://algashop-authorization-server:9000`, e é de lá que eles buscam as chaves públicas. A porta era 8081 e foi trocada na Fase 20 justamente porque colidia com a do `ordering`. Ver [`authorization-server.md`](../05-seguranca/authorization-server.md).
+O `authorization-server` roda em **9000** e **não está no compose** — sobe por `./gradlew bootRun`. Os outros três apontam o `issuer-uri` para `http://algashop-authorization-server:9000` e é de lá que buscam as chaves públicas.
+
+> Desde a Fase 22 o `ordering` **sobe sem o authorization server no ar**: o lado client passou a declarar `token-uri` em vez de `issuer-uri`, eliminando a descoberta que acontecia durante o refresh do contexto. A primeira ida à rede virou a primeira requisição que precisa de token, não a inicialização. Ver [`oauth2-client-e-token.md`](../05-seguranca/oauth2-client-e-token.md). A porta era 8081 e foi trocada na Fase 20 justamente porque colidia com a do `ordering`. Ver [`authorization-server.md`](../05-seguranca/authorization-server.md).
 
 > ⚠️ **A porta 5433 não é engano.** O Postgres do projeto é exposto em `5433` no host justamente para não conflitar com uma instalação nativa de PostgreSQL, que ocupa a `5432`. Dentro da rede Docker os containers continuam falando na `5432`.
 >
@@ -412,7 +414,8 @@ spring:
 | JWT válido ontem passa a dar `401` hoje | Chave de assinatura não persistida | Sem configuração, o Spring gera par novo a cada subida — reiniciar invalida os tokens |
 | Tudo responde `401` depois de subir | Nenhum token sendo enviado | Os três serviços exigem token em toda rota desde a Fase 21 — só `/actuator/health/**` e o webhook do FastPay são públicos |
 | `403` com token que parece certo | Escopo faltando, não autenticação | O corpo não diz qual escopo falta, de propósito; confira a matriz em [`resource-server-e-escopos.md`](../05-seguranca/resource-server-e-escopos.md) |
-| `422 produto não encontrado` na compra | O `ordering` chama o catálogo **sem token** e o 401 é engolido | Achado conhecido da Fase 21 — a propagação de token ainda não existe |
+| `502` na compra, com o AS fora do ar | O `ordering` pede token e não consegue | Comportamento correto desde a Fase 22: o 401 deixou de virar "produto não encontrado" |
+| Compra falha só no perfil `docker` | O AS não está no compose, e o issuer é nome de container | Suba o AS por `./gradlew bootRun` fora do compose — pendência registrada |
 | `UnknownHostException: algashop-authorization-server` | Falta a linha no arquivo `hosts` | Está em `etc/hostnames/hostnames`; sem ela nenhum serviço resolve o issuer |
 
 ---

@@ -274,7 +274,9 @@ Exatamente um caso vermelho, exatamente o certo.
 
 ---
 
-## O achado: o `ordering` chama o catálogo sem token
+## O achado: o `ordering` chamava o catálogo sem token
+
+> ✅ **Fechado na Fase 22.** O `ordering` virou OAuth2 client, obtém token por `client_credentials` e anexa o `Bearer` por interceptor; e o `catch` foi estreitado para `NotFound`, então 401 deixou de virar 422. O que segue é o registro do problema, que continua valendo como lição. Ver [OAuth2 client e token](./oauth2-client-e-token.md).
 
 O catálogo agora exige autenticação em tudo. O `ordering` chama o catálogo por HTTP a cada compra. E não há uma linha de propagação de token no client de saída — nenhum `Authorization`, nenhum `ClientRegistration`.
 
@@ -308,7 +310,7 @@ Vale registrar o mecanismo geral, porque ele se repete: **engolir 4xx é conveni
 
 ## Pendências registradas
 
-- [ ] **O `ordering` não propaga token ao catálogo.** É o que quebra o fluxo de compra, e o 422 mascara a causa.
+- [x] ~~**O `ordering` não propaga token ao catálogo.**~~ Fechado na Fase 22: interceptor OAuth2 no `RestClient`, com teste que fica vermelho se ele sair. E o 4xx deixou de ser engolido em bloco — 401 agora vira 502. Ver [OAuth2 client e token](./oauth2-client-e-token.md).
 - [ ] **Nenhum resource server valida `aud`.** Um token emitido para o `algashop-ordering-service` é aceito pelo billing e pelo catálogo — o escopo limita *o que* ele faz, nada limita *onde* ele vale. Um serviço comprometido replica contra os outros os tokens que recebeu. Fechar exige decidir a audiência de cada serviço e acrescentar um `OAuth2TokenValidator`.
 - [ ] **O webhook do FastPay muda estado de fatura sem verificar origem.** Público é necessário; sem verificação não deveria ser. Assinatura HMAC ou allowlist de IP resolveriam — hoje **qualquer um marca fatura como paga**.
 - [ ] **O issuer é `http://` e é nome de container.** Ele vai dentro do `iss` de todo token; trocá-lo invalida tudo em circulação. Em produção precisa ser https e estável.
