@@ -3,7 +3,7 @@
 > Antes de configurar qualquer coisa: que tipos de credencial existem e o que cada uma resolve, a diferença entre autenticar e autorizar, os quatro papéis do OAuth 2, e por que escopo não é o mesmo que perfil de usuário.
 > Este documento é conceitual. A configuração real do projeto está em [Authorization Server](./authorization-server.md).
 
-> Dezenove fases construíram um sistema que **não sabe quem está do outro lado**. "Autenticação" aparece como pendência em quase todos os documentos desde a Fase 8 — a auditoria do catálogo grava um `UUID` aleatório como autor, e o endpoint que emite URLs de escrita no S3 é aberto. Esta trilha começa a fechar isso.
+> Dezenove fases construíram um sistema que **não sabia quem estava do outro lado**. "Autenticação" aparece como pendência em quase todos os documentos desde a Fase 8 — a auditoria do catálogo grava um `UUID` aleatório como autor, e o endpoint que emite URLs de escrita no S3 é aberto. Esta trilha começa a fechar isso.
 
 ---
 
@@ -79,7 +79,7 @@ Esse desenho é o mesmo quando não há usuário nenhum e são dois serviços co
 | **Resource Owner** | quem é dono do dado e autoriza o acesso | *ainda ninguém* — não há usuário no fluxo atual |
 | **Client** | quem **pede** o token | `algashop-ordering` querendo ler o catálogo |
 | **Authorization Server** | quem **emite** o token | `algashop-authorization-server` |
-| **Resource Server** | quem **exige e valida** o token | `product-catalog`, `ordering`, `billing` — *nenhum configurado ainda* |
+| **Resource Server** | quem **exige e valida** o token | `product-catalog`, `ordering`, `billing` — os três, desde a Fase 21 |
 
 Duas confusões valem ser desfeitas de saída:
 
@@ -163,6 +163,8 @@ A distinção que mais confunde:
 > ⚠️ **Escopo não substitui autorização de domínio.** Um token com `products:write` diz que o portador *pode ter permissão de escrever* — não que ele possa escrever **naquele** produto. "Só o dono edita o próprio anúncio" é regra sua, e nenhum escopo a expressa.
 
 O caminho correto é os dois em série: o escopo **estreita** o que é possível, e a regra de negócio decide o resto. Um token restrito nunca ganha poder por causa de uma regra permissiva; um token amplo ainda pode ser barrado pela regra. A ordem importa, e o escopo vem primeiro porque é mais barato — dá para negar antes de tocar no banco.
+
+> Na prática deste projeto, o escopo virou uma **matriz de 43 rotas × escopo exigido**, travada por teste. Ver [Resource servers e escopos](./resource-server-e-escopos.md).
 
 E note o desenho dos dois clientes deste projeto: o de teste tem leitura **e** escrita; o do `ordering` tem só leitura. **O escopo mais estreito que faz o trabalho é o certo** — se o `ordering` só lê, um token dele que vaze não escreve.
 

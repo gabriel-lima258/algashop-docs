@@ -26,7 +26,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 20 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 21 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -81,7 +81,8 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Identidade e fundamentos do OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) | Senha × certificado × token, IdP e IAM, os quatro papéis, grants e por que escopo é **teto** e não papel |
-| [Authorization Server](./05-seguranca/authorization-server.md) | Os dois clientes do projeto, token **opaco × JWT**, quem guarda as chaves — e por que isto ainda não protege nada |
+| [Authorization Server](./05-seguranca/authorization-server.md) | Os dois clientes do projeto, token **opaco × JWT**, e quem guarda as chaves |
+| [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) | Quem **exige** o token: escopo por rota, 401 × 403, a matriz de 142 testes — e o serviço que chama o outro sem token |
 
 ### Artefatos
 
@@ -109,7 +110,7 @@ Para revisar o conteúdo do zero, nesta ordem:
 [Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) → [Resiliência](./01-arquitetura-design/resiliencia.md) → [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) → [Health check](./04-infraestrutura/health-checks.md)
 
 **4a. Quem pode chamar**
-[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md)
+[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md) → [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md)
 
 **4b. Quanto o sistema aguenta**
 [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) → [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md)
@@ -161,6 +162,10 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Saber o que é escopo (e o que ele **não** é) | [Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) |
 | Escolher o grant type certo | [Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) |
 | Descobrir para que serve o `/oauth2/jwks` | [Authorization Server](./05-seguranca/authorization-server.md) |
+| Proteger uma rota por escopo | [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) |
+| Diferença entre 401 e 403 | [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md), [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) |
+| Saber se desligar CSRF é seguro | [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) |
+| Testar autorização sem subir o authorization server | [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) |
 | Dar baixa em estoque sem vender o que não tem | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) |
 | Fazer duas escritas caírem juntas, ou nenhuma | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
 | Por que `@Transactional` no Mongo pode não fazer nada | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |

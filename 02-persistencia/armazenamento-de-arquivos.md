@@ -112,7 +112,7 @@ no bucket:  391242  b1984fc5-....png
 
 **3.912 vezes o declarado, aceito sem reclamação.** PUT pré-assinado não limita bytes. Limitar de verdade exige `POST` com *policy* e `content-length-range` — outro formato de requisição, com campos de formulário em vez de corpo cru.
 
-Vale entender por que isso importa mais aqui do que num upload comum: como o endpoint que emite autorizações **não tem autenticação** (o projeto inteiro não tem), qualquer um pede uma URL e escreve no bucket o quanto quiser. Num estudo local é irrelevante; numa conta AWS de verdade, é a fatura.
+Vale entender por que isso importava mais aqui do que num upload comum: enquanto o endpoint que emite autorizações **não tinha autenticação**, qualquer um pedia uma URL e escrevia no bucket o quanto quisesse. Desde a Fase 21 ele exige `products:write` — o que reduz o problema a quem já tem token, mas **não o elimina**: o tamanho continua sem ser imposto, e um cliente autorizado ainda pode enviar gigabytes sob autorização de um kilobyte.
 
 ---
 
@@ -355,7 +355,7 @@ Confirmado que o resto sobreviveu à troca: `hasDiscount`, `inStock` e `slug` co
 - [ ] **Nenhum teste cobre imagens ou storage.** Zero. Nem o `Product.addImage`/`removeImage` (que é domínio puro e testável sem infraestrutura nenhuma), nem os application services com o `StorageProviderFakeImpl` — que existe exatamente para isso e não é usado por teste algum.
 - [ ] **Objetos órfãos.** Entre pedir a URL e reivindicar a imagem, o arquivo pode ficar no bucket sem dono, e nada o recolhe. Um *lifecycle rule* no bucket ou uma varredura periódica resolveria.
 - [ ] **Tamanho não é imposto.** Migrar para POST com policy e `content-length-range`, ou aceitar e limitar por cota do bucket.
-- [ ] **Sem autenticação no `/api/v1/upload-requests`** — endpoint aberto que emite permissão de escrita. É o mesmo buraco de todo o projeto, com consequência nova. A Fase 20 começou a fechá-lo pelo lado do emissor; falta o catálogo virar resource server e exigir escopo aqui. Ver [`authorization-server.md`](../05-seguranca/authorization-server.md).
+- [x] ~~**Sem autenticação no `/api/v1/upload-requests`**~~ Fechado na Fase 21: a rota exige `products:write`, com teste na matriz de autorização. Ver [`resource-server-e-escopos.md`](../05-seguranca/resource-server-e-escopos.md).
 - [ ] **Conteúdo nunca é inspecionado.** Nada garante que o objeto seja uma imagem. Exigiria etapa assíncrona pós-upload.
 - [ ] **A listagem voltou a trafegar o documento inteiro**, e o `shortDescription` mudou de 50 para 15 caracteres sem que nenhum contrato notasse.
 - [ ] **`delete` remove do storage antes de salvar o agregado.** Se o `save` falhar depois do `deleteFile`, o arquivo já foi e o produto continua apontando para ele.

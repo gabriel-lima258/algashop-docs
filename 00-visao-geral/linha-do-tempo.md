@@ -409,7 +409,7 @@ E uma quarta, de contabilidade: trazer o `mainImage` para a listagem custou o `$
 
 ---
 
-## Fase 20 — Identidade, OAuth 2.1 e o Authorization Server (ago/2026) ← etapa atual
+## Fase 20 — Identidade, OAuth 2.1 e o Authorization Server (ago/2026)
 
 Dezenove fases construíram um sistema que **não sabe quem está do outro lado**. Nasce o sexto repositório — e ele é quase só configuração: uma dependência, uma classe vazia e dois clientes em YAML.
 
@@ -438,6 +438,33 @@ O `product-catalog` já ganhou a **dependência** de resource server, sem config
 
 ---
 
+## Fase 21 — Resource servers, escopos e a matriz de autorização (ago/2026) ← etapa atual
+
+A fase anterior terminou com "isto ainda não protege nada". Esta constrói **quem verifica** — e mostra que fechar metade de um ciclo pode ser pior que não ter começado.
+
+| Marco | O que se aprende |
+|---|---|
+| `issuer-uri` nos três serviços | Uma linha configura tudo: dela o Spring descobre o `jwks_uri` pelo `.well-known` |
+| O issuer fixado dos **dois** lados | Ele viaja no claim `iss` e quem valida **compara** — é o que barra token de outro emissor |
+| `@EnableMethodSecurity` | Sem ele as anotações ficam decorativas: compila, sobe, e **toda rota fica aberta** |
+| CSRF desligado — e por que está certo | O ataque depende de credencial que o **navegador envia sozinho**; um header `Authorization` não é |
+| `permitAll` de caminho literal | `/actuator/health` não cobre `/readiness` — o probe levava **401** e a instância nunca entrava em rotação |
+| **`@Valid` roda antes do `@PreAuthorize`** | Corpo inválido responde **400 antes de 403**: a autorização é a última camada, não a primeira |
+| `SCOPE_` e a meta-anotação | O prefixo vem do `JwtGrantedAuthoritiesConverter`; e um typo na string **nega para sempre**, em silêncio |
+| `products:stock:write` separado | Quem integra estoque não ganha de brinde o direito de reescrever preço |
+| A matriz como teste | 43 rotas × 3 casos = **142 testes**, contra 2 que existiam antes |
+| **O `ordering` chama o catálogo sem token** | E o 401 vira `Optional.empty()` → `ProductNotFound` → **422** |
+
+**A lição da fase** é sobre ordem, e é desconfortável: **um ciclo de segurança fechado pela metade é pior que um ciclo aberto**. Antes, o catálogo não exigia token e tudo funcionava, inseguro e honesto. Agora ele exige, o `ordering` não manda, e o erro resultante — 422, "produto não encontrado" — aponta para o lugar errado. Segurança introduzida sem a ponta correspondente não deixa o sistema meio protegido: deixa o sistema quebrado com um sintoma enganoso.
+
+A segunda lição é sobre **onde a decisão de autorização mora**. Ela parece vir primeiro e vem por último: filtro (401) → validação do corpo (400) → `@PreAuthorize` (403). Descobrir isso não foi leitura de documentação — foi a matriz falhando em 6 de 18 casos e obrigando a entender por quê.
+
+E a terceira é o velho tema deste caderno em roupa nova: `hasAuthority('SCOPE_orders:raed')` **compila**. A segurança de um sistema inteiro apoiada numa string sem verificação de tipo é o mesmo problema do nome de cache da Fase 15 e do `project(Class)` errado da Fase 12 — **o que não é verificado em compilação precisa ser verificado por teste, ou não é verificado.**
+
+> [`resource-server-e-escopos.md`](../05-seguranca/resource-server-e-escopos.md)
+
+---
+
 ## Onde o projeto está
 
 **Consolidado:**
@@ -461,10 +488,13 @@ O `product-catalog` já ganhou a **dependência** de resource server, sem config
 - Health check com Actuator, readiness por dependência essencial e status `DEGRADED`
 - Ambiente de teste de carga com k6 — smoke, load e volume, com o compose subindo os quatro serviços
 - Imagens de produto em S3 (LocalStack local), com upload direto por URL pré-assinada
-- Authorization server emitindo token por `client_credentials`, nos formatos opaco e JWT
+- Authorization server emitindo token JWT por `client_credentials`, com 16 escopos granulares
+- Os três serviços como resource servers, com escopo por rota e 142 testes travando a matriz
 
 **Próximos passos naturais:**
-- **Configurar os resource servers** — enquanto `ordering`, `billing` e `catalog` não exigirem token, o authorization server não protege nada
+- **Propagar token do `ordering` para o catálogo** — sem isso o fluxo de compra está quebrado, e o 422 esconde a causa
+- **Validar audiência (`aud`)** — hoje um token vale em qualquer um dos três serviços
+- **Verificar a origem do webhook do FastPay** — ele muda estado de fatura sem autenticação nenhuma
 - **Persistir a chave de assinatura** — hoje cada reinício invalida todo JWT emitido
 - **`authorization_code` + PKCE e um usuário de verdade** — o fluxo com pessoa ainda não existe
 - **Testes para imagens e storage** — hoje são zero, e o `StorageProviderFakeImpl` existe exatamente para isso sem ser usado por nenhum
@@ -491,7 +521,7 @@ O `product-catalog` já ganhou a **dependência** de resource server, sem config
 
 ## O padrão que se repete
 
-Olhando as vinte fases em conjunto, a ordem foi sempre a mesma:
+Olhando as vinte e uma fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

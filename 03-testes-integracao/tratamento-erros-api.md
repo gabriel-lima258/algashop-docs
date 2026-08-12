@@ -60,6 +60,7 @@ RuntimeException
 └── UnprocessableContentException            → 422 Unprocessable Content
 
 StorageProviderException (infrastructure/)   → 422 Unprocessable Content
+AccessDeniedException (Spring Security)      → 403 Forbidden
        (camada de apresentação)
 ```
 
@@ -109,6 +110,25 @@ public ProblemDetail handleNotFoundException(Exception e) {
 `@ExceptionHandler` aceita um **array** de classes. Como as duas exceções não têm ancestral comum além de `RuntimeException`, o parâmetro do método precisa ser o tipo comum mais próximo — daí `Exception e`. Agrupar assim evita dois métodos idênticos.
 
 Repare que `ProductNotFoundException` e `CategoryNotFoundException` **não** precisam ser listadas: o Spring resolve por hierarquia, e as duas herdam de `DomainEntityNotFoundException`.
+
+### 403 — autenticado, sem permissão
+
+```java
+@ExceptionHandler(AccessDeniedException.class)
+public ProblemDetail handleAccessDeniedException(AccessDeniedException e) {
+    ProblemDetail problemDetail = ProblemDetail.forStatus(HttpStatus.FORBIDDEN);
+    problemDetail.setTitle("Forbidden");
+    problemDetail.setDetail("You do not have permission to access this resource");
+    problemDetail.setType(URI.create("/errors/forbidden"));
+    return problemDetail;
+}
+```
+
+**401 é "não sei quem você é"; 403 é "sei, e você não pode".** O nome do 401 é historicamente infeliz — ele deveria se chamar *Unauthenticated*.
+
+> Repare no que a mensagem **não** diz: qual escopo faltou. É deliberado. Responder "faltou `invoices:write`" transforma o 403 num mapa da superfície de autorização — quem sonda descobre os nomes dos escopos sem ter nenhum. O detalhe útil vai para o log.
+
+E há uma ordem que surpreende: o `@Valid` do corpo roda **antes** do `@PreAuthorize`, então corpo inválido responde **400 antes de 403**. Ver [`resource-server-e-escopos.md`](../05-seguranca/resource-server-e-escopos.md).
 
 ### 422 — conteúdo semanticamente inválido
 

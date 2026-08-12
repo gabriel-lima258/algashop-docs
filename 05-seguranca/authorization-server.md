@@ -4,6 +4,8 @@
 > Código real: `microservices/authorization-server/` · Contrato: [`openapi/authorization-server.yml`](../openapi/authorization-server.yml)
 > Conceitos e vocabulário em [Identidade e fundamentos do OAuth 2](./fundamentos-identidade-oauth2.md).
 
+> 🔄 **Atualizado na Fase 21.** Os dois clientes trocaram `reference` por `self-contained` — o contraste opaco × JWT descrito abaixo deixou de existir na prática, e a seção correspondente explica por quê. A configuração de quem valida está em [Resource servers e escopos](./resource-server-e-escopos.md).
+
 > ⚠️ **Este documento foi escrito sem executar o servidor.** Toda resposta e todo token mostrados aqui são **ilustrativos** — derivados da especificação e do contrato OpenAPI, e assinalados como tal. Onde a afirmação dependeria de rodar, o texto diz isso. É o oposto das fases 17, 18 e 19, e a diferença está explícita de propósito.
 
 ---
@@ -31,6 +33,14 @@ Uma linha de dependência e uma classe sem corpo produzem **seis endpoints funci
 > É o que vale entender do Spring Authorization Server: ele **não** é uma biblioteca para você implementar OAuth. Ele já implementa o protocolo inteiro. O que resta configurar é **quem pode pedir token e o que esse token vale** — nunca *como* o protocolo funciona.
 
 **Porta 9000.** Era 8081, a mesma do `algashop-ordering`, e os dois não subiam juntos. 9000 é a convenção do Spring e já era a porta usada nos exemplos do contrato.
+
+**O `issuer` é explícito** desde a Fase 21:
+
+```yaml
+spring.security.oauth2.authorizationserver.issuer: http://algashop-authorization-server:9000
+```
+
+Ele vai dentro do claim `iss` de todo token emitido, e é o mesmo valor que os resource servers configuram como `issuer-uri` — quem valida **compara**. Fixar dos dois lados é o que impede um token de outro emissor de passar. E é por isso que o nome precisa resolver na máquina de quem desenvolve, não só dentro da rede do compose: há uma linha para ele em `etc/hostnames/hostnames`.
 
 ---
 
@@ -89,13 +99,15 @@ Campo a campo:
 |---|---|---|
 | Para que existe | teste manual | o `ordering` chamando o catálogo |
 | Grant | `client_credentials` | `client_credentials` |
-| Escopos | `products:read`, `products:write` | **`products:read`** |
+| Escopos | **os 16** do sistema | **`products:read`** |
 | TTL | 15 min | **5 min** |
-| Formato | `reference` (**opaco**) | `self-contained` (**JWT**) |
+| Formato | `self-contained` (JWT) | `self-contained` (JWT) |
 
-Eles não são duas cópias com valores diferentes: são **o mesmo experimento com as duas respostas**. Um mostra cada caminho do formato de token, e as demais diferenças seguem daí.
+> 🔄 **Isto mudou na Fase 21.** O cliente de teste era `reference` (opaco), e os dois juntos serviam para mostrar os dois caminhos. Quando os resource servers entraram, foram configurados com `.jwt()` — que só sabe validar token auto-contido. Token opaco exigiria que cada serviço chamasse `/oauth2/introspect`, e nenhum deles faz isso.
+>
+> A leitura vale mais que a mudança: **a escolha do formato do token não é do emissor, é do sistema.** Quem valida define o que consegue validar, e o emissor se ajusta. O contraste descrito abaixo continua sendo o raciocínio certo — ele só deixou de estar exercitado aqui.
 
-Repare no escopo: o cliente do `ordering` só lê. O `ordering` de fato só lê o catálogo — e **o escopo mais estreito que faz o trabalho é o certo**. Um token dele que vaze não escreve nada.
+O cliente de teste carrega os 16 escopos de todos os serviços porque é ele que faz `curl` na mão. O do `ordering` carrega **um**, porque o `ordering` só lê o catálogo — e **o escopo mais estreito que faz o trabalho é o certo**. Um token dele que vaze não escreve nada.
 
 ---
 
@@ -337,7 +349,7 @@ A ordem, porém, está certa. Emitir vem antes de verificar, porque não dá par
 
 ## Pendências registradas
 
-- [ ] **Nenhum resource server configurado.** Enquanto isso não existir, a feature não protege nada. E no `product-catalog` a dependência já entrou **sem** configuração: a suíte dele está em 4 falhas por `401`, porque o starter de segurança tranca tudo por padrão.
+- [x] ~~**Nenhum resource server configurado.**~~ Resolvido na Fase 21: os três serviços validam token e cada rota exige um escopo, com 142 testes travando a matriz. Ver [Resource servers e escopos](./resource-server-e-escopos.md). Continua faltando a outra ponta — o `ordering` **não propaga token** ao chamar o catálogo, e o 401 resultante chega ao usuário como 422.
 - [ ] **Chave de assinatura não persistida** — reiniciar invalida todo JWT emitido.
 - [ ] **Segredos em texto puro no repositório.** Mínimo aceitável: `{bcrypt}` + variável de ambiente.
 - [ ] **`production-env` e `docker-env` vazios** — sem cliente, sem issuer, sem chave.

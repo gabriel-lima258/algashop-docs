@@ -232,6 +232,22 @@ Sem o nome explícito, o Boot derivaria do nome da classe: `customRedisCache` e 
 
 ---
 
+## O readiness que a segurança derrubou
+
+A Fase 21 tornou os três serviços resource servers, e a primeira versão da regra pública era:
+
+```java
+.requestMatchers("/actuator/health").permitAll()
+```
+
+`requestMatchers` com caminho literal casa **exatamente** aquele path. `/actuator/health/readiness` e `/liveness` são subpaths — caíam em `anyRequest().authenticated()` e respondiam **401**.
+
+> O endpoint que este documento inteiro existe para justificar tinha acabado de ser trancado para o único consumidor que ele tem. E o sintoma seria um deploy que "não sobe", sem uma linha de erro na aplicação.
+
+Corrigido para `/actuator/health/**`, com um teste em cada serviço fixando os três caminhos. Ver [`resource-server-e-escopos.md`](../05-seguranca/resource-server-e-escopos.md).
+
+---
+
 ## Pendências registradas
 
 - [ ] **Um indicador lento trava o endpoint.** O `awsS3` custa 0,3s quando o serviço está fora, porque a conexão é recusada na hora. Se o S3 ficasse *lento* em vez de indisponível, o `/actuator/health` herdaria essa latência — não há timeout próprio no indicador.
@@ -239,6 +255,7 @@ Sem o nome explícito, o Boot derivaria do nome da classe: `customRedisCache` e 
 - [ ] **O indicador de cache não detecta o Redis fora do ar.** Reporta `UP` sem abrir conexão — provado por `CLIENT LIST` e por `commandstats`. Mesma família do problema aberto na Fase 15.
 - [ ] **O ciclo do health check está aberto.** Os três serviços expõem `/actuator/health/readiness` e **nada o consome**: nenhum `HEALTHCHECK` nos Dockerfiles, nenhum `healthcheck:` nos serviços de aplicação do compose. Na prática o Docker considera o container saudável assim que o processo sobe. Fechar exigiria `curl`/`wget` na imagem — a base `eclipse-temurin:25-jre` não tem nenhum dos dois — ou um bloco no compose.
 - [ ] **`DEGRADED` sem mapeamento HTTP.** Enquanto devolver 200, só serve para leitura humana.
+- [ ] **`show-details: always` e o endpoint público.** O `/actuator/health/**` é `permitAll` nos três serviços, e com `show-details: always` isso expõe estado dos circuitos, última exceção do gateway e ambiente a quem alcançar a porta. Liberar o *status* é necessário para o probe; liberar os *detalhes* não é — um `management.server.port` separado resolveria.
 - [ ] **`show-details: always` sem Spring Security.** Não há autenticação em nenhum dos três serviços, e `management.info.env.enabled: true` acompanha. Qualquer um que alcance a porta vê estado dos circuitos, a última exceção do gateway e o ambiente. Aceitável localmente; num ambiente real seriam `management.server.port` separado e Security. A Fase 20 começou a construir o lado do emissor — ver [`authorization-server.md`](../05-seguranca/authorization-server.md) —, mas nenhum destes serviços exige token ainda.
 - [ ] **`DEGRADED` é string literal repetida.** Três ocorrências por serviço — duas no Java (uma comparada com `.equals`) e uma no YAML. Mudar num lugar e não no outro tira o status da ordenação em silêncio.
 - [ ] **Os indicadores são duplicados entre serviços**, com diferença de uma a três linhas. Um módulo compartilhado resolveria; não existe um.

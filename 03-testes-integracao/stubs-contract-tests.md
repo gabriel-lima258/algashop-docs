@@ -535,6 +535,24 @@ Comparar com o `@WebMvcTest` que o `ProductBase` usa para os contract tests: mes
 
 ---
 
+## Os contract tests não veem a segurança
+
+As bases dos contratos montam o MockMvc assim:
+
+```java
+RestAssuredMockMvc.mockMvc(MockMvcBuilders.webAppContextSetup(context)...);
+```
+
+Sem `.apply(springSecurity())`, **a cadeia de filtros do Spring Security não é aplicada**. Consequência medida na Fase 21: o `contractTest` do catálogo passa verde com todos os endpoints exigindo token.
+
+Isso é conveniente — o contrato testa o formato, não a autorização — e perigoso pela mesma razão:
+
+> O contrato publicado continua descrevendo uma API **sem autenticação**. Quem gerar um cliente a partir dele vai escrever código que recebe 401 na primeira chamada, e nada no processo de contrato avisou.
+
+Duas saídas, e elas não são equivalentes: aplicar `springSecurity()` e incluir um token nos contratos faz os stubs refletirem a realidade; ou declarar no contrato que os endpoints exigem `Authorization`, mantendo o teste focado em formato. A segunda é mais barata; a primeira é mais honesta. Nenhuma foi feita ainda — está registrado em [`resource-server-e-escopos.md`](../05-seguranca/resource-server-e-escopos.md).
+
+---
+
 ## Quando o stub deixa de servir
 
 Todo este documento é sobre **substituir** o serviço externo. Vale enquanto a pergunta é de correção: "o meu código lida certo com esta resposta?". Para isso, um stub é melhor que o serviço real — determinístico, rápido, e capaz de produzir o 502 que ninguém consegue provocar de propósito.

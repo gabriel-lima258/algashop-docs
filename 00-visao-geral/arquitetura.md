@@ -35,7 +35,9 @@ graph TB
     B -->|HTTP| FP
     O -->|HTTP| RX
     S -->|cancela faturas expiradas| B
-    O -.->|pede token| A
+    O -->|pede token| A
+    C -.->|valida assinatura via /oauth2/jwks| A
+    B -.->|valida assinatura via /oauth2/jwks| A
 
     O --- PG
     B --- PG
@@ -109,7 +111,9 @@ O único serviço sem domínio de negócio. Ele não tem banco, não tem entidad
 
 Ele está separado pela mesma razão que os outros: **emitir credencial e verificar credencial são responsabilidades diferentes**. Concentrar a emissão num serviço significa que o segredo mora num lugar só, e que acrescentar um microsserviço não acrescenta mais um lugar que precisa saber validar senha.
 
-> ⚠️ **Nenhum dos outros serviços exige token ainda.** A seta pontilhada no diagrama é a intenção, não o estado atual — não há resource server configurado. Ver [`authorization-server.md`](../05-seguranca/authorization-server.md).
+Desde a Fase 21 os três serviços de negócio são **resource servers**: exigem token em toda rota e validam a assinatura com a chave pública que baixam do `/oauth2/jwks`. Cada rota declara o escopo que precisa.
+
+> ⚠️ **A seta `ordering → authorization-server` ainda é intenção.** O `ordering` chama o catálogo por HTTP e **não propaga token** — o catálogo responde 401, e o client mapeia 4xx para vazio, entregando 422 "produto não encontrado" ao usuário. Ver [`resource-server-e-escopos.md`](../05-seguranca/resource-server-e-escopos.md).
 
 ### `billing-scheduler` — jobs agendados
 
