@@ -26,7 +26,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 22 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 23 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -84,6 +84,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Authorization Server](./05-seguranca/authorization-server.md) | Os dois clientes do projeto, token **opaco × JWT**, e quem guarda as chaves |
 | [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) | Quem **exige** o token: escopo por rota, 401 × 403 e a matriz de 142 testes |
 | [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) | Quem **pede** o token: as três peças, o cache por principal, e a linha de config que acoplava a subida de um serviço à do outro |
+| [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) | O fluxo **com pessoa**: código, `state`, consentimento granular, refresh com rotação — e a propriedade no singular que desligava a rotação em silêncio |
 
 ### Artefatos
 
@@ -111,7 +112,7 @@ Para revisar o conteúdo do zero, nesta ordem:
 [Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) → [Resiliência](./01-arquitetura-design/resiliencia.md) → [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) → [Health check](./04-infraestrutura/health-checks.md)
 
 **4a. Quem pode chamar**
-[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md) → [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) → [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md)
+[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md) → [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) → [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) → [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md)
 
 **4b. Quanto o sistema aguenta**
 [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) → [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md)
@@ -170,6 +171,10 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Chamar outro serviço protegido a partir do meu | [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) |
 | Obter e cachear token entre serviços | [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) |
 | Evitar que um serviço dependa do outro **para subir** | [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) |
+| Autenticar uma **pessoa** e pedir consentimento | [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) |
+| Entender por que existe um *código* antes do token | [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) |
+| Fazer refresh token rotacionar de verdade | [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) |
+| Saber o que o authorization server precisa persistir | [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) |
 | Dar baixa em estoque sem vender o que não tem | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) |
 | Fazer duas escritas caírem juntas, ou nenhuma | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
 | Por que `@Transactional` no Mongo pode não fazer nada | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |

@@ -163,6 +163,31 @@ V3__add_column_email_to_customer.sql
 
 ---
 
+## Um caso diferente: schema ditado por uma biblioteca
+
+O `authorization-server` ganhou Flyway na Fase 23, e o que ele versiona **não é a nossa modelagem**:
+
+```sql
+CREATE TABLE oauth2_authorization (
+    id varchar(100) NOT NULL,
+    registered_client_id varchar(100) NOT NULL,
+    ...
+```
+
+As duas migrations são cópias fiéis da distribuição do Spring Authorization Server. Nomes de coluna, tipos e tamanhos são lidos pelo `RowMapper` da biblioteca: renomear uma coluna ou apertar um `varchar` quebra a persistência **em runtime**, não em compilação.
+
+> Nos outros serviços a migration registra uma decisão nossa, e mudá-la é uma decisão nova. Aqui ela registra um **contrato de terceiro** — e o versionamento serve para acompanhar a biblioteca, não para evoluir o modelo.
+
+E um lembrete que custou um erro para aprender: **não se edita migration já aplicada, nem para acrescentar comentário.** Prefixar um cabeçalho explicativo no `.sql` muda o checksum, e o Flyway recusa subir:
+
+```
+FlywayValidateException: Validate failed: Migrations have failed validation
+```
+
+A explicação pertence à documentação; o arquivo aplicado é imutável. Ver [Authorization code e consentimento](../05-seguranca/authorization-code-e-consentimento.md).
+
+---
+
 ## Resumo Rápido
 
 | Comando | Altera o banco? | Quando usar |

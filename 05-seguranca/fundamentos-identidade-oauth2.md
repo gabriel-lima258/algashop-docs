@@ -76,7 +76,7 @@ Esse desenho é o mesmo quando não há usuário nenhum e são dois serviços co
 
 | Papel | Quem é | Neste projeto |
 |---|---|---|
-| **Resource Owner** | quem é dono do dado e autoriza o acesso | *ainda ninguém* — não há usuário no fluxo atual |
+| **Resource Owner** | quem é dono do dado e autoriza o acesso | `customer@gmail.com`, desde a Fase 23 — [o fluxo com pessoa](./authorization-code-e-consentimento.md) |
 | **Client** | quem **pede** o token | `algashop-ordering` querendo ler o catálogo |
 | **Authorization Server** | quem **emite** o token | `algashop-authorization-server` |
 | **Resource Server** | quem **exige e valida** o token | `product-catalog`, `ordering`, `billing` — os três, desde a Fase 21 |
@@ -129,6 +129,8 @@ Quem verifica **nunca vê a senha**. Isso tem três consequências práticas:
 Porque é o único caso que existe hoje: **não há usuário no fluxo**. O `ordering` precisa ler o catálogo por conta própria, não em nome de ninguém. O client se autentica com o próprio segredo e recebe um token que representa *ele mesmo*.
 
 É também o grant mais simples — uma requisição, sem redirecionamento, sem navegador, sem tela de consentimento — e por isso o certo para começar. Todo o vocabulário (client, escopo, token, expiração, formato) aparece nele sem o ruído do fluxo com usuário.
+
+> ✅ **Deixou de ser o próximo passo na Fase 23** — o fluxo com pessoa existe, com tela de login, consentimento granular e refresh token. O PKCE, não: ele continua desligado, e a lacuna está registrada em [Authorization code e consentimento](./authorization-code-e-consentimento.md).
 
 ### `authorization_code` + PKCE, o próximo passo
 

@@ -74,7 +74,7 @@ Campo a campo:
 
 | Campo | O que decide |
 |---|---|
-| a chave do mapa | só um apelido interno para agrupar a configuração — **não** é o `client-id` |
+| a chave do mapa | **não** é o `client-id` — mas também não é só um apelido: é o `registered_client_id` gravado no banco, e renomeá-la órfã consentimentos e autorizações já persistidos |
 | `client-id` | o identificador público, o "usuário" do cliente |
 | `client-authentication-methods` | **como** ele prova quem é. `client_secret_basic` = `client-id:secret` no header `Authorization: Basic` |
 | `client_secret` | o segredo. `{noop}` é instrução ao `PasswordEncoder`: **texto puro, sem hash** |
@@ -85,7 +85,9 @@ Campo a campo:
 
 ### Três coisas que essa configuração diz nas entrelinhas
 
-**O repositório é em memória.** Cadastrar cliente é editar YAML e reiniciar; quem sai do arquivo deixa de existir na próxima subida. Não há tabela nem API de administração. Para estudo é o certo — a alternativa (`JdbcRegisteredClientRepository`) traria schema, migration e um CRUD antes de qualquer conceito ter sido aprendido.
+**O repositório de CLIENTES é em memória.** Cadastrar cliente é editar YAML e reiniciar; quem sai do arquivo deixa de existir na próxima subida. Não há tabela nem API de administração.
+
+> 🔄 **Desde a Fase 23 nem tudo é memória.** Os clientes continuam em YAML, mas **tokens e consentimentos foram para o Postgres** — porque com `authorization_code` passou a existir estado que não pode sumir num deploy. Ver [Authorization code e consentimento](./authorization-code-e-consentimento.md). Para estudo é o certo — a alternativa (`JdbcRegisteredClientRepository`) traria schema, migration e um CRUD antes de qualquer conceito ter sido aprendido.
 
 **`{noop}` é o `PasswordEncoder` sendo instruído a não fazer nada.** O prefixo entre chaves é como o Spring Security escolhe o algoritmo por credencial — `{bcrypt}`, `{argon2}`, `{noop}`. Em produção seria `{bcrypt}` e o valor viria de variável de ambiente ou de um cofre, **não** de um arquivo versionado.
 
@@ -350,13 +352,14 @@ A ordem, porém, está certa. Emitir vem antes de verificar, porque não dá par
 ## Pendências registradas
 
 - [x] ~~**Nenhum resource server configurado.**~~ Resolvido na Fase 21: os três serviços validam token e cada rota exige um escopo, com 142 testes travando a matriz. Ver [Resource servers e escopos](./resource-server-e-escopos.md). Continua faltando a outra ponta — o `ordering` **não propaga token** ao chamar o catálogo, e o 401 resultante chega ao usuário como 422.
-- [ ] **Chave de assinatura não persistida** — reiniciar invalida todo JWT emitido.
+- [ ] **Chave de assinatura não persistida** — reiniciar invalida todo JWT emitido. Ficou mais incômodo desde a Fase 23: os tokens agora sobrevivem ao restart no banco, mas a chave que os assinou não — um refresh válido gera access tokens que nenhum resource server consegue validar até ele buscar o JWKS novo.
 - [ ] **Segredos em texto puro no repositório.** Mínimo aceitável: `{bcrypt}` + variável de ambiente.
 - [ ] **`production-env` e `docker-env` vazios** — sem cliente, sem issuer, sem chave.
+- [ ] **Agora depende de Postgres para subir**, e `docker-env`/`production-env` continuam sem datasource.
 - [ ] **Não está no `docker-compose`.** É o segundo serviço fora do compose depois do `billing-scheduler`, e este aqui *é* um serviço que fica de pé.
 - [ ] **Sem Actuator**, ao contrário dos outros quatro. Não há `/actuator/health` para dizer se ele está pronto.
 - [ ] **Sem teste além do `contextLoads`.** Um teste que peça token com os dois clientes e afirme o formato de cada um caberia em poucas linhas e travaria a configuração.
-- [ ] **Sem usuário e sem `authorization_code`** — o fluxo com pessoa ainda não existe.
+- [x] ~~**Sem usuário e sem `authorization_code`**~~ Resolvido na Fase 23: há um usuário (em memória), o fluxo com pessoa funciona, e o consentimento é gravado. Ver [Authorization code e consentimento](./authorization-code-e-consentimento.md).
 - [ ] **A auditoria continua gravando `UUID` aleatório** como autor no `product-catalog`. É a pendência mais antiga do projeto, e agora ela tem para onde ir: o `sub` do token.
 - [ ] **Nada foi executado nesta fase.** Todos os exemplos vêm da especificação. Rodar os comandos acima e substituir por saída real é o próximo passo óbvio.
 

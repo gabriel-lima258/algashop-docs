@@ -137,6 +137,8 @@ O `authorization-server` roda em **9000** e **não está no compose** — sobe p
 
 > Desde a Fase 22 o `ordering` **sobe sem o authorization server no ar**: o lado client passou a declarar `token-uri` em vez de `issuer-uri`, eliminando a descoberta que acontecia durante o refresh do contexto. A primeira ida à rede virou a primeira requisição que precisa de token, não a inicialização. Ver [`oauth2-client-e-token.md`](../05-seguranca/oauth2-client-e-token.md). A porta era 8081 e foi trocada na Fase 20 justamente porque colidia com a do `ordering`. Ver [`authorization-server.md`](../05-seguranca/authorization-server.md).
 
+> Desde a Fase 23 o Postgres hospeda **quatro** bancos de aplicação: `ordering`, `billing`, `authorization_server` e os `*_test`.
+
 > ⚠️ **A porta 5433 não é engano.** O Postgres do projeto é exposto em `5433` no host justamente para não conflitar com uma instalação nativa de PostgreSQL, que ocupa a `5432`. Dentro da rede Docker os containers continuam falando na `5432`.
 >
 > Por isso as URLs mudam conforme de onde você conecta:
@@ -417,6 +419,12 @@ spring:
 | `502` na compra, com o AS fora do ar | O `ordering` pede token e não consegue | Comportamento correto desde a Fase 22: o 401 deixou de virar "produto não encontrado" |
 | Compra falha só no perfil `docker` | O AS não está no compose, e o issuer é nome de container | Suba o AS por `./gradlew bootRun` fora do compose — pendência registrada |
 | `UnknownHostException: algashop-authorization-server` | Falta a linha no arquivo `hosts` | Está em `etc/hostnames/hostnames`; sem ela nenhum serviço resolve o issuer |
+| O authorization server não sobe: banco `authorization_server` não existe | O `init-user-db.sh` só roda com o **volume vazio** | Crie o banco à mão, ou `down -v` e suba de novo (apaga tudo) |
+| `FlywayValidateException` ao subir o AS | Migration já aplicada foi editada | Nunca editar `.sql` aplicado — nem para acrescentar comentário; o checksum muda |
+| `/oauth2/authorize` devolve 401 no `curl` | Negociação de conteúdo | Sem `Accept: text/html` o entry point assume que quem chama é API e devolve erro OAuth2 em vez de redirecionar ao login |
+| O authorization server não sobe: banco `authorization_server` não existe | O `init-user-db.sh` só roda com o **volume vazio** | Crie o banco à mão, ou `down -v` e suba de novo (apaga tudo) |
+| `FlywayValidateException` ao subir o AS | Migration já aplicada foi editada | Nunca editar `.sql` aplicado — nem para acrescentar comentário; o checksum muda |
+| `/oauth2/authorize` devolve 401 no `curl` | Negociação de conteúdo | Sem `Accept: text/html` o entry point assume API e devolve erro OAuth2 em vez de redirecionar ao login |
 
 ---
 

@@ -42,6 +42,7 @@ graph TB
     O --- PG
     B --- PG
     C --- MG
+    A --- PG
 ```
 
 ---
@@ -107,7 +108,11 @@ Produtos e categorias. O único serviço em MongoDB — e a razão é o padrão 
 
 ### `authorization-server` — quem emite credencial
 
-O único serviço sem domínio de negócio. Ele não tem banco, não tem entidade, e quase não tem código: uma dependência do Spring Authorization Server e dois clientes declarados em YAML produzem os seis endpoints do protocolo OAuth 2.1.
+O único serviço sem domínio de negócio. Ele não tem entidade e quase não tem código: uma dependência do Spring Authorization Server e dois clientes declarados em YAML produzem os seis endpoints do protocolo OAuth 2.1.
+
+Desde a Fase 23 ele tem **banco** — e não por escala: `authorization_code` trouxe consentimento de usuário, e uma decisão da pessoa que some no deploy nunca foi uma decisão. Ver [`authorization-code-e-consentimento.md`](../05-seguranca/authorization-code-e-consentimento.md).
+
+Desde a Fase 23 ele tem **banco** — e não por escala: o `authorization_code` trouxe consentimento de usuário, e uma decisão da pessoa que some no deploy nunca foi uma decisão. Ver [`authorization-code-e-consentimento.md`](../05-seguranca/authorization-code-e-consentimento.md).
 
 Ele está separado pela mesma razão que os outros: **emitir credencial e verificar credencial são responsabilidades diferentes**. Concentrar a emissão num serviço significa que o segredo mora num lugar só, e que acrescentar um microsserviço não acrescenta mais um lugar que precisa saber validar senha.
 

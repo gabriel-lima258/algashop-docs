@@ -465,7 +465,7 @@ E a terceira é o velho tema deste caderno em roupa nova: `hasAuthority('SCOPE_o
 
 ---
 
-## Fase 22 — O `ordering` como OAuth2 client (ago/2026) ← etapa atual
+## Fase 22 — O `ordering` como OAuth2 client (ago/2026)
 
 A fase anterior deixou o ciclo fechado pela metade, e um sintoma enganoso: 422 "produto não encontrado" onde a causa era 401. Esta fecha a outra ponta — e desfaz um acoplamento que tinha entrado junto.
 
@@ -487,6 +487,34 @@ A segunda é sobre identidade em cache. O `principalResolver` só nomeia o dono 
 E a terceira já é um padrão, terceira vez seguida: **toda propriedade obrigatória acrescentada ao `development-env` quebra a suíte**, porque `src/test/resources` é uma árvore separada. Fase 19, Fase 21, Fase 22 — e o sintoma nunca aponta para a causa: o erro fala de um bean que falta, não de uma linha de YAML que ninguém copiou.
 
 > [`oauth2-client-e-token.md`](../05-seguranca/oauth2-client-e-token.md)
+
+---
+
+## Fase 23 — Authorization code, consentimento e o estado que sobrou (ago/2026) ← etapa atual
+
+Todo o OAuth anterior foi **sem usuário**. Esta fase traz a pessoa para dentro do fluxo — e, com ela, a primeira coisa neste servidor que não pode sumir num restart.
+
+| Marco | O que se aprende |
+|---|---|
+| `authorization_code` | `client_credentials` responde "este **serviço** pode"; só este responde "esta **pessoa** autorizou" |
+| Por que existe um *código* no meio | O que volta no redirect viaja pela URL — histórico, `Referer`, log de proxy. Token ali estaria exposto; código sozinho não vale nada |
+| O `state` | Vai e volta idêntico: é o que permite ao cliente recusar um retorno que ele não começou |
+| Consentimento ≠ autenticação | Login pergunta *quem é você*; consentimento pergunta *o que eu deixo este app fazer por mim* |
+| Escopo concedido × pedido | Pedi dois, consenti um, e o token saiu com **um** — o escopo é a interseção |
+| Consentimento acumulativo | Uma linha por `(cliente, pessoa)`; escopo já consentido **não pergunta de novo** |
+| **`reuse-refresh-token` no singular** | Propriedade ignorada em silêncio, default = reusar: **a rotação estava desligada** |
+| O servidor ganhou banco | Não por escala — por consentimento: decisão de usuário que some no deploy nunca foi decisão |
+| O schema vem da biblioteca | A migration não versiona a **nossa** modelagem; versiona a do Spring Authorization Server |
+
+**A lição da fase** é a mais repetida deste caderno, com roupa nova: **a configuração afirmava uma propriedade de segurança que o sistema não tinha.** `reuse-refresh-token` (singular) é desconhecido para o Spring, propriedade desconhecida não gera erro, e o default é *reusar*. O fluxo funcionava, o comentário no YAML dizia "sempre revoga um refresh token antigo", e reusar um refresh rotacionado devolvia **200**. Uma letra depois — o plural —, o mesmo teste devolve `400 invalid_grant`.
+
+É o mesmo mecanismo do nome de cache da Fase 15, do `project(Class)` da Fase 12 e do `hasAuthority('SCOPE_...')` da Fase 21. **O que não é verificado em compilação precisa ser verificado por comportamento** — e configuração *nunca* é verificada em compilação.
+
+A segunda lição é sobre o que obriga um sistema a ter estado. Não foi volume nem performance: foi o fato de que **consentimento é uma decisão de uma pessoa**, e uma decisão que o deploy apaga não é uma decisão. Token em memória era aceitável enquanto ninguém precisava lembrar de nada.
+
+E a terceira veio de um erro cometido ao documentar: **não se edita migration já aplicada.** Acrescentar um comentário no topo do `.sql` mudou o checksum e o Flyway recusou subir. O comentário virou documentação — que é onde ele deveria estar desde o começo.
+
+> [`authorization-code-e-consentimento.md`](../05-seguranca/authorization-code-e-consentimento.md)
 
 ---
 
@@ -516,8 +544,11 @@ E a terceira já é um padrão, terceira vez seguida: **toda propriedade obrigat
 - Authorization server emitindo token JWT por `client_credentials`, com 16 escopos granulares
 - Os três serviços como resource servers, com escopo por rota e 142 testes travando a matriz
 - O `ordering` como OAuth2 client: token por `client_credentials`, cacheado e anexado por interceptor
+- Fluxo `authorization_code` com usuário, consentimento granular e refresh token com rotação, persistidos em Postgres
 
 **Próximos passos naturais:**
+- **Ligar o PKCE** no client web — o OAuth 2.1 o exige e ele está desligado
+- **Um `UserDetailsService` de verdade** — hoje há um único usuário em memória, com senha no YAML
 - **Pôr o authorization server no compose** — no perfil `docker` o `ordering` não alcança o issuer
 - **Validar audiência (`aud`)** — hoje um token vale em qualquer um dos três serviços
 - **Verificar a origem do webhook do FastPay** — ele muda estado de fatura sem autenticação nenhuma
@@ -547,7 +578,7 @@ E a terceira já é um padrão, terceira vez seguida: **toda propriedade obrigat
 
 ## O padrão que se repete
 
-Olhando as vinte e duas fases em conjunto, a ordem foi sempre a mesma:
+Olhando as vinte e três fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração
