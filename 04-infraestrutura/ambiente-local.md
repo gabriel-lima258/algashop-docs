@@ -139,6 +139,16 @@ O `authorization-server` roda em **9000** e **não está no compose** — sobe p
 
 > Desde a Fase 23 o Postgres hospeda **quatro** bancos de aplicação: `ordering`, `billing`, `authorization_server` e os `*_test`.
 
+**Usuários de teste do authorization server** (carregados pelo `afterMigrate.sql`, todos com senha `123456`):
+
+| E-mail | Tipo | Como a senha está guardada |
+|---|---|---|
+| `john.doe@email.com` | `CUSTOMER` | `{noop}` |
+| `victoria.garcia@algashop.com` | `MANAGER` | `{noop}` |
+| `jeff.roman@algashop.com` | `OPERATOR` | **`{bcrypt}`** |
+
+Os dois formatos convivem de propósito — é o `DelegatingPasswordEncoder` mostrando que dá para migrar de algoritmo sem invalidar senha.
+
 > ⚠️ **A porta 5433 não é engano.** O Postgres do projeto é exposto em `5433` no host justamente para não conflitar com uma instalação nativa de PostgreSQL, que ocupa a `5432`. Dentro da rede Docker os containers continuam falando na `5432`.
 >
 > Por isso as URLs mudam conforme de onde você conecta:
@@ -422,6 +432,9 @@ spring:
 | O authorization server não sobe: banco `authorization_server` não existe | O `init-user-db.sh` só roda com o **volume vazio** | Crie o banco à mão, ou `down -v` e suba de novo (apaga tudo) |
 | `FlywayValidateException` ao subir o AS | Migration já aplicada foi editada | Nunca editar `.sql` aplicado — nem para acrescentar comentário; o checksum muda |
 | `/oauth2/authorize` devolve 401 no `curl` | Negociação de conteúdo | Sem `Accept: text/html` o entry point assume que quem chama é API e devolve erro OAuth2 em vez de redirecionar ao login |
+| Login recusa usuário que existe | Senha sem prefixo de algoritmo | O `DelegatingPasswordEncoder` exige `{noop}`/`{bcrypt}` na coluna `password` |
+| Access token continua funcionando depois do logout | Comportamento esperado do JWT | Revogar no authorization server não alcança quem valida localmente — ver [`openid-connect-e-sessao.md`](../05-seguranca/openid-connect-e-sessao.md) |
+| Todo mundo desloga a cada restart do AS | Sessão em memória | `@EnableJdbcHttpSession` + as tabelas do `V4` põem a sessão no banco |
 | O authorization server não sobe: banco `authorization_server` não existe | O `init-user-db.sh` só roda com o **volume vazio** | Crie o banco à mão, ou `down -v` e suba de novo (apaga tudo) |
 | `FlywayValidateException` ao subir o AS | Migration já aplicada foi editada | Nunca editar `.sql` aplicado — nem para acrescentar comentário; o checksum muda |
 | `/oauth2/authorize` devolve 401 no `curl` | Negociação de conteúdo | Sem `Accept: text/html` o entry point assume API e devolve erro OAuth2 em vez de redirecionar ao login |

@@ -33,6 +33,8 @@ E é por isso que **token expira e senha não**. A expiração não é inconveni
 
 ---
 
+> Desde a Fase 24 o projeto tem também a camada de **identidade** — OpenID Connect sobre o OAuth2, com ID token, `/userinfo` e logout. Ver [OpenID Connect: identidade, sessão e logout](./openid-connect-e-sessao.md).
+
 ## Autenticar não é autorizar
 
 Duas perguntas distintas, que a mesma infraestrutura costuma responder — e confundi-las produz sistemas que sabem quem você é mas não o que você pode, ou o contrário.

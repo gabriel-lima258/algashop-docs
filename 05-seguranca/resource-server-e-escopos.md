@@ -297,6 +297,22 @@ Vale registrar o mecanismo geral, porque ele se repete: **engolir 4xx é conveni
 
 ---
 
+## O `sub` mudou de significado na Fase 24
+
+Nos fluxos com usuário (`authorization_code` e `refresh_token`), o access token passou a trazer o **UUID do `auth_user`** no `sub`, em vez do e-mail:
+
+```
+sub = 019d7764-3b02-7fd5-b0e7-c47c58592857     (era john.doe@email.com)
+```
+
+Para os resource servers isso é uma **mudança de contrato** — e uma oportunidade. É a primeira vez que existe um identificador estável de pessoa atravessando a fronteira dos serviços, o que dá destino à pendência mais antiga do caderno: a auditoria do `product-catalog`, que grava um `UUID` aleatório como autor.
+
+> Em `client_credentials` nada muda: não há pessoa, e o `sub` continua sendo o `client_id`. Quem for ler o `sub` precisa saber **qual** dos dois tipos de token está recebendo.
+
+Ver [OpenID Connect: identidade, sessão e logout](./openid-connect-e-sessao.md).
+
+---
+
 ## Armadilhas
 
 - **`@EnableMethodSecurity` ausente** deixa as anotações decorativas, sem erro nenhum.

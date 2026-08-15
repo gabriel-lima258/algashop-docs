@@ -1,7 +1,7 @@
 # Authorization code, consentimento e refresh token
 
 > Todo o OAuth deste projeto até aqui foi **sem usuário**. Este documento é sobre o fluxo com pessoa — e sobre a consequência que vem junto: a partir do momento em que alguém consente, existe estado que precisa sobreviver a um restart.
-> Código real: `PersistenceConfig.java`, `db/migration/V1__*.sql` e `V2__*.sql`, `application-development-env.yaml` (authorization-server).
+> Código real: `infrastructure/security/persistence/OAuth2PersistenceConfig.java`, `db/migration/V1__*.sql` e `V2__*.sql`, `application-development-env.yaml` (authorization-server).
 > Conceitos em [Identidade e OAuth 2](./fundamentos-identidade-oauth2.md) · o servidor em [Authorization Server](./authorization-server.md) · o outro lado em [OAuth2 client e token](./oauth2-client-e-token.md).
 
 ---
@@ -58,6 +58,8 @@ authorize ... &state=fase23
 É proteção contra CSRF no callback: o cliente gera um valor aleatório, guarda na sessão, e recusa o retorno cujo `state` não bate. Sem ele, alguém induz a vítima a completar um fluxo que o atacante começou.
 
 ---
+
+> 🔄 **Atualizado na Fase 24.** O usuário saiu da memória e foi para o banco (`auth_user`), e o escopo `openid` entrou no client web — o que faz este mesmo fluxo devolver também um **ID token**. Ver [OpenID Connect: identidade, sessão e logout](./openid-connect-e-sessao.md).
 
 ## A tela de consentimento
 
@@ -262,8 +264,8 @@ curl -s -u algashop-ecommerce-web:ecommerce123 -d grant_type=refresh_token \
 - [ ] **PKCE desligado** (`require-proof-key: false`) num client `authorization_code`. O OAuth 2.1 o tornou obrigatório, inclusive para client confidencial, e [os fundamentos deste caderno afirmam isso](./fundamentos-identidade-oauth2.md#o-que-mudou-no-oauth-21). Ligar exige gerar `code_verifier`/`code_challenge` no cliente — o que o teste manual não faz hoje.
 - [ ] **Tokens em texto puro no banco.** `access_token_value` e `refresh_token_value` são `text`, como o `JdbcOAuth2AuthorizationService` espera. O banco virou um armazém de credenciais portadoras: **quem lê a tabela se passa por qualquer usuário**. Cifrar em repouso, ou tratar esse banco com o mesmo rigor de um cofre.
 - [ ] **`logging.level.org.springframework.security: TRACE`** registra credenciais e tokens no log. Excelente para aprender, e não pode chegar a outro ambiente.
-- [ ] **Um usuário único, em memória, com senha no YAML.** É o placeholder até existir um `UserDetailsService` de verdade — e sem ele não há cadastro, troca de senha nem revogação de sessão.
-- [ ] **Não há tela de gerenciamento de consentimento.** O usuário concede e não tem como revogar; só apagando a linha no banco.
+- [x] ~~**Um usuário único, em memória, com senha no YAML.**~~ Resolvido na Fase 24: há uma tabela `auth_user`, um `UserDetailsService` sobre ela e um `DelegatingPasswordEncoder`. Continua sem cadastro e sem troca de senha pela aplicação.
+- [ ] **Não há tela de gerenciamento de consentimento.** O usuário concede e não tem como revogar; só apagando a linha no banco. O logout da Fase 24 revoga as **autorizações**, mas preserva o consentimento — e está certo: sair não é desfazer permissão.
 - [ ] **O app cliente não existe.** O `redirect_uri` aponta para `http://algashop-ecommerce:9080`, que não está no repositório — o fluxo é exercitável até o redirect, e ali termina.
 - [ ] **`docker-env` e `production-env` continuam vazios**, e agora sem datasource o servidor nem sobe nesses perfis.
 - [ ] **`init-user-db.sh` só roda com o volume do Postgres vazio.** Quem já tinha o banco criado não ganha o `authorization_server`, e a falha na subida não diz isso.

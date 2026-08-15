@@ -186,6 +186,15 @@ FlywayValidateException: Validate failed: Migrations have failed validation
 
 A explicação pertence à documentação; o arquivo aplicado é imutável. Ver [Authorization code e consentimento](../05-seguranca/authorization-code-e-consentimento.md).
 
+Na Fase 24 entraram mais duas migrations no mesmo serviço, e elas mostram os **dois** casos lado a lado:
+
+| Migration | De quem é o schema |
+|---|---|
+| `V3__create_ddl_auth_user.sql` | **nosso** — `auth_user` é uma tabela que o projeto modelou |
+| `V4__create_ddl_spring_sessions.sql` | da **biblioteca** — `SPRING_SESSION` e `SPRING_SESSION_ATTRIBUTES`, do Spring Session |
+
+Só a primeira pode evoluir por decisão nossa. A segunda acompanha a versão da dependência, e mexer nela quebra em runtime.
+
 ---
 
 ## Resumo Rápido

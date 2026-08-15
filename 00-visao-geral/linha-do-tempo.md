@@ -490,7 +490,7 @@ E a terceira já é um padrão, terceira vez seguida: **toda propriedade obrigat
 
 ---
 
-## Fase 23 — Authorization code, consentimento e o estado que sobrou (ago/2026) ← etapa atual
+## Fase 23 — Authorization code, consentimento e o estado que sobrou (ago/2026)
 
 Todo o OAuth anterior foi **sem usuário**. Esta fase traz a pessoa para dentro do fluxo — e, com ela, a primeira coisa neste servidor que não pode sumir num restart.
 
@@ -515,6 +515,33 @@ A segunda lição é sobre o que obriga um sistema a ter estado. Não foi volume
 E a terceira veio de um erro cometido ao documentar: **não se edita migration já aplicada.** Acrescentar um comentário no topo do `.sql` mudou o checksum e o Flyway recusou subir. O comentário virou documentação — que é onde ele deveria estar desde o começo.
 
 > [`authorization-code-e-consentimento.md`](../05-seguranca/authorization-code-e-consentimento.md)
+
+---
+
+## Fase 24 — OpenID Connect: identidade, sessão e logout (ago/2026) ← etapa atual
+
+A fase anterior soube **o que a pessoa autorizou**. Esta sabe **quem ela é** — e descobre que identidade traz estado junto.
+
+| Marco | O que se aprende |
+|---|---|
+| OIDC sobre OAuth2 | Access token responde *"pode fazer isto"*; ID token responde *"é esta pessoa"*. Públicos diferentes |
+| O erro clássico | Mandar ID token para a API. Ele identifica, não autoriza |
+| `openid` não vai ao consentimento | Consentimento é sobre **permissão em recurso**; pedir identidade não é |
+| Usuário no banco | `auth_user`, `UserDetailsService`, e o fim do usuário em memória |
+| `{noop}` e `{bcrypt}` juntos | O **prefixo** é o que permite migrar de algoritmo sem invalidar senha |
+| Duas filter chains | A do protocolo antes da do `formLogin`; e o entry point escolhido por **negociação de conteúdo** |
+| `sub` vira UUID | Identificador estável atravessa a fronteira — e é **mudança de contrato** |
+| Logout revoga autorizações | O padrão encerra a **sessão**; revogar token é decisão da aplicação |
+| **Logout não invalida JWT emitido** | `/userinfo` recusa, refresh recusa — e o resource server aceita até o `exp` |
+| Sessão em banco | Sem ela, deploy desloga todo mundo e a segunda instância não reconhece ninguém |
+
+**A lição da fase** é sobre onde a revogação chega: o logout apagou as autorizações, `/userinfo` passou a responder **401** e o refresh **400** — e o mesmo access token continuou sendo aceito por qualquer resource server, porque ele valida **localmente** pela assinatura e não pergunta nada a ninguém. **Os 5 minutos de TTL *são* a janela de logout incompleto.** É o preço do JWT, escolhido lá na Fase 20, chegando à conta.
+
+A segunda é sobre um rename. `PersistenceConfig` virou `OAuth2PersistenceConfig`, mudou de pacote e **perdeu o `@Configuration`**. Sozinho, isso teria desfeito a Fase 23 em silêncio — tokens e consentimentos de volta à memória, sem erro, com o sintoma aparecendo semanas depois. O que salvou foi o código novo **injetar** `OAuth2AuthorizationService`: a dependência explícita transformou uma regressão invisível numa falha de inicialização. **Depender de um bean por injeção falha alto; depender dele por efeito colateral falha baixo.**
+
+E a terceira, terceira vez seguida: `spring.session.timeout: 30m` está **inerte**, porque `@EnableJdbcHttpSession` faz a auto-configuração recuar. Os dois valores coincidem, então nada quebra — que é exatamente o que torna esse tipo de erro difícil de encontrar.
+
+> [`openid-connect-e-sessao.md`](../05-seguranca/openid-connect-e-sessao.md)
 
 ---
 
@@ -545,10 +572,12 @@ E a terceira veio de um erro cometido ao documentar: **não se edita migration j
 - Os três serviços como resource servers, com escopo por rota e 142 testes travando a matriz
 - O `ordering` como OAuth2 client: token por `client_credentials`, cacheado e anexado por interceptor
 - Fluxo `authorization_code` com usuário, consentimento granular e refresh token com rotação, persistidos em Postgres
+- OpenID Connect: ID token com claims de identidade, `/userinfo`, logout com revogação e sessão em banco
 
 **Próximos passos naturais:**
 - **Ligar o PKCE** no client web — o OAuth 2.1 o exige e ele está desligado
-- **Um `UserDetailsService` de verdade** — hoje há um único usuário em memória, com senha no YAML
+- **Ligar `@EnableJpaAuditing`** — a classe base promete auditoria e nada preenche os campos; há um NPE latente
+- **Usar o `sub` do token na auditoria do catálogo** — a pendência mais antiga do caderno finalmente tem de onde tirar o autor
 - **Pôr o authorization server no compose** — no perfil `docker` o `ordering` não alcança o issuer
 - **Validar audiência (`aud`)** — hoje um token vale em qualquer um dos três serviços
 - **Verificar a origem do webhook do FastPay** — ele muda estado de fatura sem autenticação nenhuma
@@ -578,7 +607,7 @@ E a terceira veio de um erro cometido ao documentar: **não se edita migration j
 
 ## O padrão que se repete
 
-Olhando as vinte e três fases em conjunto, a ordem foi sempre a mesma:
+Olhando as vinte e quatro fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração
