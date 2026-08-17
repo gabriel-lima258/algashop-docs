@@ -189,6 +189,22 @@ A expressão do `@PreAuthorize` é uma **string avaliada em runtime**. Um typo �
 
 Concentrar as strings num arquivo reduz a superfície de erro de N controllers para um lugar, e é o que torna a matriz de testes capaz de cobri-las. Como bônus, o controller passa a declarar a intenção (`@CanReadOrders`) em vez da sintaxe.
 
+### Nem toda meta-anotação verifica escopo
+
+A Fase 25 acrescentou um tipo diferente, ao lado das de escopo:
+
+```java
+@PreAuthorize("hasAuthority('SCOPE_users:read')")        // permissão: o que o token pode
+public @interface CanReadUsers {}
+
+@PreAuthorize("@securityCheck.canAccessOwnProfile()")    // sujeito: quem o token representa
+public @interface CanAccessOwnProfile {}
+```
+
+A segunda não pergunta *o que este token autoriza*, e sim *este token representa uma pessoa?* — porque `/api/v1/users/me` não faz sentido para um token de máquina. Máquina recebe **403**: não é falta de permissão, é ausência de sujeito.
+
+E ela agrava a armadilha desta seção. `@securityCheck` é resolvido **pelo nome do bean** (`@Service("securityCheck")`), em runtime, dentro de uma string. Renomear o bean e esquecer a expressão quebra a autorização sem erro de compilação, sem aviso da IDE e sem log — o método simplesmente passa a negar todo mundo. Detalhes em [Gestão de usuários e auditoria](./gestao-de-usuarios-e-auditoria.md).
+
 ### O desenho dos escopos
 
 | Serviço | Escopos |
@@ -196,6 +212,7 @@ Concentrar as strings num arquivo reduz a superfície de erro de N controllers p
 | `product-catalog` | `products:read`, `products:write`, **`products:stock:write`**, `categories:read`, `categories:write` |
 | `ordering` | `orders:read/write`, `customers:read/write`, `shopping-carts:read/write`, `shipping-costs:preview` |
 | `billing` | `invoices:read/write`, `credit-cards:read/write` |
+| `authorization-server` | `users:read`, `users:write` *(Fase 25)* |
 
 Duas escolhas valem ser notadas:
 
@@ -309,7 +326,14 @@ Para os resource servers isso é uma **mudança de contrato** — e uma oportuni
 
 > Em `client_credentials` nada muda: não há pessoa, e o `sub` continua sendo o `client_id`. Quem for ler o `sub` precisa saber **qual** dos dois tipos de token está recebendo.
 
-Ver [OpenID Connect: identidade, sessão e logout](./openid-connect-e-sessao.md).
+✅ **A Fase 25 usou.** Os três serviços que auditam trocaram o `UUID.randomUUID()` pelo `sub`, e a pergunta "qual dos dois tipos de token é este?" ganhou uma resposta explícita — `isMachineAuthenticated()`, que compara `aud` e `sub`. Verificado nos dois casos:
+
+```
+máquina:  sub = algashop-test                aud = algashop-test           → aud contém sub
+usuário:  sub = 019d7764-3b02-7be2-9112-…    aud = algashop-ecommerce-web  → não contém
+```
+
+Ver [OpenID Connect: identidade, sessão e logout](./openid-connect-e-sessao.md) e [Gestão de usuários e auditoria](./gestao-de-usuarios-e-auditoria.md).
 
 ---
 

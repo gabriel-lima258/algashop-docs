@@ -518,7 +518,7 @@ E a terceira veio de um erro cometido ao documentar: **não se edita migration j
 
 ---
 
-## Fase 24 — OpenID Connect: identidade, sessão e logout (ago/2026) ← etapa atual
+## Fase 24 — OpenID Connect: identidade, sessão e logout (ago/2026)
 
 A fase anterior soube **o que a pessoa autorizou**. Esta sabe **quem ela é** — e descobre que identidade traz estado junto.
 
@@ -542,6 +542,32 @@ A segunda é sobre um rename. `PersistenceConfig` virou `OAuth2PersistenceConfig
 E a terceira, terceira vez seguida: `spring.session.timeout: 30m` está **inerte**, porque `@EnableJdbcHttpSession` faz a auto-configuração recuar. Os dois valores coincidem, então nada quebra — que é exatamente o que torna esse tipo de erro difícil de encontrar.
 
 > [`openid-connect-e-sessao.md`](../05-seguranca/openid-connect-e-sessao.md)
+
+---
+
+## Fase 25 — Gestão de usuários, `/me` e auditoria com identidade real (ago/2026) ← etapa atual
+
+A Fase 24 pôs o UUID do usuário no `sub` do token. Esta **usa** esse `sub` — e ao usá-lo fecha a pendência mais antiga do caderno, aberta na Fase 8.
+
+| Marco | O que se aprende |
+|---|---|
+| API de usuários no authorization server | O serviço de protocolo ganhou domínio próprio: listar, criar, atualizar, anonimizar |
+| `SecurityCheckApplicationService` | A aplicação pergunta "quem está chamando?"; só a infraestrutura sabe que existe JWT |
+| Auditoria com autor real | `created_by_user_id` = `sub` do token. **Dezessete fases depois** |
+| `Optional.empty()` para máquina | "Criado por ninguém" é mais honesto que "criado por um UUID aleatório" |
+| `/me` | O id que o **cliente não escolhe** elimina a classe de bug que `/{userId}` obriga a proteger |
+| Máquina em `/me` → **403** | Não é falta de permissão, é ausência de sujeito |
+| `@PreAuthorize("@securityCheck…")` | O SpEL resolve **bean por nome**, em runtime. Renomear quebra sem erro de compilação |
+| `DELETE` anonimiza | A linha sobrevive porque o id dela pode estar gravado como autor em outros serviços |
+| `aud` × `sub` como heurística | Distingue máquina de pessoa por **coincidência estrutural**, não por afirmação |
+
+**A lição da fase** veio de três bugs encadeados que só um deles se via. `getAudience()` devolve `null` quando o token não traz `aud` — e como o `AuditorAware` consulta a segurança **antes de cada persistência**, o NPE derrubava todo `POST`/`PUT`/`DELETE` de todos os serviços. Atrás dele, um `catch (IllegalAccessError)` protegendo um `UUID.fromString` que lança `IllegalArgumentException`: código morto, escrito com a melhor das intenções, esperando o dia em que o bug da frente fosse corrigido. E os dois estavam nas **quatro** cópias idênticas do arquivo — a duplicação entre serviços cobrando quatro edições para um conserto.
+
+A quarta, no authorization server, é a mesma família do rename da Fase 24: `TestSecurityConfig` declarava exatamente o bean que faltava, estava versionado, compilava — e **ninguém o importava**. `@TestConfiguration` não entra por component scan.
+
+E a terceira asserção que envelheceu: `assertThat(createdByUserId).isNotNull()` passava **sempre** enquanto o autor era `UUID.randomUUID()`. Nunca teve chance de falhar, e por isso nunca provou nada. No `ordering` ela foi **fortalecida** para `isEqualTo(TEST_USER_ID)` — com `isNotNull()` o teste passaria igual se a auditoria regredisse ao UUID aleatório.
+
+> [`gestao-de-usuarios-e-auditoria.md`](../05-seguranca/gestao-de-usuarios-e-auditoria.md)
 
 ---
 
@@ -573,11 +599,12 @@ E a terceira, terceira vez seguida: `spring.session.timeout: 30m` está **inerte
 - O `ordering` como OAuth2 client: token por `client_credentials`, cacheado e anexado por interceptor
 - Fluxo `authorization_code` com usuário, consentimento granular e refresh token com rotação, persistidos em Postgres
 - OpenID Connect: ID token com claims de identidade, `/userinfo`, logout com revogação e sessão em banco
+- API de usuários com filtros, paginação, `/me` e anonimização — e auditoria com o autor real, vindo do token
 
 **Próximos passos naturais:**
+- **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
 - **Ligar o PKCE** no client web — o OAuth 2.1 o exige e ele está desligado
-- **Ligar `@EnableJpaAuditing`** — a classe base promete auditoria e nada preenche os campos; há um NPE latente
-- **Usar o `sub` do token na auditoria do catálogo** — a pendência mais antiga do caderno finalmente tem de onde tirar o autor
+- **Claim explícito de tipo de token** — hoje "máquina ou pessoa?" é deduzido comparando `aud` e `sub`
 - **Pôr o authorization server no compose** — no perfil `docker` o `ordering` não alcança o issuer
 - **Validar audiência (`aud`)** — hoje um token vale em qualquer um dos três serviços
 - **Verificar a origem do webhook do FastPay** — ele muda estado de fatura sem autenticação nenhuma
@@ -600,14 +627,14 @@ E a terceira, terceira vez seguida: `spring.session.timeout: 30m` está **inerte
 - Índices na coleção `categories` (hoje a busca por nome é varredura com regex)
 - Devolver `brand` à busca por termo (`@TextIndexed`) e tirar o índice que ficou órfão
 - Testes do pipeline e um que afirme `IXSCAN` no `explain` (o agregado `Product` já tem o seu)
-- ~~Autenticação~~ — começou na Fase 20; falta o resource server, e só então a auditoria troca o `UUID` aleatório pelo `sub` do token
+- ~~Autenticação~~ — começou na Fase 20, chegou aos resource servers na 21 e à auditoria na 25: o `UUID` aleatório deu lugar ao `sub` do token
 - Observabilidade — tracing distribuído, métricas (a começar por `hikaricp.connections.pending` e `tomcat.threads.busy`), log estruturado
 
 ---
 
 ## O padrão que se repete
 
-Olhando as vinte e quatro fases em conjunto, a ordem foi sempre a mesma:
+Olhando as vinte e cinco fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

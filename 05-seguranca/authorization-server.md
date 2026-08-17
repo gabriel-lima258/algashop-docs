@@ -24,6 +24,8 @@ authorization-server/
     └── application-production-env.yaml              ← vazio
 ```
 
+> Esta árvore descreve o serviço **na Fase 20**, quando ele era só protocolo. Ele cresceu: a Fase 23 trouxe banco (tokens e consentimentos), a 24 trouxe usuários e OIDC, e a 25 trouxe **domínio de negócio próprio** — `AuthUser` com fábrica e invariantes, application services de comando e consulta, e dois controllers. Deixou de ser "o serviço sem entidade". Ver [Gestão de usuários e auditoria](./gestao-de-usuarios-e-auditoria.md).
+
 ```gradle
 implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-authorization-server'
 ```
@@ -226,7 +228,18 @@ Lidos do contrato ([`openapi/authorization-server.yml`](../openapi/authorization
 | `GET /.well-known/oauth-authorization-server` | qualquer um | descobrir todos os outros |
 | `GET /oauth2/authorize` | o **navegador** | iniciar o fluxo com usuário |
 
-Os três primeiros exigem autenticação do cliente; os três últimos são públicos — e é correto que sejam: chave pública é pública, e metadado de descoberta existe para ser descoberto.
+E, desde a Fase 25, endpoints que **não são de protocolo** — API de negócio deste serviço, protegida como qualquer resource server:
+
+| Endpoint | Escopo exigido | Para quê |
+|---|---|---|
+| `GET /api/v1/users` | `users:read` | listar com filtro por nome, e-mail e tipo, paginado |
+| `GET /api/v1/users/{id}` | `users:read` | um usuário pelo id |
+| `POST /api/v1/users` | `users:write` | cadastrar |
+| `PUT /api/v1/users/{id}` | `users:write` | atualizar nome, tipo e `enabled` |
+| `DELETE /api/v1/users/{id}` | `users:write` | **anonimizar** (a linha permanece) |
+| `GET /api/v1/users/me` | — *(exige ser pessoa)* | o próprio perfil, resolvido pelo `sub` do token |
+
+Os três primeiros do bloco de protocolo exigem autenticação do cliente; os três últimos são públicos — e é correto que sejam: chave pública é pública, e metadado de descoberta existe para ser descoberto.
 
 ### O `.well-known` é mais importante do que parece
 

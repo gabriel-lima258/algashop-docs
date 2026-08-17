@@ -183,6 +183,8 @@ sub = 019d7764-3b02-7fd5-b0e7-c47c58592857     (era john.doe@email.com)
 > **Isto é uma mudança de contrato**, e vale registrar como tal: qualquer resource server que tivesse lido `sub` como e-mail passa a receber um UUID. Nenhum lê hoje — mas o motivo de a mudança estar certa é o mesmo que a torna incompatível: **e-mail muda, id não.** Um identificador que o usuário pode alterar não serve para amarrar dados a ele.
 >
 > E isso finalmente dá destino à pendência mais antiga deste caderno: a auditoria do `product-catalog`, que grava um `UUID` aleatório como autor. O `sub` do access token agora **é** esse UUID.
+>
+> ✅ **A Fase 25 colheu isso.** O `AuditorAware` dos três serviços que auditam passou a ler o `sub`, e o `GET /api/v1/users/me` do authorization server passou a resolver "quem sou eu" sem receber id nenhum na URL. Ver [Gestão de usuários e auditoria](./gestao-de-usuarios-e-auditoria.md).
 
 Repare no `else if`: o `sub` só é reescrito em `authorization_code` e `refresh_token`. Em `client_credentials` não há pessoa, e o `sub` continua sendo o `client_id` — que é o correto.
 
@@ -335,12 +337,12 @@ A cadeia até a falha vale ser entendida:
 
 ## Pendências registradas
 
-- [ ] **`@EnableJpaAuditing` não existe.** `AbstractAuditableAggregateRoot` promete `@CreatedDate`/`@CreatedBy`/`@LastModifiedDate` e nada preenche esses campos. Hoje passa despercebido porque o seed grava `created_at` à mão — mas um `AuthUser` criado pela aplicação teria `createdAt` **nulo**, e `OidcUserInfoService` chama `getCreatedAt().toEpochSecond()`: **NPE latente** no caminho de emissão de token. Ligar exige também decidir de onde vem o `AuditorAware<UUID>`.
+- ✅ ~~**`@EnableJpaAuditing` não existe**~~ — **ligado na Fase 25**, junto com a resposta para "de onde vem o `AuditorAware<UUID>`": do `sub` deste mesmo ID token. O NPE latente em `OidcUserInfoService.getCreatedAt().toEpochSecond()` deixou de ser latente porque `createdAt` passou a ser preenchido. Ver [Gestão de usuários e auditoria](./gestao-de-usuarios-e-auditoria.md).
 - [ ] **O logout é global por usuário**, revogando autorizações de todos os clients. Fazer por client exigiria filtrar pelo `registered_client_id` do `id_token_hint`.
 - [ ] **`/userinfo` devolve dados congelados** na emissão do ID token, em vez de consultar o `AuthUser`.
 - [ ] **Sem back-channel logout.** Os resource servers não são notificados; um access token vivo continua aceito até expirar.
 - [ ] **Senhas `{noop}` no seed** — dois dos três usuários. O terceiro está em `{bcrypt}`, que é o caminho certo.
-- [ ] **Não há cadastro, troca de senha nem desativação** pela aplicação. O `AuthUser` é anêmico porque ainda não há operação — quando houver, ele precisa deixar de ser.
+- ✅ ~~**Não há cadastro, troca de senha nem desativação** pela aplicação. O `AuthUser` é anêmico porque ainda não há operação — quando houver, ele precisa deixar de ser.~~ — **Fase 25**: chegaram cadastro, atualização e anonimização, e o agregado deixou de ser anêmico (fábrica `brandNew`, `anonymize()`, setters validando). Falta ainda a **troca de senha** — e a senha temporária do cadastro não é entregue a ninguém.
 - [ ] **`AuthUserType` não vira authority.** Se um dia a autorização precisar de papel (e não só de escopo), o `UserDetails` terá que carregá-lo.
 - [ ] **PKCE segue desligado** — pendência herdada da Fase 23.
 - [ ] **Typo em `idTokenHoldeer`** no `OidcUserInfoMapper`.

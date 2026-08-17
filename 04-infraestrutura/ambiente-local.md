@@ -76,6 +76,31 @@ docker compose -f docker-compose.tools.yml up -d
 
 > ⚠️ **O `.env` na raiz do meta não é opcional.** É de lá que o Compose lê `REDIS_PASSWORD` para montar o `--requirepass` do Redis. Sem o arquivo, a variável resolve para string vazia, o Redis sobe **sem autenticação**, e as aplicações — que mandam senha — são recusadas. O sintoma é traiçoeiro: tudo responde normalmente, e o cache simplesmente nunca funciona. Ver [`redis.md`](./redis.md).
 
+### O hífen que decide se o arquivo é válido
+
+A mesma variável causou um terceiro problema na Fase 25, e desta vez mais barulhento:
+
+```yaml
+"--requirepass", "${REDIS_PASSWORD:algashop}"    # ❌
+"--requirepass", "${REDIS_PASSWORD:-algashop}"   # ✅
+```
+
+```
+$ docker compose -f docker-compose.tools.yml config
+invalid interpolation format for services.algashop-redis.command.[].
+```
+
+A sintaxe de valor padrão do Compose é `${VAR:-default}`, **com hífen** — a forma sem hífen não é "valor padrão que não funciona", é sintaxe inválida. E o erro é de parsing do arquivo **inteiro**: nenhum serviço sobe, nem os que não têm nada a ver com Redis.
+
+Duas formas convivem e vale distinguir:
+
+| Forma | Significado |
+|---|---|
+| `${VAR:-default}` | usa `default` se `VAR` estiver **ausente ou vazia** |
+| `${VAR-default}` | usa `default` só se `VAR` estiver **ausente** (vazia continua vazia) |
+
+O hábito útil: **`docker compose config` antes de `up`**. Ele expande tudo e mostra o YAML final — é o `--dry-run` do Compose, e teria pego este erro na hora.
+
 ### Cenário B — tudo em container
 
 Desde a Fase 18 o comando é o mais curto possível:

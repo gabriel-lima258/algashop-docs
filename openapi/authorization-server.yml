@@ -30,6 +30,10 @@ tags:
     description: Introspecção e revogação de tokens
   - name: Discovery
     description: Endpoints de descoberta e metadados
+  - name: Users
+    description: |
+      Gestão de usuários — REST API protegida por Access Token JWT.
+      Leitura exige o escopo `users:read`; escrita (criação e anonimização), `users:write`.
 
 paths:
   /oauth2/authorize:
@@ -287,6 +291,147 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthorizationServerMetadata"
+  /api/v1/users:
+    get:
+      tags: [Users]
+      summary: Lista usuários
+      description: |
+        Listagem paginada com filtros opcionais por nome, e-mail (ambos parciais,
+        case-insensitive) e tipo de usuário. Requer o escopo `users:read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - schema:
+            type: string
+            example: John
+          in: query
+          name: name
+          description: Nome do usuário (busca parcial, case-insensitive)
+          required: false
+        - schema:
+            type: string
+            example: john.manager@algashop.com
+          in: query
+          name: email
+          description: E-mail do usuário (busca parcial, case-insensitive)
+          required: false
+        - schema:
+            type: string
+            enum: [MANAGER, OPERATOR, CUSTOMER]
+            example: OPERATOR
+          in: query
+          name: type
+          description: Tipo do usuário
+          required: false
+        - $ref: "#/components/parameters/pageNumber"
+        - $ref: "#/components/parameters/pageSize"
+        - $ref: "#/components/parameters/sort"
+        - $ref: "#/components/parameters/direction"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      content:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/AuthUserOutput"
+    post:
+      tags: [Users]
+      summary: Cria usuário
+      description: |
+        Cria um usuário com senha temporária gerada pelo servidor.
+        Requer o escopo `users:write`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthUserInput"
+      responses:
+        "201":
+          description: Usuário criado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserOutput"
+        "400":
+          description: Campos inválidos.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: E-mail já está em uso.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+  /api/v1/users/{userId}:
+    get:
+      tags: [Users]
+      summary: Consulta usuário por ID
+      description: Requer o escopo `users:read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/userId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserOutput"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Users]
+      summary: Exclui (anonimiza) usuário
+      description: |
+        **Anonimização, não remoção física.** O registro permanece no banco: os dados
+        pessoais são substituídos por valores neutros (`Anonymized User`,
+        `anonymized-<id>@deleted.local`) e o usuário é desabilitado.
+        Requer o escopo `users:write`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/userId"
+      responses:
+        "204":
+          description: Usuário anonimizado.
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/users/me:
+    get:
+      tags: [Users]
+      summary: Consulta o próprio usuário autenticado
+      description: |
+        Retorna os dados do usuário dono do Access Token (claim `sub`).
+        Exige token de usuário — um token de máquina (`client_credentials`)
+        recebe 403, pois não há usuário humano associado.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserOutput"
+        "403":
+          description: Token sem usuário associado (client de máquina).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
 
 components:
   securitySchemes:
@@ -312,6 +457,61 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/OAuth2ErrorResponse"
+    NotFound:
+      description: Recurso não encontrado.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+  parameters:
+    userId:
+      schema:
+        type: string
+        format: uuid
+      name: userId
+      in: path
+      required: true
+      example: "019d7764-3e11-7000-8000-000000000001"
+    pageNumber:
+      schema:
+        type: number
+        format: int32
+        minimum: 0
+        default: 0
+      name: page
+      description: Página (zero-based)
+      in: query
+    pageSize:
+      schema:
+        type: number
+        format: int32
+        minimum: 1
+        default: 15
+        example: 10
+      name: size
+      description: Tamanho da página
+      in: query
+    sort:
+      schema:
+        type: string
+        enum:
+          - NAME
+          - EMAIL
+          - TYPE
+        example: "NAME"
+      name: sortByProperty
+      description: Propriedade de ordenação (allowlist)
+      in: query
+    direction:
+      schema:
+        type: string
+        enum:
+          - ASC
+          - DESC
+        example: "ASC"
+      name: sortDirection
+      description: Direção da ordenação
+      in: query
   schemas:
     TokenResponse:
       type: object
@@ -528,3 +728,103 @@ components:
         error_uri:
           type: string
           format: uri
+    AuthUserOutput:
+      type: object
+      required:
+        - id
+        - name
+        - email
+        - type
+        - enabled
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "019d7764-3e11-7000-8000-000000000001"
+        name:
+          type: string
+          example: "John Manager"
+        email:
+          type: string
+          format: email
+          example: "john.manager@algashop.com"
+        type:
+          type: string
+          enum: [MANAGER, OPERATOR, CUSTOMER]
+          example: MANAGER
+        enabled:
+          type: boolean
+          example: true
+    AuthUserInput:
+      type: object
+      required:
+        - name
+        - email
+        - type
+      properties:
+        name:
+          type: string
+          example: "John Manager"
+        email:
+          type: string
+          format: email
+          example: "john.manager@algashop.com"
+        type:
+          type: string
+          enum: [MANAGER, OPERATOR, CUSTOMER]
+          example: MANAGER
+    Page:
+      type: object
+      required:
+        - number
+        - size
+        - totalPages
+        - totalElements
+        - content
+      properties:
+        number:
+          type: integer
+          format: int32
+          example: 0
+        size:
+          type: integer
+          format: int32
+          example: 15
+        totalPages:
+          type: integer
+          format: int32
+          example: 1
+        totalElements:
+          type: integer
+          format: int64
+          example: 2
+    ProblemDetail:
+      title: Problem
+      type: object
+      required:
+        - status
+        - type
+        - title
+        - instance
+      description: >
+        Representa um problema na comunicação com a API.
+        Modelo baseado na RFC 7807 (Problem Details for HTTP APIs).
+      properties:
+        status:
+          type: integer
+          example: 404
+        type:
+          type: string
+          example: "/errors/not-found"
+        title:
+          type: string
+          example: "Not found"
+        instance:
+          type: string
+          example: "/api/v1/users/019d7764-3e11-7000-8000-000000000002"
+        detail:
+          type: string
+          example: "User id 019d7764-3e11-7000-8000-000000000002 not found"
+        fields:
+          type: object
+          description: Campos que causaram o erro (presente em /errors/invalid-fields)

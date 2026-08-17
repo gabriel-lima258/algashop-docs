@@ -204,8 +204,13 @@ public class SpringDataAuditingConfig {
     }
 
     @Bean
-    public AuditorAware<UUID> auditorProvider() {
-        return () -> Optional.of(UUID.randomUUID());
+    public AuditorAware<UUID> auditorProvider(SecurityCheckApplicationService securityCheck) {
+        return () -> {
+            if (!securityCheck.isAuthenticated() || securityCheck.isMachineAuthenticated()) {
+                return Optional.empty();
+            }
+            return Optional.of(securityCheck.getAuthenticatedUserId());
+        };
     }
 }
 ```
@@ -223,7 +228,7 @@ E as anotações no agregado:
 
 Repare que o construtor de `Category` **perdeu** a linha `this.createdAt = OffsetDateTime.now()`. Isso é intencional: com auditoria ativa, quem preenche é a infraestrutura, no momento do `save()`.
 
-> ⚠️ **Pendência conhecida:** `auditorProvider()` devolve `UUID.randomUUID()` — um placeholder. Cada gravação registra um "usuário" diferente e inventado. Quando houver autenticação, isso vira algo como ler o id do usuário do `SecurityContextHolder`.
+> ✅ **Resolvido na Fase 25.** Até então o `auditorProvider()` devolvia `UUID.randomUUID()` — cada gravação registrava um "usuário" diferente e inventado, um placeholder disfarçado de dado. Com o `sub` do token carregando o UUID real do usuário (Fase 24), o autor passou a vir de quem de fato chamou. Quando quem chama é **máquina** (`client_credentials`), o provider devolve `Optional.empty()`: "criado por ninguém" é mais honesto que um UUID aleatório. Ver [Gestão de usuários e auditoria](../05-seguranca/gestao-de-usuarios-e-auditoria.md).
 
 ---
 
@@ -511,7 +516,7 @@ Coisas que ficaram conscientemente pela metade nesta etapa:
 
 - ✅ ~~`ProductQueryServiceImpl.filter()` ainda retorna `null`~~ — **implementado** com `Query` + `Criteria` e paginação manual; ver [`consultas-mongo-criteria.md`](./consultas-mongo-criteria.md).
 - [ ] Não há testes cobrindo o agregado `Product` (nem os invariantes de preço, nem a persistência). O `ProductRepositoryIT` que surgiu depois exercita só a projeção do repositório, e sem asserção — apenas loga o resultado.
-- [ ] `auditorProvider()` devolve `UUID.randomUUID()` até existir autenticação.
+- ✅ ~~`auditorProvider()` devolve `UUID.randomUUID()` até existir autenticação~~ — **resolvido na Fase 25**: o autor vem do `sub` do token; ver [Gestão de usuários e auditoria](../05-seguranca/gestao-de-usuarios-e-auditoria.md).
 - [x] ~~`quantityInStock` tem `setQuantityInStock` **privado** e nenhum método público de entrada/saída de estoque. Produto criado **pela API** fica travado em `0`, e `isInStock()` sempre retorna `false`.~~ Resolvido na Fase 13 com `POST /{productId}/restock` e `/withdraw` — e resolvido **sem** setter público: o ajuste acontece direto no banco, de forma atômica, sem carregar o agregado. Ver [`concorrencia-e-atomicidade.md`](./concorrencia-e-atomicidade.md). O detalhe histórico continua valendo: os documentos do [`DataLoader`](../04-infraestrutura/carga-de-dados-mongo.md) são inseridos crus, e era por isso que `?inStock=true` funcionava na massa de teste e não num produto cadastrado pelo endpoint.
 - [x] ~~N+1 latente no `@DocumentReference`.~~ Resolvido de vez: a listagem primeiro trocou o N+1 pelo `$lookup` (ver [`agregacoes-mongo.md`](./agregacoes-mongo.md)), e a Fase 12 removeu a referência inteira — não há mais o que resolver em nenhum caminho de leitura. Ver [`desnormalizacao-mongo.md`](./desnormalizacao-mongo.md).
 - [ ] `brand` tem `@Indexed` e nenhuma consulta filtra por marca — índice que só custa escrita. Detalhe em [`indices-mongo.md`](./indices-mongo.md).

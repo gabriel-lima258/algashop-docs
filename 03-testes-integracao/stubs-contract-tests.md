@@ -553,6 +553,31 @@ Duas saídas, e elas não são equivalentes: aplicar `springSecurity()` e inclui
 
 ---
 
+## Contract tests no authorization-server
+
+O authorization-server foi o terceiro serviço a adotar o padrão, para a REST API de usuários (`/api/v1/users`). A estrutura é a mesma do product-catalog — plugin `org.springframework.cloud.contract`, contratos em `src/contractTest/resources/contracts/user/`, base `UserBase` em `contract/base/` — com cinco cenários: listagem paginada, findById 200, findById 404, DELETE 204 e DELETE 404.
+
+A base mocka os **dois** serviços que o `UserController` injeta:
+
+```java
+@WebMvcTest(controllers = UserController.class)
+public class UserBase {
+    @MockitoBean private AuthUserQueryService authUserQueryService;                      // GETs
+    @MockitoBean private AuthUserManagementApplicationService authUserManagementApplicationService;  // POST/DELETE
+```
+
+O mock da listagem repete o truque do `ProductBase`: lê o `size` do filtro recebido (`answer.getArgument(0)`) em vez de devolver constante, para que `size: fromRequest().query("size")` no contrato case com a resposta.
+
+Três particularidades valem registro:
+
+1. **`page`, não `number`.** O `PageFilter` do authorization-server expõe o query param `page`; os contratos de categoria do catálogo usam `number`. Quem copiar um `findXxxV1.groovy` de lá para cá precisa trocar o nome do parâmetro — o stub aceita qualquer um (é `optional`), mas o teste de provider gerado manda o parâmetro literal, e o filtro não é preenchido se o nome divergir.
+2. **DELETE que promete 204 e não promete remoção.** O contrato de `deleteUserByIdV1` afirma só o status. O efeito colateral real é **anonimização** (`AuthUser.anonymize()`: nome e e-mail neutros, `enabled=false`), não remoção física — semântica que o contrato não vê e não deve ver. Um consumidor que fizer DELETE e depois GET no mesmo id vai receber **200 com dados anonimizados**, não 404; se algum dia isso surpreender um consumer, o lugar de expressar é um contrato novo, não o código.
+3. **Sem publicação de stubs.** Nenhum serviço consome a API de usuários via Stub Runner ainda, então o `build.gradle` não tem `maven-publish`/`verifierStubsJar`. Quando surgir o primeiro consumer, o passo é o mesmo já descrito na seção de publicação: gerar o `-stubs.jar` e apontar o `@AutoConfigureStubRunner` para ele.
+
+Como aqui também não se aplica `springSecurity()`, vale o mesmo aviso da seção anterior: os contratos descrevem uma API sem autenticação, mas os endpoints reais exigem `users:read`/`users:write`.
+
+---
+
 ## Quando o stub deixa de servir
 
 Todo este documento é sobre **substituir** o serviço externo. Vale enquanto a pergunta é de correção: "o meu código lida certo com esta resposta?". Para isso, um stub é melhor que o serviço real — determinístico, rápido, e capaz de produzir o 502 que ninguém consegue provocar de propósito.

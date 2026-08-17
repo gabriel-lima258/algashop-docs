@@ -60,6 +60,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Stubs e contract tests](./03-testes-integracao/stubs-contract-tests.md) | Testar integração entre serviços sem subir todos: Spring Cloud Contract, WireMock, Stub Runner |
+| [Testes de integração de query services](./03-testes-integracao/testes-integracao-query-services.md) | Query service se testa contra banco real: Testcontainers, isolamento do seed do Flyway, builders e os cenários mínimos de paginação |
 | [Tratamento de erros na API](./03-testes-integracao/tratamento-erros-api.md) | `ProblemDetail` (RFC 9457), hierarquia de exceções e quando usar 404, 422 ou 500 |
 | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) | Cenários, executores e thresholds — e as três armadilhas que fazem um teste de carga medir menos do que promete |
 
@@ -86,6 +87,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) | Quem **pede** o token: as três peças, o cache por principal, e a linha de config que acoplava a subida de um serviço à do outro |
 | [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) | O fluxo **com pessoa**: código, `state`, consentimento granular, refresh com rotação — e a propriedade no singular que desligava a rotação em silêncio |
 | [OpenID Connect: identidade, sessão e logout](./05-seguranca/openid-connect-e-sessao.md) | ID token × access token, usuário no banco, `/userinfo`, logout com revogação — e por que ele **não** alcança um JWT já emitido |
+| [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) | A API de usuários, `/me` como id que o cliente não escolhe, token de pessoa × de máquina — e a auditoria que trocou o `UUID` aleatório pelo `sub` do token |
 
 ### Artefatos
 
@@ -113,7 +115,7 @@ Para revisar o conteúdo do zero, nesta ordem:
 [Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) → [Resiliência](./01-arquitetura-design/resiliencia.md) → [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) → [Health check](./04-infraestrutura/health-checks.md)
 
 **4a. Quem pode chamar**
-[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md) → [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) → [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) → [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) → [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md)
+[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md) → [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) → [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) → [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) → [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) → [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md)
 
 **4b. Quanto o sistema aguenta**
 [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) → [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md)
@@ -181,6 +183,11 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Migrar de algoritmo de senha sem invalidar as antigas | [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) |
 | Fazer logout revogar tokens de verdade | [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) |
 | Guardar sessão fora da memória | [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) |
+| Saber **quem** está chamando, sem acoplar a aplicação ao Spring Security | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
+| Preencher `createdBy` com o usuário de verdade | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
+| Distinguir token de pessoa de token de máquina | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
+| Fazer um endpoint `/me` sem receber id na URL | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
+| Apagar um usuário sem quebrar referência de auditoria | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
 | Dar baixa em estoque sem vender o que não tem | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) |
 | Fazer duas escritas caírem juntas, ou nenhuma | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
 | Por que `@Transactional` no Mongo pode não fazer nada | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
