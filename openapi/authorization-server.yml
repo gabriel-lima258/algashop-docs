@@ -392,6 +392,46 @@ paths:
                 $ref: "#/components/schemas/AuthUserOutput"
         "404":
           $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Users]
+      summary: Atualiza usuário
+      description: |
+        Atualiza nome, tipo e situação (enabled). O e-mail não é alterável por esta
+        operação. Requer o escopo `users:write`.
+
+        Regra de domínio: o tipo de um usuário `CUSTOMER` não pode ser alterado —
+        a tentativa retorna 422.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/userId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthUserUpdateInput"
+      responses:
+        "200":
+          description: Usuário atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserOutput"
+        "400":
+          description: Campos inválidos.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Regra de negócio violada (ex. mudar o tipo de um CUSTOMER).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
     delete:
       tags: [Users]
       summary: Exclui (anonimiza) usuário
@@ -773,6 +813,23 @@ components:
           type: string
           enum: [MANAGER, OPERATOR, CUSTOMER]
           example: MANAGER
+    AuthUserUpdateInput:
+      type: object
+      required:
+        - name
+        - type
+        - enabled
+      properties:
+        name:
+          type: string
+          example: "John Updated"
+        type:
+          type: string
+          enum: [MANAGER, OPERATOR, CUSTOMER]
+          example: MANAGER
+        enabled:
+          type: boolean
+          example: true
     Page:
       type: object
       required:
