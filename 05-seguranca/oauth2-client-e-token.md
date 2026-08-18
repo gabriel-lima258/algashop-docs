@@ -268,7 +268,7 @@ O que reduziria isso: `@ConfigurationProperties` com `@NotBlank` só quando a fu
 
 - [x] ~~**O `ordering` não propaga token ao catálogo.**~~ Fechado nesta fase, com teste que falha se o interceptor sair.
 - [ ] **`client-secret: secret123` em texto puro** num arquivo versionado — o par do `{noop}` do lado do authorization server. Mínimo aceitável: variável de ambiente ou cofre.
-- [ ] **No perfil `docker` o `ordering` não alcança o authorization server.** O endereço é `http://algashop-authorization-server:9000` — nome de container — e **o AS não está no compose**. Dentro da rede, esse nome não resolve, e a compra falha com 502 na primeira chamada ao catálogo.
+- ✅ ~~**No perfil `docker` o `ordering` não alcança o authorization server.**~~ — **resolvido na Fase 26**: o AS entrou no `docker-compose.services.yml` e responde por `auth.algashop.local` dentro da rede (o DNS do Docker resolve o `hostname:` do container).
 - [ ] **O `.oauth2Client()` da `SecurityFilterChain` não tem uso hoje.** Ele só passa a ser necessário se o `ordering` ganhar login de usuário com `authorization_code`.
 - [ ] **O cache de token é por instância** (`InMemoryOAuth2AuthorizedClientService`). Com N réplicas, são N tokens em circulação — aceitável, mas multiplica a carga no authorization server proporcionalmente.
 - [ ] **Nada testa a renovação.** O provider renova quando o token expira; nenhum teste exercita um token vencido.

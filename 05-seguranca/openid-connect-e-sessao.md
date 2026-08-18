@@ -361,6 +361,20 @@ A cadeia até a falha vale ser entendida:
 
 ---
 
+---
+
+## 🔄 O cookie de sessão virou peça de arquitetura (Fase 26)
+
+Nesta fase a sessão descrita acima deixou de ser detalhe interno. Um `CookieSerializer` explícito passou a controlar como ela viaja:
+
+```
+Set-Cookie: JSESSIONID=...; Domain=algashop.local; Path=/; HttpOnly; SameSite=Lax
+```
+
+O `Domain` é o que permite `auth.algashop.local` e `admin.algashop.local` compartilharem a **mesma** sessão — e foi por isso que os hosts do projeto foram renomeados para debaixo de um pai comum. Sem isso, o *silent refresh* (renovar o access token num iframe escondido, apoiado na sessão) seria estruturalmente impossível.
+
+> Ver [PKCE e clientes públicos](./pkce-e-clientes-publicos.md#o-domínio-comum-não-é-cosmético).
+
 ## Referências
 
 - [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)

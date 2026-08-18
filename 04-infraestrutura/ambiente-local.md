@@ -76,6 +76,22 @@ docker compose -f docker-compose.tools.yml up -d
 
 > ⚠️ **O `.env` na raiz do meta não é opcional.** É de lá que o Compose lê `REDIS_PASSWORD` para montar o `--requirepass` do Redis. Sem o arquivo, a variável resolve para string vazia, o Redis sobe **sem autenticação**, e as aplicações — que mandam senha — são recusadas. O sintoma é traiçoeiro: tudo responde normalmente, e o cache simplesmente nunca funciona. Ver [`redis.md`](./redis.md).
 
+### Os nomes `*.algashop.local` no `/etc/hosts`
+
+Desde a Fase 26 o projeto usa três nomes sob um domínio-pai comum, e **todos** precisam resolver na máquina de quem desenvolve:
+
+```
+127.0.0.1 algashop.local          # o e-commerce (9080)
+127.0.0.1 admin.algashop.local    # a SPA de administração (4200)
+127.0.0.1 auth.algashop.local     # o authorization server (9000)
+```
+
+A lista completa está em `etc/hostnames/hostnames`, para copiar no `/etc/hosts`.
+
+Isso **não é conveniência**. O `auth.algashop.local` vai dentro do claim `iss` de todo token, e quem valida compara — por isso o nome tem que existir aqui fora, não só dentro da rede do compose. E o pai comum é o que permite ao cookie de sessão ser emitido com `Domain=algashop.local` e acompanhar requisições para os três hosts, que é o que faz o *silent refresh* funcionar. Ver [PKCE e clientes públicos](../05-seguranca/pkce-e-clientes-publicos.md#o-domínio-comum-não-é-cosmético).
+
+> Dentro da rede do compose, quem responde por `auth.algashop.local` é o `hostname:` do container do authorization server — o DNS embutido do Docker resolve hostname entre containers, verificado.
+
 ### O hífen que decide se o arquivo é válido
 
 A mesma variável causou um terceiro problema na Fase 25, e desta vez mais barulhento:
@@ -109,7 +125,7 @@ Desde a Fase 18 o comando é o mais curto possível:
 docker compose up -d
 ```
 
-O `docker-compose.yml` inclui o de serviços, que por sua vez inclui o de tools — um `up` sobe **tudo**: infraestrutura, `ordering` (8081), `billing` (8082), `product-catalog` (8083) e o `billing-scheduler`. Exige que as imagens já existam localmente (`gabriel58221/*:dev`) — ver [`docker.md`](./docker.md).
+O `docker-compose.yml` inclui o de serviços, que por sua vez inclui o de tools — um `up` sobe **tudo**: infraestrutura, `ordering` (8081), `billing` (8082), `product-catalog` (8083), o `billing-scheduler` e, desde a Fase 26, o `authorization-server` (9000). Exige que as imagens já existam localmente (`gabriel58221/*:dev`) — ver [`docker.md`](./docker.md).
 
 O `billing-scheduler` entrou como o que ele é: um job efêmero. Ele sobe, cancela as faturas vencidas e **encerra com código 0** — por isso `restart: no` e nenhuma porta publicada. Vê-lo como `Exited (0)` no `compose ps` é o comportamento correto, não uma falha. Em produção quem o reexecuta seria um CronJob; aqui, um `docker compose up algashop-billing-scheduler` quando quiser.
 
@@ -149,6 +165,7 @@ A tabela que evita 90% dos problemas de "não conecta":
 | `algashop-billing` | **8082** | 8082 | PostgreSQL |
 | `product-catalog` | **8083** | 8083 | MongoDB |
 | `billing-scheduler` | — | — | sem porta HTTP (só jobs) |
+| `authorization-server` | **9000** | 9000 | PostgreSQL · responde por `auth.algashop.local` |
 | PostgreSQL | **5433** | 5432 | ⚠️ deslocada de propósito |
 | MongoDB nó 1 | **27017** | 27017 | primário — `priority: 2` |
 | MongoDB nó 2 | **27018** | 27017 | secundário — `priority: 0` |
@@ -158,7 +175,7 @@ A tabela que evita 90% dos problemas de "não conecta":
 | FastPay | **9995** | 9995 | gateway de pagamento simulado |
 | LocalStack | **4566** | 4566 | a AWS emulada — só S3, bucket `algashop-product-image` |
 
-O `authorization-server` roda em **9000** e **não está no compose** — sobe por `./gradlew bootRun`. Os outros três apontam o `issuer-uri` para `http://algashop-authorization-server:9000` e é de lá que buscam as chaves públicas.
+O `authorization-server` roda em **9000** e, desde a Fase 26, **está no compose** — em desenvolvimento ainda dá para subi-lo por `./gradlew bootRun`. Os outros três apontam o `issuer-uri` para `http://auth.algashop.local:9000` e é de lá que buscam as chaves públicas.
 
 > Desde a Fase 22 o `ordering` **sobe sem o authorization server no ar**: o lado client passou a declarar `token-uri` em vez de `issuer-uri`, eliminando a descoberta que acontecia durante o refresh do contexto. A primeira ida à rede virou a primeira requisição que precisa de token, não a inicialização. Ver [`oauth2-client-e-token.md`](../05-seguranca/oauth2-client-e-token.md). A porta era 8081 e foi trocada na Fase 20 justamente porque colidia com a do `ordering`. Ver [`authorization-server.md`](../05-seguranca/authorization-server.md).
 

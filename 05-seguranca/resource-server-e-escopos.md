@@ -33,7 +33,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://algashop-authorization-server:9000
+          issuer-uri: http://auth.algashop.local:9000
 ```
 
 > **O `issuer-uri` sozinho configura tudo.** Dele o Spring busca `/.well-known/oauth-authorization-server`, e de lá tira o `jwks_uri` — o endereço das chaves públicas. A chave não é copiada para lugar nenhum, e é isso que torna a rotação possível sem deploy coordenado.

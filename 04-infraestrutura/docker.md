@@ -177,3 +177,20 @@ javap -v build/classes/java/main/.../Application.class | grep major
 
 > ⚠️ **Nenhum dos quatro Dockerfiles tem `HEALTHCHECK`**, mesmo depois de os serviços passarem a expor `/actuator/health/readiness`. O Docker considera o container saudável assim que o processo sobe. Fechar isso exigiria `curl` ou `wget` na imagem — a base `eclipse-temurin:25-jre` não traz nenhum dos dois — ou um bloco `healthcheck:` no compose. Ver [`health-checks.md`](./health-checks.md).
 - **Container de init aparece como `Exited (0)`**: é o esperado. `docker compose logs algashop-mongodb-init` mostra o resultado do `rs.initiate`. O mesmo vale para o `algashop-billing-scheduler`, que entrou no compose na Fase 18: ele é um job, roda uma vez e encerra.
+
+---
+
+## O authorization server entrou no compose (Fase 26)
+
+Ele era o único serviço que só rodava por `bootRun`. Ganhou `Dockerfile` — idêntico ao dos outros — e a mesma task `dockerBuild` com Buildx multi-plataforma.
+
+Uma armadilha que custou um `docker compose up` inteiro: o nome da imagem no `build.gradle` e o nome no `docker-compose.services.yml` **precisam ser o mesmo**. Estavam diferentes (`gabriel58221/...` contra `algashop/...`), e o sintoma não diz isso:
+
+```
+Error response from daemon: pull access denied for algashop/authorization-server,
+repository does not exist or may require 'docker login'
+```
+
+O Docker não tem como saber que a imagem *deveria* ter sido construída localmente: se o nome não está na máquina, ele tenta puxar do registry, e a mensagem fala de autenticação — não de nome errado.
+
+> **Imagem local e imagem do compose são amarradas só pela string.** Nada valida a correspondência: é a mesma família do nome de bean em SpEL e do escopo em `hasAuthority`.

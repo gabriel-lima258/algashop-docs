@@ -39,7 +39,7 @@ Uma linha de dependência e uma classe sem corpo produzem **seis endpoints funci
 **O `issuer` é explícito** desde a Fase 21:
 
 ```yaml
-spring.security.oauth2.authorizationserver.issuer: http://algashop-authorization-server:9000
+spring.security.oauth2.authorizationserver.issuer: http://auth.algashop.local:9000
 ```
 
 Ele vai dentro do claim `iss` de todo token emitido, e é o mesmo valor que os resource servers configuram como `issuer-uri` — quem valida **compara**. Fixar dos dois lados é o que impede um token de outro emissor de passar. E é por isso que o nome precisa resolver na máquina de quem desenvolve, não só dentro da rede do compose: há uma linha para ele em `etc/hostnames/hostnames`.
@@ -227,6 +227,8 @@ Lidos do contrato ([`openapi/authorization-server.yml`](../openapi/authorization
 | `GET /oauth2/jwks` | o **resource server** | pegar as chaves públicas |
 | `GET /.well-known/oauth-authorization-server` | qualquer um | descobrir todos os outros |
 | `GET /oauth2/authorize` | o **navegador** | iniciar o fluxo com usuário |
+
+> **Cinco clientes, desde a Fase 26.** O quinto — `algashop-admin-web` — é o primeiro **público**: `client-authentication-methods: none` e `require-proof-key: true`. Ele não guarda segredo porque roda no navegador, e prova continuidade por PKCE em vez de identidade por `client_secret`. Também é o único sem `refresh_token` e sem consentimento. Ver [PKCE e clientes públicos](./pkce-e-clientes-publicos.md).
 
 E, desde a Fase 25, endpoints que **não são de protocolo** — API de negócio deste serviço, protegida como qualquer resource server:
 

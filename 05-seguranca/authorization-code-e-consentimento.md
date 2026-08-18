@@ -96,7 +96,7 @@ POST /oauth2/token
 E o claim do access token confirma:
 
 ```json
-{ "iss": "http://algashop-authorization-server:9000",
+{ "iss": "http://auth.algashop.local:9000",
   "sub": "customer@gmail.com",
   "aud": "algashop-ecommerce-web",
   "scope": ["customers:read"] }
@@ -222,12 +222,12 @@ registered_client_id = algashop-ecommerce-web-client
 
 ```bash
 # 1. login (guardando cookie de sessão)
-curl -s -c jar -b jar http://algashop-authorization-server:9000/login   # extrair o _csrf do HTML
+curl -s -c jar -b jar http://auth.algashop.local:9000/login   # extrair o _csrf do HTML
 curl -s -c jar -b jar -d "username=customer@gmail.com" -d "password=secret123" -d "_csrf=<...>" \
-     http://algashop-authorization-server:9000/login
+     http://auth.algashop.local:9000/login
 
 # 2. autorizar, pedindo um escopo AINDA NÃO consentido (senão a tela é pulada)
-curl -s -c jar -b jar "http://algashop-authorization-server:9000/oauth2/authorize\
+curl -s -c jar -b jar "http://auth.algashop.local:9000/oauth2/authorize\
 ?response_type=code&client_id=algashop-ecommerce-web\
 &redirect_uri=http%3A%2F%2Falgashop-ecommerce%3A9080%2Flogin%2Foauth2%2Fcode%2Falgashop-ecommerce-web\
 &scope=customers%3Aread%20customers%3Awrite&state=teste"
@@ -236,12 +236,12 @@ curl -s -c jar -b jar "http://algashop-authorization-server:9000/oauth2/authoriz
 # 4. trocar o code por token
 curl -s -u algashop-ecommerce-web:ecommerce123 -d grant_type=authorization_code \
      -d "code=<CODE>" --data-urlencode "redirect_uri=<a mesma>" \
-     http://algashop-authorization-server:9000/oauth2/token
+     http://auth.algashop.local:9000/oauth2/token
 
 # 5. renovar, e provar a rotação reusando o antigo -> 400 invalid_grant
 curl -s -u algashop-ecommerce-web:ecommerce123 -d grant_type=refresh_token \
      --data-urlencode "refresh_token=<REFRESH>" \
-     http://algashop-authorization-server:9000/oauth2/token
+     http://auth.algashop.local:9000/oauth2/token
 ```
 
 > ⚠️ Com `Accept: */*`, o `/oauth2/authorize` sem sessão responde **401** em vez de redirecionar para o login: o `DelegatingAuthenticationEntryPoint` escolhe por negociação de conteúdo, e sem `Accept: text/html` ele assume que quem chama é uma API e devolve erro OAuth2. É uma confusão fácil ao testar por `curl`.
@@ -284,6 +284,23 @@ curl -s -u algashop-ecommerce-web:ecommerce123 -d grant_type=refresh_token \
 - [ ] Existe caminho para o usuário **revogar** o que consentiu?
 
 ---
+
+---
+
+## 🔄 O mesmo fluxo, sem segredo (Fase 26)
+
+Tudo descrito acima vale para um cliente **confidencial** — que se autentica com `client_secret` na troca do código. A Fase 26 acrescentou um cliente **público**, que roda no navegador e não tem segredo nenhum para apresentar.
+
+O fluxo é o mesmo, com duas diferenças:
+
+- no `/oauth2/authorize` viaja um `code_challenge` — o hash SHA-256 de um segredo descartável que o cliente acabou de sortear;
+- no `/oauth2/token` viaja o `code_verifier` original, no lugar onde o `client_secret` iria.
+
+O servidor recalcula o hash e compara. É o **PKCE**, e ele substitui a pergunta "quem é você?" pela pergunta "foi você que começou isto?".
+
+E o mesmo endpoint ganhou um uso novo: com `prompt=none`, o `/oauth2/authorize` renova o token **sem tela**, apoiado na sessão — é o *silent refresh*, que existe porque um cliente público não deveria guardar refresh token.
+
+> Documento completo: [PKCE e clientes públicos](./pkce-e-clientes-publicos.md).
 
 ## Referências
 

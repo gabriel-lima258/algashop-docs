@@ -545,7 +545,7 @@ E a terceira, terceira vez seguida: `spring.session.timeout: 30m` está **inerte
 
 ---
 
-## Fase 25 — Gestão de usuários, `/me` e auditoria com identidade real (ago/2026) ← etapa atual
+## Fase 25 — Gestão de usuários, `/me` e auditoria com identidade real (ago/2026)
 
 A Fase 24 pôs o UUID do usuário no `sub` do token. Esta **usa** esse `sub` — e ao usá-lo fecha a pendência mais antiga do caderno, aberta na Fase 8.
 
@@ -568,6 +568,33 @@ A quarta, no authorization server, é a mesma família do rename da Fase 24: `Te
 E a terceira asserção que envelheceu: `assertThat(createdByUserId).isNotNull()` passava **sempre** enquanto o autor era `UUID.randomUUID()`. Nunca teve chance de falhar, e por isso nunca provou nada. No `ordering` ela foi **fortalecida** para `isEqualTo(TEST_USER_ID)` — com `isNotNull()` o teste passaria igual se a auditoria regredisse ao UUID aleatório.
 
 > [`gestao-de-usuarios-e-auditoria.md`](../05-seguranca/gestao-de-usuarios-e-auditoria.md)
+
+---
+
+## Fase 26 — PKCE, clientes públicos e silent refresh (ago/2026) ← etapa atual
+
+Todos os clientes até aqui guardavam um segredo. Esta fase acrescenta o primeiro que **não pode guardar nada** — uma SPA — e descobre quanta coisa isso arrasta junto.
+
+| Marco | O que se aprende |
+|---|---|
+| O problema do cliente público | Segredo embutido em bundle JavaScript está a um *view-source* de distância. Não é segredo, é string |
+| PKCE | Em vez de segredo permanente, um **descartável por requisição**: `S256(verifier)` vai no `/authorize`, o verifier vai no `/token` |
+| O que ele protege | **Continuidade**, não identidade: quem pediu o código é quem o troca. Não substitui redirect URI registrada |
+| `plain` anula o mecanismo | Se o challenge é o próprio verifier, interceptar o `/authorize` entrega tudo |
+| Sem `code_verifier` → **`invalid_client`** | Não `invalid_grant`. Para cliente público, o verifier **é** a autenticação |
+| Sem `refresh_token` no admin | Credencial longa no navegador reproduz o problema do segredo — daí o silent refresh |
+| `prompt=none` + iframe | Renova o token pela **sessão**, sem tela. O access token curto é projeção da sessão |
+| O domínio comum não é cosmético | Cookie com `Domain=algashop.local` é o que faz `auth.` e `admin.` compartilharem sessão |
+| same-**site** ≠ same-**origin** | O iframe é cross-origin (precisa de CORS) e same-site (o `SameSite=Lax` deixa passar) |
+| CORS ≠ `frame-ancestors` | Uma deixa a SPA **chamar**; a outra deixa o AS ser **embutido**. Confundir é o erro clássico |
+
+**A lição da fase** veio de tentar quebrar o PKCE, que é o único jeito de prová-lo. Verifier errado devolve `invalid_grant`, como esperado. Mas **omitir o verifier devolve `invalid_client`** — e esse erro diz, com precisão, o que o PKCE é: para um cliente sem segredo, o verifier ocupa exatamente o lugar que o `client_secret` ocuparia. O servidor não reclama de um parâmetro faltando; reclama de que o cliente não se identificou.
+
+A segunda veio do `prompt=none`. Sem sessão, a spec do OIDC manda devolver `login_required` para a `redirect_uri`. O que acontece é um **302 para `/login`**: o `/oauth2/authorize` exige autenticação na filter chain, o `ExceptionTranslationFilter` intercepta, e o endpoint onde o `prompt=none` seria lido nunca é alcançado. Mesma lição de ordem de camadas da Fase 21 — **a camada de fora decide primeiro, e não conhece as regras da de dentro** — com o agravante de que, dentro de um iframe escondido, o sintoma é silêncio.
+
+E a terceira, pela quarta vez: propriedade obrigatória nova no `development-env` derruba o perfil de teste (Fases 19, 21, 22, 26). Desta vez, porém, a mensagem apontou **exatamente** para a causa (`BindValidationException ... algashop.security.cors: must not be null`), em vez de aparecer quatro beans adiante como na fase anterior. `@ConfigurationProperties` + `@Validated` falha cedo e no lugar certo — e foi por isso que a correção declarou os valores no `test-env` em vez de dar defaults à classe: o default faria o servidor subir sem CSP em silêncio.
+
+> [`pkce-e-clientes-publicos.md`](../05-seguranca/pkce-e-clientes-publicos.md)
 
 ---
 
@@ -600,10 +627,12 @@ E a terceira asserção que envelheceu: `assertThat(createdByUserId).isNotNull()
 - Fluxo `authorization_code` com usuário, consentimento granular e refresh token com rotação, persistidos em Postgres
 - OpenID Connect: ID token com claims de identidade, `/userinfo`, logout com revogação e sessão em banco
 - API de usuários com filtros, paginação, `/me` e anonimização — e auditoria com o autor real, vindo do token
+- Cliente público com PKCE, silent refresh por `prompt=none`, e os cinco serviços rodando no compose
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
-- **Ligar o PKCE** no client web — o OAuth 2.1 o exige e ele está desligado
+- **Ligar o PKCE também no client confidencial** — o admin já usa; o `algashop-ecommerce-web` segue com `require-proof-key: false`
+- **Fazer `prompt=none` responder `login_required`** — hoje ele redireciona para `/login` e o iframe da SPA fica em silêncio
 - **Claim explícito de tipo de token** — hoje "máquina ou pessoa?" é deduzido comparando `aud` e `sub`
 - **Pôr o authorization server no compose** — no perfil `docker` o `ordering` não alcança o issuer
 - **Validar audiência (`aud`)** — hoje um token vale em qualquer um dos três serviços
@@ -634,7 +663,7 @@ E a terceira asserção que envelheceu: `assertThat(createdByUserId).isNotNull()
 
 ## O padrão que se repete
 
-Olhando as vinte e cinco fases em conjunto, a ordem foi sempre a mesma:
+Olhando as vinte e seis fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração
