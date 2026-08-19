@@ -302,6 +302,19 @@ E o mesmo endpoint ganhou um uso novo: com `prompt=none`, o `/oauth2/authorize` 
 
 > Documento completo: [PKCE e clientes públicos](./pkce-e-clientes-publicos.md).
 
+---
+
+## 🔄 A tela de consentimento agora é nossa (Fase 28)
+
+O `consentPage("/oauth2/consent")` tira do Spring a tela padrão. O `AuthorizationConsentController` recebe os parâmetros do servidor, separa o que já foi aprovado do que falta, e traduz cada escopo em frase legível — `products:read` vira *"Read products."*.
+
+Duas coisas que a tela revela e que valem para entender este documento:
+
+- **`openid` não aparece na lista** — o controller o pula, coerente com o que já estava descrito aqui: consentimento é sobre permissão em recurso.
+- **O `state` do formulário não é o do client.** O que chega à tela é um valor gerado pelo servidor, que amarra o consentimento àquela requisição de autorização específica.
+
+Ver [Telas e formulários de login](./telas-e-formularios-de-login.md).
+
 ## Referências
 
 - [RFC 6749 §4.1 — Authorization Code Grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1)

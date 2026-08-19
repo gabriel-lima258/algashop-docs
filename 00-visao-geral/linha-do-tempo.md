@@ -598,7 +598,7 @@ E a terceira, pela quarta vez: propriedade obrigatória nova no `development-env
 
 ---
 
-## Fase 27 — RBAC: papéis, permissões e o filtro que roda antes do código (ago/2026) ← etapa atual
+## Fase 27 — RBAC: papéis, permissões e o filtro que roda antes do código (ago/2026)
 
 A autorização respondia uma pergunta só — *este token tem o escopo?*. Esta fase acrescenta a segunda — *quem é esta pessoa?* — e descobre que a resposta muda **onde** a autorização acontece.
 
@@ -622,6 +622,28 @@ A segunda é sobre quem verifica o quê. Renomear `canAccessOwnProfile()` para `
 E a terceira, repetindo uma lição já documentada: comentar `V5` e `V6` — migrations já aplicadas — derrubou o servidor com `FlywayValidateException`. Migration aplicada não se edita, nem para acrescentar comentário.
 
 > [`rbac-e-controle-de-acesso.md`](../05-seguranca/rbac-e-controle-de-acesso.md)
+
+---
+
+## Fase 28 — As telas do authorization server (ago/2026) ← etapa atual
+
+A tela de login era a do Spring Security: cinza, sem marca, e denunciando qual biblioteca guarda as senhas. Esta fase põe páginas próprias — e o assunto acaba não sendo HTML, e sim **onde a apresentação encosta na segurança**.
+
+| Marco | O que se aprende |
+|---|---|
+| O contrato invisível do `formLogin` | `username`, `password`, `POST /login`, `_csrf` — quatro strings que sustentam a autenticação, e nenhuma verificada em compilação |
+| O `_csrf` que ninguém escreve | O Thymeleaf o injeta em formulários com `th:action`. Trocar por `action` devolve **403** em todo login |
+| `loginPage()` liga duas coisas | Onde renderizar **e** para onde mandar quem não tem sessão — por isso a rota precisa de `permitAll`, sob pena de loop |
+| Estático também é rota | CSS fora do `permitAll` (ou fora do commit) = página sem estilo, e **nada reclama** |
+| `defaultSuccessUrl` × `SavedRequest` | O destino após o login depende de **como** você chegou nele — e é isso que faz o fluxo OAuth2 funcionar |
+| Consentimento próprio | `consentPage()`, escopo virando frase, e o `state` interno que não é o do client |
+| Logout em duas etapas | `GET` confirma, `POST` executa — porque logout por GET é CSRF |
+
+**A lição da fase** apareceu ao testar a própria suíte nova. Quebrando `name="username"` no template, exatamente um teste ficou vermelho — o que lê o HTML. E o teste que faz **login de verdade continuou verde**, porque o `formLogin()` do `spring-security-test` monta o POST sozinho e nunca lê a página. **Um teste de login que não lê o HTML não testa o formulário** — ele testa o filtro, que já funcionava. Quando o defeito mora na *ligação* entre duas peças, testar cada peça isolada não encontra nada.
+
+E a quinta repetição do mesmo padrão: `defaultRedirectUri`, obrigatória e declarada só no `development-env`, derrubou o perfil de teste (fases 19, 21, 22, 26, 28). Virou item de checklist.
+
+> [`telas-e-formularios-de-login.md`](../05-seguranca/telas-e-formularios-de-login.md)
 
 ---
 
@@ -656,10 +678,13 @@ E a terceira, repetindo uma lição já documentada: comentar `V5` e `V6` — mi
 - API de usuários com filtros, paginação, `/me` e anonimização — e auditoria com o autor real, vindo do token
 - Cliente público com PKCE, silent refresh por `prompt=none`, e os cinco serviços rodando no compose
 - RBAC completo: papel no token, política de client e escopo por papel, e regras de dono do recurso
+- Telas próprias de login, logout e consentimento em Thymeleaf, com suíte de fumaça sobre o HTML
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
 - **Ligar o PKCE também no client confidencial** — o admin já usa; o `algashop-ecommerce-web` segue com `require-proof-key: false`
+- **Implementar a recuperação de senha** — três telas existem, nenhuma tem rota, e `/forgot-password` responde 404
+- **Tirar o Font Awesome do CDN** — dependência de terceiro na tela de login
 - **Um teste que valide as duas tabelas de política em conjunto** — foi a lacuna entre elas que quebrou a loja
 - **Permitir back-office fazer pedido em nome do cliente** — hoje `verifyCanOrderFor` exige ser o próprio
 - **Fazer `prompt=none` responder `login_required`** — hoje ele redireciona para `/login` e o iframe da SPA fica em silêncio
@@ -693,7 +718,7 @@ E a terceira, repetindo uma lição já documentada: comentar `V5` e `V6` — mi
 
 ## O padrão que se repete
 
-Olhando as vinte e sete fases em conjunto, a ordem foi sempre a mesma:
+Olhando as vinte e oito fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

@@ -282,6 +282,8 @@ CUSTOMER -> ecommerce-web : invalid_scope
 
 **"Pode entrar e não pode fazer nada."** O fluxo inteiro da loja estava quebrado — e o erro aponta para o *pedido* (`invalid_scope`), não para a *configuração que falta*, que é o que torna esse tipo de bug caro de achar.
 
+> 🔄 **Fase 28:** a tela de consentimento que o usuário vê depois disto passou a ser própria — e ela só é alcançada por quem **já passou** por estas duas tabelas. Consentir é a última porta, não a primeira. Ver [Telas e formulários de login](./telas-e-formularios-de-login.md).
+
 > **As duas tabelas se preenchem em conjunto.** `allowed` responde "pode abrir?"; `scope` responde "pode levar o quê?". Uma sem a outra produz um usuário que autentica e não autoriza — o pior dos dois mundos, porque parece funcionar até o último passo.
 
 A lição mais geral: **política espalhada em duas tabelas precisa de uma verificação que olhe as duas juntas.** Nenhum teste unitário pegaria isso, porque cada tabela, isolada, está correta.

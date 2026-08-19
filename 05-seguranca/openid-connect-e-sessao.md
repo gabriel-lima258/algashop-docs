@@ -156,6 +156,8 @@ public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) {
 
 **Por que duas.** O Spring avalia as chains na ordem do `@Order` e usa a **primeira** cujo `securityMatcher` casar. A de cima recorta apenas os endpoints do protocolo (`getEndpointsMatcher()`); tudo o mais — a começar pela página de login — cai na de baixo. Inverter a ordem faria o `formLogin` engolir `/oauth2/token`.
 
+> 🔄 **Fase 28:** o `formLogin(withDefaults())` da chain de baixo virou `formLogin(form -> form.loginPage("/login"))`, com página própria em Thymeleaf, e a lista de rotas públicas cresceu para incluir os arquivos estáticos. O logout ganhou tela de confirmação. Ver [Telas e formulários de login](./telas-e-formularios-de-login.md).
+
 **O `LoginUrlAuthenticationEntryPoint` por `MediaTypeRequestMatcher`** é a peça que resolve um conflito real: `/oauth2/authorize` é chamado por **navegador** (quer ser redirecionado ao login) e `/oauth2/token` por **backend** (quer um erro JSON). A negociação de conteúdo decide qual comportamento aplicar.
 
 > É exatamente a mesma mecânica que na fase passada fazia o `curl` levar **401** onde o navegador levava 302: sem `Accept: text/html`, o entry point conclui que quem chama é uma API.
