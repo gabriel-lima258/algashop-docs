@@ -571,7 +571,7 @@ E a terceira asserção que envelheceu: `assertThat(createdByUserId).isNotNull()
 
 ---
 
-## Fase 26 — PKCE, clientes públicos e silent refresh (ago/2026) ← etapa atual
+## Fase 26 — PKCE, clientes públicos e silent refresh (ago/2026)
 
 Todos os clientes até aqui guardavam um segredo. Esta fase acrescenta o primeiro que **não pode guardar nada** — uma SPA — e descobre quanta coisa isso arrasta junto.
 
@@ -595,6 +595,33 @@ A segunda veio do `prompt=none`. Sem sessão, a spec do OIDC manda devolver `log
 E a terceira, pela quarta vez: propriedade obrigatória nova no `development-env` derruba o perfil de teste (Fases 19, 21, 22, 26). Desta vez, porém, a mensagem apontou **exatamente** para a causa (`BindValidationException ... algashop.security.cors: must not be null`), em vez de aparecer quatro beans adiante como na fase anterior. `@ConfigurationProperties` + `@Validated` falha cedo e no lugar certo — e foi por isso que a correção declarou os valores no `test-env` em vez de dar defaults à classe: o default faria o servidor subir sem CSP em silêncio.
 
 > [`pkce-e-clientes-publicos.md`](../05-seguranca/pkce-e-clientes-publicos.md)
+
+---
+
+## Fase 27 — RBAC: papéis, permissões e o filtro que roda antes do código (ago/2026) ← etapa atual
+
+A autorização respondia uma pergunta só — *este token tem o escopo?*. Esta fase acrescenta a segunda — *quem é esta pessoa?* — e descobre que a resposta muda **onde** a autorização acontece.
+
+| Marco | O que se aprende |
+|---|---|
+| Escopo × papel | Escopo é teto do **client**; papel é quem é a **pessoa**. Nenhum substitui o outro |
+| `role` no access token | Só em fluxo com pessoa; `client_credentials` não tem papel — e isso vira regra |
+| `ROLE_` como prefixo | `hasRole('X')` monta `"ROLE_X"` sozinho. Gravar `"X"` falha em silêncio |
+| Autorização como **critério de emissão** | O `/oauth2/authorize` recusa antes de existir código — e token assinado não se revoga |
+| Duas tabelas de política | `allowed` responde "pode abrir?"; `scope` responde "pode levar o quê?" |
+| Ausência de linha = negado | Client novo não fica disponível para ninguém até alguém decidir |
+| `andThen`, não substituir | `setAuthenticationValidator()` **troca** o validador padrão — encadear preserva a checagem de redirect URI |
+| Máquina como permissão | Quem cadastra cliente é a loja, não o back-office. `isMachineAuthenticated()` vira requisito |
+| Filtrar × negar | Listagem se filtra (200 com menos dados); recurso único se nega (403) |
+| O id que atravessa serviços | `auth_user.id` = `customer.id` = `invoice.customer_id` — sem isso, "só o dono" é decorativo |
+
+**A lição da fase** veio de um buraco que nenhum teste pegava. O `CUSTOMER` estava listado como permitido no client da loja e **sem uma única linha** de escopo — "pode entrar e não pode fazer nada". Todo pedido dele voltava `invalid_scope`, um erro que aponta para a requisição e não para a configuração que falta. Cada tabela, isolada, estava correta; o defeito só existe na relação entre as duas. **Política espalhada em duas tabelas precisa de uma verificação que olhe as duas juntas.**
+
+A segunda é sobre quem verifica o quê. Renomear `canAccessOwnProfile()` para `isCustomer()` quebrou a compilação na hora, no lugar certo — e foi ótimo. Mudanças equivalentes feitas por string (nome de bean em SpEL, escopo em `hasAuthority`) passam pela compilação e negam todo mundo em runtime. **A diferença não é de risco intrínseco, é de quem verifica.**
+
+E a terceira, repetindo uma lição já documentada: comentar `V5` e `V6` — migrations já aplicadas — derrubou o servidor com `FlywayValidateException`. Migration aplicada não se edita, nem para acrescentar comentário.
+
+> [`rbac-e-controle-de-acesso.md`](../05-seguranca/rbac-e-controle-de-acesso.md)
 
 ---
 
@@ -628,10 +655,13 @@ E a terceira, pela quarta vez: propriedade obrigatória nova no `development-env
 - OpenID Connect: ID token com claims de identidade, `/userinfo`, logout com revogação e sessão em banco
 - API de usuários com filtros, paginação, `/me` e anonimização — e auditoria com o autor real, vindo do token
 - Cliente público com PKCE, silent refresh por `prompt=none`, e os cinco serviços rodando no compose
+- RBAC completo: papel no token, política de client e escopo por papel, e regras de dono do recurso
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
 - **Ligar o PKCE também no client confidencial** — o admin já usa; o `algashop-ecommerce-web` segue com `require-proof-key: false`
+- **Um teste que valide as duas tabelas de política em conjunto** — foi a lacuna entre elas que quebrou a loja
+- **Permitir back-office fazer pedido em nome do cliente** — hoje `verifyCanOrderFor` exige ser o próprio
 - **Fazer `prompt=none` responder `login_required`** — hoje ele redireciona para `/login` e o iframe da SPA fica em silêncio
 - **Claim explícito de tipo de token** — hoje "máquina ou pessoa?" é deduzido comparando `aud` e `sub`
 - **Pôr o authorization server no compose** — no perfil `docker` o `ordering` não alcança o issuer
@@ -663,7 +693,7 @@ E a terceira, pela quarta vez: propriedade obrigatória nova no `development-env
 
 ## O padrão que se repete
 
-Olhando as vinte e seis fases em conjunto, a ordem foi sempre a mesma:
+Olhando as vinte e sete fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

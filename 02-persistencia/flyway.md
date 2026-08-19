@@ -204,3 +204,25 @@ Só a primeira pode evoluir por decisão nossa. A segunda acompanha a versão da
 | `flywayInfo` | Não | Ver estado atual das migrações |
 | `flywayValidate` | Não | Verificar integridade antes de deploy |
 | `flywayMigrate` | Sim | Aplicar migrações pendentes |
+
+
+---
+
+## V5 e V6: política de acesso como schema (Fase 27)
+
+O RBAC trouxe duas tabelas ao authorization server:
+
+```sql
+V5__create_ddl_auth_user_type_client_scope.sql   -- papel + client -> escopo permitido
+V6__create_ddl_auth_user_type_client.sql         -- papel -> client permitido
+```
+
+Nenhuma das duas tem entidade JPA, e é proposital: não são agregados, são **tabelas de decisão**. As colunas juntas formam a chave primária porque a linha não tem identidade própria — ela *é* o fato. Quem as lê usa `JdbcOperations` direto, sem contexto de persistência.
+
+> ⚠️ **E a lição de sempre, cobrada de novo.** Comentar essas duas migrations *depois* de aplicadas derrubou o servidor:
+>
+> ```
+> FlywayValidateException: Validate failed: Migrations have failed validation
+> ```
+>
+> Migration aplicada não se edita — **nem para acrescentar comentário**. O checksum muda e o Flyway recusa subir. Em banco de desenvolvimento o conserto é apagar as linhas do `flyway_schema_history` e as tabelas, deixando o Flyway reaplicar; em produção, seria `flyway repair` ou uma migration nova.

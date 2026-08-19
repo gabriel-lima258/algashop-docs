@@ -125,6 +125,8 @@ O `AuthUserType` (`MANAGER`, `OPERATOR`, `CUSTOMER`) **não vira `GrantedAuthori
 
 É coerente com o desenho do projeto: [autorização é por escopo, e acontece nos resource servers](./resource-server-e-escopos.md). O `type` é informação de identidade, não permissão. Vale saber que a distinção é essa, e não um esquecimento.
 
+> 🔄 **Isto mudou na Fase 27.** O `AuthUserType` continua não virando authority **aqui** (no `UserDetails` do formulário de login), mas passou a viajar como claim `role` no access token — e a virar `ROLE_MANAGER`/`ROLE_OPERATOR`/`ROLE_CUSTOMER` nos quatro resource servers. A distinção do parágrafo acima segue válida, com um adendo: identidade vira permissão **na fronteira do token**, não dentro do authorization server. Ver [RBAC e controle de acesso](./rbac-e-controle-de-acesso.md).
+
 ---
 
 ## As duas filter chains

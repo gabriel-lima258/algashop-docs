@@ -135,6 +135,26 @@ public ProblemDetail handleAccessDeniedException(AccessDeniedException e) {
 
 > Repare no que a mensagem **não** diz: qual escopo faltou. É deliberado. Responder "faltou `invoices:write`" transforma o 403 num mapa da superfície de autorização do sistema — quem sonda descobre os nomes dos escopos sem ter nenhum. O detalhe útil vai para o log, não para o corpo.
 
+### 🔄 A decisão foi refinada na Fase 27
+
+Com o RBAC, passaram a existir dois tipos de recusa, e eles não merecem o mesmo silêncio:
+
+| Exceção | Quem lança | O corpo diz |
+|---|---|---|
+| `AuthorizationDeniedException` | o `@PreAuthorize` — **escopo** | genérico: *"You do not have permission to access this resource"* |
+| `AccessDeniedException` | a **regra de negócio** (`canRegisterUserOfType`, `canEditUser`) | específico: *"Cannot register user of type CUSTOMER"* |
+
+O critério é o que a mensagem **entrega a quem sonda**. "Faltou `invoices:write`" nomeia um escopo e ajuda a mapear a superfície de autorização. "Não é possível cadastrar um CUSTOMER por aqui" descreve uma **regra de negócio pública** — quem integra a API precisa saber, e quem ataca não ganha nada com isso.
+
+Dá para ver as duas atuando na mesma operação:
+
+```
+MANAGER   criando CUSTOMER  -> 403  "Cannot register user of type CUSTOMER"       (regra)
+OPERATOR  criando qualquer  -> 403  "You do not have permission to access..."     (escopo)
+```
+
+O OPERATOR nem chega à regra: falta-lhe `users:write`, e o `@PreAuthorize` barra antes. **A mensagem denuncia qual camada atuou** — o que é útil para quem depura e inofensivo para quem sonda.
+
 Ver [tratamento de erros](../03-testes-integracao/tratamento-erros-api.md).
 
 ---
@@ -202,6 +222,16 @@ public @interface CanAccessOwnProfile {}
 ```
 
 A segunda não pergunta *o que este token autoriza*, e sim *este token representa uma pessoa?* — porque `/api/v1/users/me` não faz sentido para um token de máquina. Máquina recebe **403**: não é falta de permissão, é ausência de sujeito.
+
+E na Fase 27 apareceu a terceira família: **papel**. Ela não vive em meta-anotação, e sim no `SecurityCheckApplicationService`, porque depende de dados que só a aplicação conhece (o tipo do usuário sendo editado, o dono do recurso). O critério de separação ficou assim:
+
+| Verificação | Onde mora | Exemplo |
+|---|---|---|
+| escopo | meta-anotação | `@CanWriteUsers` |
+| sujeito | meta-anotação | `@CanAccessOwnProfile` |
+| **papel + dados** | `SecurityCheckApplicationService` | `canEditUser(tipo, id)` |
+
+Ver [RBAC e controle de acesso](./rbac-e-controle-de-acesso.md).
 
 E ela agrava a armadilha desta seção. `@securityCheck` é resolvido **pelo nome do bean** (`@Service("securityCheck")`), em runtime, dentro de uma string. Renomear o bean e esquecer a expressão quebra a autorização sem erro de compilação, sem aviso da IDE e sem log — o método simplesmente passa a negar todo mundo. Detalhes em [Gestão de usuários e auditoria](./gestao-de-usuarios-e-auditoria.md).
 

@@ -192,6 +192,25 @@ PUT /users/{id de um CUSTOMER}  {"type":"MANAGER"}
 
 ---
 
+## 🔄 Quem pode cadastrar e editar quem (Fase 27)
+
+Os endpoints acima nasceram protegidos só por escopo: quem tivesse `users:write` fazia tudo. A Fase 27 acrescentou a pergunta que faltava — *quem é esta pessoa?* — e com ela as regras:
+
+```
+MANAGER   criando MANAGER / OPERATOR   -> 201
+MANAGER   criando CUSTOMER             -> 403   (cliente nasce pela loja, não pelo painel)
+máquina   criando CUSTOMER             -> 201
+OPERATOR  criando qualquer um          -> 403   (nem tem users:write no escopo do papel)
+
+MANAGER   editando outro MANAGER/OPERATOR  -> 200
+MANAGER   editando um CUSTOMER             -> 403
+qualquer  editando o PRÓPRIO registro      -> 200
+```
+
+O `DELETE` que anonimiza e o `/me` continuam como estavam. Detalhes e o fluxo completo em [RBAC e controle de acesso](./rbac-e-controle-de-acesso.md).
+
+---
+
 ## Filtros e paginação
 
 Mesmo desenho dos outros serviços (ver [`paginacao.md`](../02-persistencia/paginacao.md)): `AuthUserFilter extends SortablePageFilter`, Criteria API com predicados condicionais, `PageModel` de saída.

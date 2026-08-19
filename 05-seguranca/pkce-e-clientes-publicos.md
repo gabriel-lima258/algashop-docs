@@ -122,6 +122,8 @@ Três decisões que valem ser lidas com atenção:
 
 **Não há consentimento.** A tela de consentimento existe para cliente de **terceiro** — quando uma aplicação que não é sua pede acesso aos seus dados. Num cliente próprio, feito pela mesma organização que opera o servidor, pedir consentimento é teatro: o usuário está autorizando a empresa a acessar dados que ela já tem. Compare com o `algashop-ecommerce-web`, que também é próprio e **exige** consentimento — uma inconsistência que vale registrar.
 
+**Quem pode usar este client não está aqui.** Desde a Fase 27, abrir o `admin-web` depende do **papel** do usuário — `MANAGER` e `OPERATOR` entram, `CUSTOMER` leva `access_denied` no `/oauth2/authorize`. E os escopos que cada um leva também variam. Nada disso está no YAML: está em duas tabelas. Ver [RBAC e controle de acesso](./rbac-e-controle-de-acesso.md).
+
 **O código dura 2 minutos, não 10.** Código de autorização é usado imediatamente, uma vez só. Prazo curto reduz a janela de qualquer interceptação.
 
 ## A prova — quebrando o PKCE
