@@ -177,6 +177,12 @@ O authorization-server ainda **não tem** o `AuthorizationMatrixTest` que os out
 
 ---
 
+## E quando o teste envolve segurança
+
+Um query service protegido por papel (o `OrderQueryService` do `ordering`, que filtra por dono) precisa de identidade no contexto — e aí entram decisões que este documento não cobre: mockar a porta, montar a autenticação ou declarar com `@WithMockJwt`. Ver [Testando segurança](./testando-seguranca.md).
+
+---
+
 ## Resumo mental
 
 > **Query service se testa contra banco real** — o que está em jogo é o SQL gerado, não a orquestração.

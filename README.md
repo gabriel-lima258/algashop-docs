@@ -27,7 +27,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 28 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 29 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -63,6 +63,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Stubs e contract tests](./03-testes-integracao/stubs-contract-tests.md) | Testar integração entre serviços sem subir todos: Spring Cloud Contract, WireMock, Stub Runner |
 | [Testes de integração de query services](./03-testes-integracao/testes-integracao-query-services.md) | Query service se testa contra banco real: Testcontainers, isolamento do seed do Flyway, builders e os cenários mínimos de paginação |
 | [Tratamento de erros na API](./03-testes-integracao/tratamento-erros-api.md) | `ProblemDetail` (RFC 9457), hierarquia de exceções e quando usar 404, 422 ou 500 |
+| [Testando segurança](./03-testes-integracao/testando-seguranca.md) | Identidade em teste com `@WithSecurityContext`, declarativo × imperativo, o que o `MockJwtDecoder` **não** cobre — e por que teste de asserção negativa dá falso conforto |
 | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) | Cenários, executores e thresholds — e as três armadilhas que fazem um teste de carga medir menos do que promete |
 
 ### 04 — Infraestrutura
@@ -155,9 +156,12 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Saber se o serviço pode receber tráfego | [Health check e degradação](./04-infraestrutura/health-checks.md) |
 | Diferença entre liveness e readiness | [Health check e degradação](./04-infraestrutura/health-checks.md) |
 | Dependência opcional fora sem derrubar o serviço | [Health check e degradação](./04-infraestrutura/health-checks.md) |
-| Saber quanto o sistema aguenta | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
-| Escolher entre VUs fixos e taxa fixa no k6 | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
-| Fazer um teste de carga reprovar de verdade | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
+| Saber quanto o sistema aguenta | [Testando segurança](./03-testes-integracao/testando-seguranca.md) | Identidade em teste com `@WithSecurityContext`, declarativo × imperativo, o que o `MockJwtDecoder` **não** cobre — e por que teste de asserção negativa dá falso conforto |
+| [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
+| Escolher entre VUs fixos e taxa fixa no k6 | [Testando segurança](./03-testes-integracao/testando-seguranca.md) | Identidade em teste com `@WithSecurityContext`, declarativo × imperativo, o que o `MockJwtDecoder` **não** cobre — e por que teste de asserção negativa dá falso conforto |
+| [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
+| Fazer um teste de carga reprovar de verdade | [Testando segurança](./03-testes-integracao/testando-seguranca.md) | Identidade em teste com `@WithSecurityContext`, declarativo × imperativo, o que o `MockJwtDecoder` **não** cobre — e por que teste de asserção negativa dá falso conforto |
+| [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
 | Decidir se vale ligar threads virtuais | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) |
 | Descobrir qual recurso satura primeiro | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) |
 | Entender por que o container morreu com exit 137 | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md), [Docker](./04-infraestrutura/docker.md) |
@@ -216,6 +220,10 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Por que meu índice existe e não foi usado | [Índices no MongoDB](./02-persistencia/indices-mongo.md) |
 | Ordenar resultado de busca por relevância | [Índices no MongoDB](./02-persistencia/indices-mongo.md) |
 | Popular o Mongo com dados de teste | [Carga de dados](./04-infraestrutura/carga-de-dados-mongo.md) |
+| Autenticar um usuário dentro de um teste | [Testando segurança](./03-testes-integracao/testando-seguranca.md) |
+| Saber se meu teste de segurança prova alguma coisa | [Testando segurança](./03-testes-integracao/testando-seguranca.md) |
+| Descobrir o que um `JwtDecoder` mockado deixa de cobrir | [Testando segurança](./03-testes-integracao/testando-seguranca.md) |
+| Substituir uma dependência que nasce dentro de um `@Bean` | [Testando segurança](./03-testes-integracao/testando-seguranca.md) |
 | Devolver 404 ou 422 | [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) |
 | Criar uma migration | [Flyway](./02-persistencia/flyway.md) |
 | Testar sem subir o outro serviço | [Contract tests](./03-testes-integracao/stubs-contract-tests.md) |

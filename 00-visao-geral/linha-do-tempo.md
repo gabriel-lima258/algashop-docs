@@ -625,7 +625,7 @@ E a terceira, repetindo uma lição já documentada: comentar `V5` e `V6` — mi
 
 ---
 
-## Fase 28 — As telas do authorization server (ago/2026) ← etapa atual
+## Fase 28 — As telas do authorization server (ago/2026)
 
 A tela de login era a do Spring Security: cinza, sem marca, e denunciando qual biblioteca guarda as senhas. Esta fase põe páginas próprias — e o assunto acaba não sendo HTML, e sim **onde a apresentação encosta na segurança**.
 
@@ -644,6 +644,30 @@ A tela de login era a do Spring Security: cinza, sem marca, e denunciando qual b
 E a quinta repetição do mesmo padrão: `defaultRedirectUri`, obrigatória e declarada só no `development-env`, derrubou o perfil de teste (fases 19, 21, 22, 26, 28). Virou item de checklist.
 
 > [`telas-e-formularios-de-login.md`](../05-seguranca/telas-e-formularios-de-login.md)
+
+---
+
+## Fase 29 — Testar segurança: identidade declarativa e o que o mock esconde (ago/2026) ← etapa atual
+
+As fases 27 e 28 encheram o `ordering` de regras que dependem de **quem está chamando**. Testá-las trouxe um problema que não é de segurança, é de teste: como pôr identidade no contexto sem que o teste vire tautologia.
+
+| Marco | O que se aprende |
+|---|---|
+| Três formas de autenticar em teste | Mockar a porta (tautologia), montar a autenticação (imperativo), `@WithSecurityContext` (declarativo) |
+| `@WithMockJwt` | Anotação própria: `subject`, `scopes`, `role` e `audiences` na assinatura do teste, herdando e sobrescrevendo pela hierarquia |
+| O converter **injetado** | A factory usa o bean do contexto, não um `new` — é isso que faz o teste passar pelo caminho de produção |
+| Declarativo × imperativo | O critério é temporal: a identidade existe **antes** do teste ou é criada **por** ele? |
+| O que o mock esconde | Assinatura, `iss`, `exp` e `aud` nunca são verificados. A suíte cobre **autorização**, não autenticação |
+| Testabilidade é desenho | Dependência criada dentro de um método não tem como ser substituída — extrair o interceptor foi o que destravou os ITs de apresentação |
+| `canOrderFor(UUID)` | A regra duplicada em `BuyNow` e `Checkout` virou uma pergunta só na porta |
+
+**A lição da fase** veio de uma refatoração de teste que passou verde. Ao trocar o `TestSecurityCheckConfig` por um `@MockitoBean`, o stub passou a devolver `UUID.randomUUID()` e a asserção de auditoria voltou de `isEqualTo` para `isNotNull()` — enquanto **o comentário logo acima continuava dizendo** que `isNotNull()` passaria igual se a auditoria regredisse ao UUID aleatório. O teste passou a fazer exatamente aquilo contra o que ele avisa. **Refatoração de teste carrega um risco que refatoração de produção não carrega: quando um teste enfraquece, nada fica vermelho.** E o sinal de alerta foi o comentário sobrevivendo à mudança que descrevia.
+
+A segunda veio da mutação. Apagando o claim `role` do mock, dois testes ficaram vermelhos — e **todos os de asserção negativa continuaram verdes**, porque sem papel `isCustomer()` é falso, que é o que eles afirmam. Eles passam pelo motivo errado. **Teste de asserção negativa não detecta mecanismo quebrado** — é a mesma lição da Fase 28, onde o teste de login continuou verde com o formulário quebrado.
+
+E uma terceira, pequena: o `compileTestJava` passou com **dois imports de uma classe deletada**. Só com `clean` o erro apareceu.
+
+> [`testando-seguranca.md`](../03-testes-integracao/testando-seguranca.md)
 
 ---
 
@@ -679,10 +703,12 @@ E a quinta repetição do mesmo padrão: `defaultRedirectUri`, obrigatória e de
 - Cliente público com PKCE, silent refresh por `prompt=none`, e os cinco serviços rodando no compose
 - RBAC completo: papel no token, política de client e escopo por papel, e regras de dono do recurso
 - Telas próprias de login, logout e consentimento em Thymeleaf, com suíte de fumaça sobre o HTML
+- Identidade declarativa em teste (`@WithMockJwt`) e as três camadas de teste de segurança do `ordering`
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
 - **Ligar o PKCE também no client confidencial** — o admin já usa; o `algashop-ecommerce-web` segue com `require-proof-key: false`
+- **Levar o `@WithMockJwt` para catálogo e billing** — hoje só o `ordering` tem identidade declarativa em teste
 - **Implementar a recuperação de senha** — três telas existem, nenhuma tem rota, e `/forgot-password` responde 404
 - **Tirar o Font Awesome do CDN** — dependência de terceiro na tela de login
 - **Um teste que valide as duas tabelas de política em conjunto** — foi a lacuna entre elas que quebrou a loja
@@ -718,7 +744,7 @@ E a quinta repetição do mesmo padrão: `defaultRedirectUri`, obrigatória e de
 
 ## O padrão que se repete
 
-Olhando as vinte e oito fases em conjunto, a ordem foi sempre a mesma:
+Olhando as vinte e nove fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

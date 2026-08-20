@@ -288,6 +288,21 @@ O que reduziria isso: `@ConfigurationProperties` com `@NotBlank` só quando a fu
 
 ---
 
+---
+
+## 🔄 O interceptor virou bean próprio (Fase 29)
+
+Ele nascia dentro do método que criava o `ProductCatalogApiClient` — e por isso **não havia como substituí-lo em teste**. Todo IT de apresentação tentava buscar token de verdade no authorization server, que não está de pé durante os testes.
+
+```java
+@Bean("productCatalogAPIClientInterceptor")
+public OAuth2ClientHttpRequestInterceptor productCatalogAPIClientInterceptor(...) { ... }
+```
+
+Mesmo objeto, mesmo lugar no fluxo, agora com nome — e os testes o trocam por um `@MockitoBean`.
+
+> **Dependência criada dentro de um método não é um bean, não tem nome, e nada externo a alcança.** Testabilidade acabou sendo propriedade do desenho, não do teste. Ver [Testando segurança](../03-testes-integracao/testando-seguranca.md#testabilidade-é-propriedade-do-desenho).
+
 ## Referências
 
 - [Spring Security — OAuth2 Client](https://docs.spring.io/spring-security/reference/servlet/oauth2/client/index.html)
