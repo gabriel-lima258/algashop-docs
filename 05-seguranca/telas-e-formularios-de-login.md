@@ -232,7 +232,7 @@ O lado bom continua valendo: `@ConfigurationProperties` + `@Validated` falha **c
 
 ## Pendências registradas
 
-- [ ] **O fluxo de recuperação de senha é só casca.** `forgot-password.html`, `password-form.html` e `password-message.html` existem sem rota; `/forgot-password` está liberado no filter chain, está linkado na tela de login e responde **404**. Implementação prevista para a próxima fase.
+- ✅ ~~**O fluxo de recuperação de senha é só casca.**~~ — **implementado na Fase 30**: as três telas ganharam rota no `PublicPasswordController`, mais uma quarta (`forgot-password-message`) que faltava. Ver [Verificação de e-mail e troca de senha](./verificacao-de-email-e-troca-de-senha.md).
 - [ ] **Font Awesome vem de um CDN** (`cdnjs.cloudflare.com`) nas seis páginas — dependência de terceiro numa tela de login: sem rede os ícones somem, e é superfície de cadeia de suprimentos num lugar sensível.
 - [ ] **Não há teste da tela de consentimento** renderizando com escopos — só do redirecionamento para o login.
 - [ ] **A tabela de descrições de escopo vive no controller**, e desatualiza em silêncio.

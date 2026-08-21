@@ -27,7 +27,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 29 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 30 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -92,6 +92,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) | A API de usuários, `/me` como id que o cliente não escolhe, token de pessoa × de máquina — e a auditoria que trocou o `UUID` aleatório pelo `sub` do token |
 | [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) | Como um cliente **sem segredo** prova continuidade; silent refresh por `prompt=none`; cookie de domínio comum, CORS × `frame-ancestors` |
 | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) | O fluxo guiado das quatro camadas: papel no token, client e escopo por papel, regras de negócio e dono do recurso — e a lacuna entre duas tabelas que quebrou a loja |
+| [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
 | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) | O contrato invisível entre o HTML e o filtro, o `_csrf` que o Thymeleaf injeta, consentimento próprio — e por que um teste de login pode passar com a tela quebrada |
 
 ### Artefatos
@@ -120,7 +121,7 @@ Para revisar o conteúdo do zero, nesta ordem:
 [Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) → [Resiliência](./01-arquitetura-design/resiliencia.md) → [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) → [Health check](./04-infraestrutura/health-checks.md)
 
 **4a. Quem pode chamar**
-[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md) → [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) → [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) → [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) → [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) → [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) → [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) → [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) → [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md)
+[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md) → [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) → [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) → [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) → [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) → [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) → [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) → [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) → [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) → [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md)
 
 **4b. Quanto o sistema aguenta**
 [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) → [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md)
@@ -207,10 +208,14 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Limitar escopos por papel, no mesmo client | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) |
 | Fazer alguém ver só os próprios recursos | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) |
 | Decidir entre filtrar a consulta e negar com 403 | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) |
-| Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
-| Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
-| Fazer uma tela de consentimento própria | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
-| Servir CSS e imagem numa aplicação protegida | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
+| Trocar a tela de login padrão do Spring Security | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
+| [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
+| Descobrir por que o login devolve 403 (ou nunca funciona) | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
+| [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
+| Fazer uma tela de consentimento própria | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
+| [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
+| Servir CSS e imagem numa aplicação protegida | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
+| [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Dar baixa em estoque sem vender o que não tem | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) |
 | Fazer duas escritas caírem juntas, ou nenhuma | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
 | Por que `@Transactional` no Mongo pode não fazer nada | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |

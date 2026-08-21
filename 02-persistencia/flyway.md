@@ -226,3 +226,5 @@ Nenhuma das duas tem entidade JPA, e é proposital: não são agregados, são **
 > ```
 >
 > Migration aplicada não se edita — **nem para acrescentar comentário**. O checksum muda e o Flyway recusa subir. Em banco de desenvolvimento o conserto é apagar as linhas do `flyway_schema_history` e as tabelas, deixando o Flyway reaplicar; em produção, seria `flyway repair` ou uma migration nova.
+>
+> **Aconteceu de novo na Fase 30**, com a `V7`. Desta vez o conserto foi o outro caminho — reverter o comentário e mover a explicação para a documentação, sem tocar no banco. É o mais seguro dos dois: não depende de o ambiente ser descartável.

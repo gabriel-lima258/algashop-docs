@@ -211,6 +211,20 @@ O `DELETE` que anonimiza e o `/me` continuam como estavam. Detalhes e o fluxo co
 
 ---
 
+## 🔄 A senha temporária, resolvida (Fase 30)
+
+O `System.out.println(tempPassword)` descrito acima morreu — e não por ter virado log. Ele **deixou de fazer sentido**: o cadastro passou a gerar uma senha aleatória que ninguém precisa conhecer, e a senha de verdade é definida pelo próprio usuário, por um link enviado no e-mail de ativação.
+
+```java
+user.setPassword(passwordManager.encrypt(passwordManager.generate()));  // inútil de propósito
+String plainToken = user.generateVerificationToken(activationTtl, tokenHasher);
+emailSender.sendActivationEmail(user, plainToken);
+```
+
+E o `isDisabled()` fecha a porta enquanto isso não acontece: quem não clicou no link tem conta e não entra. Ver [Verificação de e-mail e troca de senha](./verificacao-de-email-e-troca-de-senha.md).
+
+---
+
 ## Filtros e paginação
 
 Mesmo desenho dos outros serviços (ver [`paginacao.md`](../02-persistencia/paginacao.md)): `AuthUserFilter extends SortablePageFilter`, Criteria API com predicados condicionais, `PageModel` de saída.
@@ -293,7 +307,7 @@ Corrigido o `@Import`, apareceu o bean seguinte da cadeia — `JwtDecoder`, que 
 
 ## Armadilhas e pendências
 
-**A senha temporária vaza e não chega a ninguém.** `create()` gera 12 caracteres aleatórios, imprime no stdout e guarda só o hash:
+**A senha temporária vaza e não chega a ninguém.** *(✅ resolvido na Fase 30 — ver adiante.)* `create()` gera 12 caracteres aleatórios, imprime no stdout e guarda só o hash:
 
 ```java
 String tempPassword = RandomStringUtils.secure().nextAlphabetic(12);

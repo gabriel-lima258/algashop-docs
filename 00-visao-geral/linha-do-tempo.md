@@ -647,7 +647,7 @@ E a quinta repetição do mesmo padrão: `defaultRedirectUri`, obrigatória e de
 
 ---
 
-## Fase 29 — Testar segurança: identidade declarativa e o que o mock esconde (ago/2026) ← etapa atual
+## Fase 29 — Testar segurança: identidade declarativa e o que o mock esconde (ago/2026)
 
 As fases 27 e 28 encheram o `ordering` de regras que dependem de **quem está chamando**. Testá-las trouxe um problema que não é de segurança, é de teste: como pôr identidade no contexto sem que o teste vire tautologia.
 
@@ -668,6 +668,29 @@ A segunda veio da mutação. Apagando o claim `role` do mock, dois testes ficara
 E uma terceira, pequena: o `compileTestJava` passou com **dois imports de uma classe deletada**. Só com `clean` o erro apareceu.
 
 > [`testando-seguranca.md`](../03-testes-integracao/testando-seguranca.md)
+
+---
+
+## Fase 30 — Verificação de e-mail e troca de senha (ago/2026) ← etapa atual
+
+A Fase 25 deixou uma pendência constrangedora: o cadastro gerava senha aleatória, **imprimia no stdout** e não entregava a ninguém — o usuário criado pela API nunca conseguia logar. Esta fase fecha isso, e o caminho revela que **definir a primeira senha e recuperar a senha esquecida são a mesma operação**.
+
+| Marco | O que se aprende |
+|---|---|
+| Token em texto puro só no e-mail | No banco fica o **hash**. Quem lê a tabela não reconstrói link nenhum — mesma forma do PKCE |
+| SHA-256, não BCrypt | O salt aleatório do BCrypt impediria a busca `findByVerificationToken(hash)` |
+| `MessageDigest.isEqual` | Comparação em tempo constante, contra ataque de temporização |
+| O agregado orquestra | Valida token, troca senha, consome o link e verifica o e-mail — a aplicação só busca, chama e salva |
+| Portas **no domínio** | `AuthUserPasswordManager` e `VerificationTokenHasher` passadas como argumento, não injetadas na entidade |
+| Senha inicial que ninguém sabe | Existe só para a coluna não nascer nula. Foi assim que o `System.out.println` morreu |
+| `isDisabled()` | Conta pode existir, estar habilitada, ter senha — e ainda assim não servir para entrar |
+| Não dizer quem existe | `/forgot-password` responde igual para e-mail cadastrado e não cadastrado |
+
+**A lição da fase** está em dois erros com a mesma forma. O e-mail de troca de senha formatava o prazo com `getActivationTtl()` — o TTL do *outro* fluxo: o link morria em 2 horas e a mensagem prometia 24. E o `catch (AccessDeniedException)` do controller, que existe para mostrar "Invalid token.", **quase nunca era alcançado**: token inválido nem chega a ser encontrado, escapava como `AuthUserNotFoundException` e virava um `404 application/problem+json` numa tela de navegador. **Copiar um método e trocar metade das linhas produz uma mentira consistente; um tratamento de erro pode existir, parecer completo, e cobrir só o caminho menos provável.**
+
+E um achado que não deu para observar, mas é estrutural: `@Async` dentro de `@Transactional` **despacha o e-mail antes do commit**. Entre o envio e a gravação existe uma janela em que o link já está na caixa de entrada e o token ainda não está no banco.
+
+> [`verificacao-de-email-e-troca-de-senha.md`](../05-seguranca/verificacao-de-email-e-troca-de-senha.md)
 
 ---
 
@@ -704,12 +727,14 @@ E uma terceira, pequena: o `compileTestJava` passou com **dois imports de uma cl
 - RBAC completo: papel no token, política de client e escopo por papel, e regras de dono do recurso
 - Telas próprias de login, logout e consentimento em Thymeleaf, com suíte de fumaça sobre o HTML
 - Identidade declarativa em teste (`@WithMockJwt`) e as três camadas de teste de segurança do `ordering`
+- Verificação de e-mail e troca de senha por token com hash em banco, orquestrada pelo agregado
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
 - **Ligar o PKCE também no client confidencial** — o admin já usa; o `algashop-ecommerce-web` segue com `require-proof-key: false`
+- **Enviar o e-mail depois do commit** — hoje o `@Async` dispara antes, e o link pode chegar antes do token existir
+- **Testar o fluxo de senha** — token, expiração, reuso e ativação foram provados só por `curl`
 - **Levar o `@WithMockJwt` para catálogo e billing** — hoje só o `ordering` tem identidade declarativa em teste
-- **Implementar a recuperação de senha** — três telas existem, nenhuma tem rota, e `/forgot-password` responde 404
 - **Tirar o Font Awesome do CDN** — dependência de terceiro na tela de login
 - **Um teste que valide as duas tabelas de política em conjunto** — foi a lacuna entre elas que quebrou a loja
 - **Permitir back-office fazer pedido em nome do cliente** — hoje `verifyCanOrderFor` exige ser o próprio
@@ -744,7 +769,7 @@ E uma terceira, pequena: o `compileTestJava` passou com **dois imports de uma cl
 
 ## O padrão que se repete
 
-Olhando as vinte e nove fases em conjunto, a ordem foi sempre a mesma:
+Olhando as trinta fases em conjunto, a ordem foi sempre a mesma:
 
 ```
 domínio → testes → persistência → API → contrato → infraestrutura → refatoração

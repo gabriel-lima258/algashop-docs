@@ -167,6 +167,8 @@ A tabela que evita 90% dos problemas de "não conecta":
 | `billing-scheduler` | — | — | sem porta HTTP (só jobs) |
 | `authorization-server` | **9000** | 9000 | PostgreSQL · responde por `auth.algashop.local` |
 | PostgreSQL | **5433** | 5432 | ⚠️ deslocada de propósito |
+| Mailpit (SMTP) | **1025** | 1025 | servidor de e-mail falso |
+| Mailpit (web) | **8025** | 8025 | caixa de entrada em <http://localhost:8025> |
 | MongoDB nó 1 | **27017** | 27017 | primário — `priority: 2` |
 | MongoDB nó 2 | **27018** | 27017 | secundário — `priority: 0` |
 | MongoDB nó 3 | **27019** | 27017 | secundário — `priority: 0` |
