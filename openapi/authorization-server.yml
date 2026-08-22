@@ -3,39 +3,37 @@ openapi: 3.0.3
 info:
   title: AlgaShop - Authorization Server
   description: |
-    Especificação OpenAPI dos endpoints padrão do **Spring Authorization Server** 
-    implementando **OAuth 2.1**. 
+    Especificação OpenAPI dos endpoints padrão do **Spring Authorization Server**,
+    implementando **OAuth 2.1** e **OpenID Connect 1.0**.
 
     ### Prefixos de caminho padrão
-    | Grupo  | Prefixo   |
-    |--------|-----------|
+    | Grupo | Prefixo |
+    |-------|---------|
     | OAuth2 | `/oauth2` |
+    | OIDC | `/connect` |
+    | Discovery | `/.well-known` |
 
-  version: "1.0"
+  version: "2.0"
   contact:
     name: Spring Authorization Server Docs
     url: https://docs.spring.io/spring-security/reference/servlet/oauth2/authorization-server/index.html
 
 servers:
-  - url: http://localhost:9000
-    description: |
-      Servidor local de desenvolvimento.
-      A porta 9000 é a convenção do Spring Authorization Server — e evita o conflito
-      com o `algashop-ordering`, que ocupa a 8081.
+  - url: http://127.0.0.1:8081
+    description: Servidor local de desenvolvimento
 
 tags:
   - name: OAuth2 Core
     description: Endpoints principais do protocolo OAuth 2.1
   - name: Token Management
     description: Introspecção e revogação de tokens
+  - name: OIDC
+    description: Endpoints OpenID Connect 1.0
   - name: Discovery
     description: Endpoints de descoberta e metadados
-  - name: Users
-    description: |
-      Gestão de usuários — REST API protegida por Access Token JWT.
-      Leitura exige o escopo `users:read`; escrita (criação e anonimização), `users:write`.
 
 paths:
+
   /oauth2/authorize:
     get:
       tags: [OAuth2 Core]
@@ -121,6 +119,7 @@ paths:
             ```
             {redirect_uri}?error=access_denied&state=xyz
             ```
+
   /oauth2/token:
     post:
       tags: [OAuth2 Core]
@@ -156,7 +155,6 @@ paths:
                 redirect_uri:
                   type: string
                   format: uri
-                  example: http://127.0.0.1:4200/login/oauth2/code/oidc-client
                   description: Obrigatório para `authorization_code` se enviado na requisição de autorização.
                 code_verifier:
                   type: string
@@ -173,7 +171,7 @@ paths:
                 value:
                   grant_type: authorization_code
                   code: SplxlOBeZQQYbYS6WxSbIA
-                  redirect_uri: http://127.0.0.1:4200/login/oauth2/code/oidc-client
+                  redirect_uri: http://127.0.0.1:8080/login/oauth2/code/oidc-client
                   code_verifier: dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
               client_credentials:
                 summary: Client Credentials
@@ -196,6 +194,7 @@ paths:
           $ref: "#/components/responses/OAuth2Error"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
+
   /oauth2/introspect:
     post:
       tags: [Token Management]
@@ -229,6 +228,7 @@ paths:
                 $ref: "#/components/schemas/IntrospectionResponse"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
+
   /oauth2/revoke:
     post:
       tags: [Token Management]
@@ -260,6 +260,7 @@ paths:
           $ref: "#/components/responses/OAuth2Error"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
+
   /oauth2/jwks:
     get:
       tags: [OAuth2 Core]
@@ -276,6 +277,101 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JWKSet"
+
+  /userinfo:
+    get:
+      tags: [OIDC]
+      summary: UserInfo Endpoint (GET)
+      description: |
+        Retorna claims do usuário autenticado.
+        Requer escopo `openid` e um Access Token válido como Bearer.
+        Especificado em **OpenID Connect Core 1.0 §5.3**.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Claims do usuário.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserInfoResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+    post:
+      tags: [OIDC]
+      summary: UserInfo Endpoint (POST)
+      description: |
+        Alternativa POST ao endpoint UserInfo.
+        O Access Token pode ser enviado via `Authorization: Bearer` ou no body.
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                access_token:
+                  type: string
+      responses:
+        "200":
+          description: Claims do usuário.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserInfoResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /connect/logout:
+    get:
+      tags: [OIDC]
+      summary: OIDC RP-Initiated Logout Endpoint
+      description: |
+        Encerra a sessão do usuário no Authorization Server.
+        Especificado em **OpenID Connect RP-Initiated Logout 1.0**.
+      security: []
+      parameters:
+        - name: id_token_hint
+          in: query
+          required: false
+          schema:
+            type: string
+          description: ID Token previamente emitido para identificar o cliente e sessão.
+        - name: logout_hint
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Hint sobre o login identifier a ser encerrado.
+        - name: client_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: post_logout_redirect_uri
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uri
+          description: URI de redirecionamento pós-logout (deve estar registrado no cliente).
+          example: http://127.0.0.1:8080/
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Valor opaco retornado ao cliente após o logout.
+        - name: ui_locales
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirecionamento para `post_logout_redirect_uri` (se fornecido) ou página padrão.
+
   /.well-known/oauth-authorization-server:
     get:
       tags: [Discovery]
@@ -291,189 +387,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthorizationServerMetadata"
-  /api/v1/users:
-    get:
-      tags: [Users]
-      summary: Lista usuários
-      description: |
-        Listagem paginada com filtros opcionais por nome, e-mail (ambos parciais,
-        case-insensitive) e tipo de usuário. Requer o escopo `users:read`.
-      security:
-        - bearerAuth: []
-      parameters:
-        - schema:
-            type: string
-            example: John
-          in: query
-          name: name
-          description: Nome do usuário (busca parcial, case-insensitive)
-          required: false
-        - schema:
-            type: string
-            example: john.manager@algashop.com
-          in: query
-          name: email
-          description: E-mail do usuário (busca parcial, case-insensitive)
-          required: false
-        - schema:
-            type: string
-            enum: [MANAGER, OPERATOR, CUSTOMER]
-            example: OPERATOR
-          in: query
-          name: type
-          description: Tipo do usuário
-          required: false
-        - $ref: "#/components/parameters/pageNumber"
-        - $ref: "#/components/parameters/pageSize"
-        - $ref: "#/components/parameters/sort"
-        - $ref: "#/components/parameters/direction"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Page"
-                  - type: object
-                    properties:
-                      content:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/AuthUserOutput"
-    post:
-      tags: [Users]
-      summary: Cria usuário
-      description: |
-        Cria um usuário com senha temporária gerada pelo servidor.
-        Requer o escopo `users:write`.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AuthUserInput"
-      responses:
-        "201":
-          description: Usuário criado.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthUserOutput"
-        "400":
-          description: Campos inválidos.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "409":
-          description: E-mail já está em uso.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-  /api/v1/users/{userId}:
-    get:
-      tags: [Users]
-      summary: Consulta usuário por ID
-      description: Requer o escopo `users:read`.
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/userId"
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthUserOutput"
-        "404":
-          $ref: "#/components/responses/NotFound"
-    put:
-      tags: [Users]
-      summary: Atualiza usuário
-      description: |
-        Atualiza nome, tipo e situação (enabled). O e-mail não é alterável por esta
-        operação. Requer o escopo `users:write`.
 
-        Regra de domínio: o tipo de um usuário `CUSTOMER` não pode ser alterado —
-        a tentativa retorna 422.
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/userId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AuthUserUpdateInput"
-      responses:
-        "200":
-          description: Usuário atualizado.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthUserOutput"
-        "400":
-          description: Campos inválidos.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "422":
-          description: Regra de negócio violada (ex. mudar o tipo de um CUSTOMER).
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
-    delete:
-      tags: [Users]
-      summary: Exclui (anonimiza) usuário
-      description: |
-        **Anonimização, não remoção física.** O registro permanece no banco: os dados
-        pessoais são substituídos por valores neutros (`Anonymized User`,
-        `anonymized-<id>@deleted.local`) e o usuário é desabilitado.
-        Requer o escopo `users:write`.
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/userId"
-      responses:
-        "204":
-          description: Usuário anonimizado.
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /api/v1/users/me:
+  /.well-known/openid-configuration:
     get:
-      tags: [Users]
-      summary: Consulta o próprio usuário autenticado
+      tags: [Discovery]
+      summary: OpenID Provider Configuration (Discovery)
       description: |
-        Retorna os dados do usuário dono do Access Token (claim `sub`).
-        Exige token de usuário — um token de máquina (`client_credentials`)
-        recebe 403, pois não há usuário humano associado.
-      security:
-        - bearerAuth: []
+        Endpoint de descoberta OIDC. Retorna os metadados do OpenID Provider.
+        Especificado em **OpenID Connect Discovery 1.0 §4**.
+      security: []
       responses:
         "200":
-          description: OK
+          description: Configuração do OpenID Provider.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthUserOutput"
-        "403":
-          description: Token sem usuário associado (client de máquina).
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetail"
+                $ref: "#/components/schemas/OIDCProviderMetadata"
 
 components:
+
   securitySchemes:
     basicAuth:
       type: http
@@ -484,6 +416,7 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: Access Token JWT emitido pelo Authorization Server.
+
   responses:
     OAuth2Error:
       description: Resposta de erro OAuth2.
@@ -497,61 +430,7 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/OAuth2ErrorResponse"
-    NotFound:
-      description: Recurso não encontrado.
-      content:
-        application/problem+json:
-          schema:
-            $ref: "#/components/schemas/ProblemDetail"
-  parameters:
-    userId:
-      schema:
-        type: string
-        format: uuid
-      name: userId
-      in: path
-      required: true
-      example: "019d7764-3e11-7000-8000-000000000001"
-    pageNumber:
-      schema:
-        type: number
-        format: int32
-        minimum: 0
-        default: 0
-      name: page
-      description: Página (zero-based)
-      in: query
-    pageSize:
-      schema:
-        type: number
-        format: int32
-        minimum: 1
-        default: 15
-        example: 10
-      name: size
-      description: Tamanho da página
-      in: query
-    sort:
-      schema:
-        type: string
-        enum:
-          - NAME
-          - EMAIL
-          - TYPE
-        example: "NAME"
-      name: sortByProperty
-      description: Propriedade de ordenação (allowlist)
-      in: query
-    direction:
-      schema:
-        type: string
-        enum:
-          - ASC
-          - DESC
-        example: "ASC"
-      name: sortDirection
-      description: Direção da ordenação
-      in: query
+
   schemas:
     TokenResponse:
       type: object
@@ -657,6 +536,57 @@ components:
                 type: string
               "x5t#S256":
                 type: string
+    UserInfoResponse:
+      type: object
+      required: [sub]
+      properties:
+        sub:
+          type: string
+          description: Subject identifier único para o usuário.
+        name:
+          type: string
+        given_name:
+          type: string
+        family_name:
+          type: string
+        middle_name:
+          type: string
+        nickname:
+          type: string
+        preferred_username:
+          type: string
+        profile:
+          type: string
+          format: uri
+        picture:
+          type: string
+          format: uri
+        website:
+          type: string
+          format: uri
+        email:
+          type: string
+          format: email
+        email_verified:
+          type: boolean
+        gender:
+          type: string
+        birthdate:
+          type: string
+        zoneinfo:
+          type: string
+          example: America/Sao_Paulo
+        locale:
+          type: string
+          example: pt-BR
+        phone_number:
+          type: string
+        phone_number_verified:
+          type: boolean
+        address:
+          type: object
+        updated_at:
+          type: integer
     AuthorizationServerMetadata:
       type: object
       required:
@@ -745,6 +675,71 @@ components:
           example: [RS256]
         tls_client_certificate_bound_access_tokens:
           type: boolean
+    OIDCProviderMetadata:
+      allOf:
+        - $ref: "#/components/schemas/AuthorizationServerMetadata"
+        - type: object
+          required: [userinfo_endpoint]
+          properties:
+            userinfo_endpoint:
+              type: string
+              format: uri
+              example: http://localhost:9000/userinfo
+            end_session_endpoint:
+              type: string
+              format: uri
+              example: http://localhost:9000/connect/logout
+            registration_endpoint:
+              type: string
+              format: uri
+              example: http://localhost:9000/connect/register
+            claims_supported:
+              type: array
+              items:
+                type: string
+              example:
+                - sub
+                - iss
+                - iat
+                - exp
+                - name
+                - given_name
+                - family_name
+                - email
+                - email_verified
+                - picture
+                - locale
+                - zoneinfo
+            claims_parameter_supported:
+              type: boolean
+              example: false
+            request_parameter_supported:
+              type: boolean
+              example: false
+            request_uri_parameter_supported:
+              type: boolean
+              example: false
+            require_request_uri_registration:
+              type: boolean
+            userinfo_signing_alg_values_supported:
+              type: array
+              items:
+                type: string
+              example: [RS256]
+            id_token_signing_alg_values_supported:
+              type: array
+              items:
+                type: string
+              example: [RS256]
+            acr_values_supported:
+              type: array
+              items:
+                type: string
+            subject_types_supported:
+              type: array
+              items:
+                type: string
+              example: [public]
     OAuth2ErrorResponse:
       type: object
       required: [error]
@@ -768,120 +763,3 @@ components:
         error_uri:
           type: string
           format: uri
-    AuthUserOutput:
-      type: object
-      required:
-        - id
-        - name
-        - email
-        - type
-        - enabled
-      properties:
-        id:
-          type: string
-          format: uuid
-          example: "019d7764-3e11-7000-8000-000000000001"
-        name:
-          type: string
-          example: "John Manager"
-        email:
-          type: string
-          format: email
-          example: "john.manager@algashop.com"
-        type:
-          type: string
-          enum: [MANAGER, OPERATOR, CUSTOMER]
-          example: MANAGER
-        enabled:
-          type: boolean
-          example: true
-    AuthUserInput:
-      type: object
-      required:
-        - name
-        - email
-        - type
-      properties:
-        name:
-          type: string
-          example: "John Manager"
-        email:
-          type: string
-          format: email
-          example: "john.manager@algashop.com"
-        type:
-          type: string
-          enum: [MANAGER, OPERATOR, CUSTOMER]
-          example: MANAGER
-    AuthUserUpdateInput:
-      type: object
-      required:
-        - name
-        - type
-        - enabled
-      properties:
-        name:
-          type: string
-          example: "John Updated"
-        type:
-          type: string
-          enum: [MANAGER, OPERATOR, CUSTOMER]
-          example: MANAGER
-        enabled:
-          type: boolean
-          example: true
-    Page:
-      type: object
-      required:
-        - number
-        - size
-        - totalPages
-        - totalElements
-        - content
-      properties:
-        number:
-          type: integer
-          format: int32
-          example: 0
-        size:
-          type: integer
-          format: int32
-          example: 15
-        totalPages:
-          type: integer
-          format: int32
-          example: 1
-        totalElements:
-          type: integer
-          format: int64
-          example: 2
-    ProblemDetail:
-      title: Problem
-      type: object
-      required:
-        - status
-        - type
-        - title
-        - instance
-      description: >
-        Representa um problema na comunicação com a API.
-        Modelo baseado na RFC 7807 (Problem Details for HTTP APIs).
-      properties:
-        status:
-          type: integer
-          example: 404
-        type:
-          type: string
-          example: "/errors/not-found"
-        title:
-          type: string
-          example: "Not found"
-        instance:
-          type: string
-          example: "/api/v1/users/019d7764-3e11-7000-8000-000000000002"
-        detail:
-          type: string
-          example: "User id 019d7764-3e11-7000-8000-000000000002 not found"
-        fields:
-          type: object
-          description: Campos que causaram o erro (presente em /errors/invalid-fields)

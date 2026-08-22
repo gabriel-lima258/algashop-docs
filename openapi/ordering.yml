@@ -2,7 +2,7 @@ openapi: 3.0.4
 
 info:
   title: AlgaShop - Ordering
-  version: "1.0"
+  version: "2.0"
 
 servers:
   - description: Development
@@ -11,11 +11,16 @@ servers:
     url: "https://api.algashop.com"
 
 paths:
-  /api/v1/customers:
+  /api/v1/customers/me:
     post:
-      description: Register new customer
+      description: >-
+        Register the authenticated user as a customer. The customer id is taken
+        from the access token subject, never from the request body. Requires
+        scope customers:write and the CUSTOMER role.
       tags:
-        - Customers
+        - My Customer
+      security:
+        - oauth2: ["customers:write"]
       requestBody:
         required: true
         content:
@@ -34,9 +39,13 @@ paths:
               schema:
                 type: string
               description: Resource address
-              example: "/api/v1/customers/6e148bd5-47f6-4022-b9da-07cfaa294f7a"
+              example: "/api/v1/customers/me"
         400:
           $ref: "#/components/responses/BadRequest"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        403:
+          $ref: "#/components/responses/Forbidden"
         409:
           $ref: "#/components/responses/Conflict"
         422:
@@ -44,52 +53,13 @@ paths:
         500:
           $ref: "#/components/responses/InternalError"
     get:
-      description: List customers
+      description: >-
+        Get the authenticated customer's own data. Requires scope
+        customers:read and the CUSTOMER role.
       tags:
-        - Customers
-      parameters:
-        - schema:
-            type: string
-            example: "12345"
-          in: query
-          name: document
-          required: false
-        - schema:
-            type: string
-            example: "johndoe@email.com"
-          in: query
-          name: email
-          required: false
-        - $ref: "#/components/parameters/page"
-        - $ref: "#/components/parameters/size"
-        - $ref: "#/components/parameters/sort"
-        - $ref: "#/components/parameters/direction"
-      responses:
-        200:
-          description: Ok
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Page"
-                  - type: object
-                properties:
-                  content:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/OrderSummary"
-  /api/v1/customers/{customerId}:
-    get:
-      parameters:
-        - schema:
-            type: string
-          name: customerId
-          in: path
-          required: true
-          example: '6e148bd5-47f6-4022-b9da-07cfaa294f7a'
-      description: Get one customer by id
-      tags:
-        - Customers
+        - My Customer
+      security:
+        - oauth2: ["customers:read"]
       responses:
         200:
           description: Ok
@@ -97,19 +67,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Customer"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        403:
+          $ref: "#/components/responses/Forbidden"
         404:
           $ref: "#/components/responses/NotFound"
     put:
-      parameters:
-        - schema:
-            type: string
-          name: customerId
-          in: path
-          required: true
-          example: '6e148bd5-47f6-4022-b9da-07cfaa294f7a'
-      description: Edit customer
+      description: >-
+        Update the authenticated customer's own data. Requires scope
+        customers:write and the CUSTOMER role.
       tags:
-        - Customers
+        - My Customer
+      security:
+        - oauth2: ["customers:write"]
       requestBody:
         required: true
         content:
@@ -125,36 +96,28 @@ paths:
                 $ref: "#/components/schemas/Customer"
         400:
           $ref: "#/components/responses/BadRequest"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        403:
+          $ref: "#/components/responses/Forbidden"
         404:
           $ref: "#/components/responses/NotFound"
-        409:
-          $ref: "#/components/responses/Conflict"
         422:
           $ref: "#/components/responses/UnprocessableEntity"
         500:
           $ref: "#/components/responses/InternalError"
-    delete:
-      parameters:
-        - schema:
-            type: string
-          name: customerId
-          in: path
-          required: true
-          example: '6e148bd5-47f6-4022-b9da-07cfaa294f7a'
-      description: Delete customer
-      tags:
-        - Customers
-      responses:
-        204:
-          description: No content
-        404:
-          $ref: "#/components/responses/NotFound"
 
-  /api/v1/orders:
+  /api/v1/customers/me/orders:
     post:
       tags:
-        - Orders
-      description: Create an Order
+        - My Orders
+      description: >-
+        Place an order as the authenticated customer. The customer id comes
+        from the access token subject and, on shopping-cart checkouts, the cart
+        is resolved from the authenticated customer - neither is accepted in
+        the request body. Requires scope orders:write and the CUSTOMER role.
+      security:
+        - oauth2: ["orders:write"]
       requestBody:
         required: true
         content:
@@ -176,23 +139,318 @@ paths:
               schema:
                 type: string
               description: Resource address
-              example: "/api/v1/orders/01226N0693HDE"
+              example: "/api/v1/customers/me/orders/01226N0693HDE"
         400:
           $ref: "#/components/responses/BadRequest"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        403:
+          $ref: "#/components/responses/Forbidden"
         409:
           $ref: "#/components/responses/Conflict"
         422:
           $ref: "#/components/responses/UnprocessableEntity"
         500:
           $ref: "#/components/responses/InternalError"
-        502:
-          $ref: "#/components/responses/BadGateway"
-        504:
-          $ref: "#/components/responses/GatewayTimeout"
     get:
-      description: List orders
+      description: >-
+        List orders placed by the authenticated customer. The listing is always
+        scoped to the token subject; a customerId query parameter, if sent, is
+        ignored. Requires scope orders:read and the CUSTOMER role.
+      tags:
+        - My Orders
+      security:
+        - oauth2: ["orders:read"]
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/OrderStatus"
+          in: query
+          name: status
+          required: false
+        - schema:
+            type: string
+            format: date
+            example: "2024-04-25"
+          in: query
+          name: placedAtFrom
+          required: false
+        - schema:
+            type: string
+            format: date
+            example: "2024-04-01"
+          in: query
+          name: placedAtTo
+          required: false
+        - schema:
+            type: number
+            example: 1211.98
+          in: query
+          name: totalAmountFrom
+          required: false
+        - schema:
+            type: number
+            example: 2341.98
+          in: query
+          name: totalAmountTo
+          required: false
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - $ref: "#/components/parameters/direction"
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      content:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/OrderSummary"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        403:
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/customers/me/orders/{orderId}:
+    get:
+      tags:
+        - My Orders
+      description: >-
+        Detail of one order belonging to the authenticated customer. An order
+        owned by another customer answers 404, never 403, so ids cannot be
+        probed. Requires scope orders:read and the CUSTOMER role.
+      security:
+        - oauth2: ["orders:read"]
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: orderId
+          in: path
+          example: "01226N0693HDG"
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        403:
+          $ref: "#/components/responses/Forbidden"
+        404:
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/customers/me/shopping-cart:
+    get:
+      tags:
+        - My Shopping Cart
+      description: Get the authenticated customer's shopping cart
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShoppingCart"
+        404:
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - My Shopping Cart
+      description: Create a Shopping Cart for the authenticated customer (if not exists)
+      responses:
+        201:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShoppingCart"
+        404:
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/customers/me/shopping-cart/items:
+    get:
+      tags:
+        - My Shopping Cart
+      description: List items in the authenticated customer's shopping cart
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShoppingCartItemList"
+        404:
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - My Shopping Cart
+      description: Add or update an item in the authenticated customer's shopping cart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShoppingCartItemInput"
+      responses:
+        204:
+          description: OK
+        400:
+          $ref: "#/components/responses/BadRequest"
+        404:
+          $ref: "#/components/responses/NotFound"
+        500:
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags:
+        - My Shopping Cart
+      description: Empty the authenticated customer's shopping cart
+      responses:
+        204:
+          description: OK
+        404:
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/customers/me/shopping-cart/items/{itemId}:
+    delete:
+      tags:
+        - My Shopping Cart
+      description: Remove an item from the authenticated customer's shopping cart
+      parameters:
+        - schema:
+            type: string
+          name: itemId
+          in: path
+          required: true
+          example: "28fcd9fb-4ce7-44d6-9583-14d8b3dc5aff"
+      responses:
+        204:
+          description: OK
+        404:
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/customers:
+    get:
+      description: >-
+        List customers. Administrative: requires scope customers:read and a
+        non-CUSTOMER role (back-office users only).
+      tags:
+        - Customers
+      security:
+        - oauth2: ["customers:read"]
+      parameters:
+        - schema:
+            type: string
+            example: "John Doe"
+          in: query
+          name: firstName
+          required: false
+        - schema:
+            type: string
+            example: "johndoe@email.com"
+          in: query
+          name: email
+          required: false
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - $ref: "#/components/parameters/direction"
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      content:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/CustomerSummary"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        403:
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/customers/{customerId}:
+    get:
+      description: >-
+        Get one customer by id. Administrative: requires scope customers:read
+        and a non-CUSTOMER role (back-office users only).
+      tags:
+        - Customers
+      security:
+        - oauth2: ["customers:read"]
+      parameters:
+        - schema:
+            type: string
+          name: customerId
+          in: path
+          required: true
+          example: "6e148bd5-47f6-4022-b9da-07cfaa294f7a"
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        403:
+          $ref: "#/components/responses/Forbidden"
+        404:
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/customers/{customerId}/shopping-cart:
+    get:
+      description: >-
+        Read a customer's shopping cart. Administrative, read-only: requires
+        scope shopping-carts:read.
+      tags:
+        - Customers
+      security:
+        - oauth2: ["shopping-carts:read"]
+      parameters:
+        - schema:
+            type: string
+          name: customerId
+          in: path
+          required: true
+          example: "6e148bd5-47f6-4022-b9da-07cfaa294f7a"
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShoppingCart"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        403:
+          $ref: "#/components/responses/Forbidden"
+        404:
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/orders:
+    get:
+      description: >-
+        List orders of any customer. Administrative: requires scope orders:read
+        and a non-CUSTOMER role (back-office users only). Customers list their
+        own orders at /api/v1/customers/me/orders.
       tags:
         - Orders
+      security:
+        - oauth2: ["orders:read"]
       parameters:
         - schema:
             $ref: "#/components/schemas/OrderStatus"
@@ -250,16 +508,25 @@ paths:
                 allOf:
                   - $ref: "#/components/schemas/Page"
                   - type: object
-                properties:
-                  content:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/OrderSummary"
+                    properties:
+                      content:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/OrderSummary"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        403:
+          $ref: "#/components/responses/Forbidden"
+
   /api/v1/orders/{orderId}:
     get:
       tags:
         - Orders
-      description: Order detail
+      description: >-
+        Order detail of any customer. Administrative: requires scope
+        orders:read and a non-CUSTOMER role (back-office users only).
+      security:
+        - oauth2: ["orders:read"]
       parameters:
         - schema:
             type: string
@@ -274,152 +541,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Order"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        403:
+          $ref: "#/components/responses/Forbidden"
         404:
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/shopping-carts:
-    post:
-      tags:
-        - Shopping Cart
-      description: Create shopping cart
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ShoppingCartInput"
-      responses:
-        201:
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ShoppingCart"
-        400:
-          $ref: "#/components/responses/BadRequest"
-        500:
-          $ref: "#/components/responses/InternalError"
-  /api/v1/shopping-carts/{shoppingCartId}:
-    get:
-      parameters:
-        - schema:
-            type: string
-          name: shoppingCartId
-          in: path
-          required: true
-          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
-      tags:
-        - Shopping Cart
-      description: Find shopping cart
-      responses:
-        200:
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ShoppingCart"
-        404:
-          $ref: "#/components/responses/NotFound"
-    delete:
-      parameters:
-        - schema:
-            type: string
-          name: shoppingCartId
-          in: path
-          required: true
-          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
-      tags:
-        - Shopping Cart
-      description: Delete shopping cart
-      responses:
-        204:
-          description: OK
-        404:
-          $ref: "#/components/responses/NotFound"
-  /api/v1/shopping-carts/{shoppingCartId}/items:
-    post:
-      parameters:
-        - schema:
-            type: string
-          name: shoppingCartId
-          in: path
-          required: true
-          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
-      tags:
-        - Shopping Cart
-      description: Add or update cart item
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ShoppingCartItemInput"
-      responses:
-        204:
-          description: OK
-        404:
-          $ref: "#/components/responses/NotFound"
-        400:
-          $ref: "#/components/responses/BadRequest"
-        500:
-          $ref: "#/components/responses/InternalError"
-    get:
-      parameters:
-        - schema:
-            type: string
-          name: shoppingCartId
-          in: path
-          required: true
-          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
-      tags:
-        - Shopping Cart
-      description: List shopping cart items
-      responses:
-        200:
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ShoppingCartItemList"
-        404:
-          $ref: "#/components/responses/NotFound"
-    delete:
-      parameters:
-        - schema:
-            type: string
-          name: shoppingCartId
-          in: path
-          required: true
-          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
-      tags:
-        - Shopping Cart
-      description: Empty shopping cart
-      responses:
-        204:
-          description: OK
-        404:
-          $ref: "#/components/responses/NotFound"
-  /api/v1/shopping-carts/{shoppingCartId}/items/{itemId}:
-    delete:
-      tags:
-        - Shopping Cart
-      description: Remove cart item
-      parameters:
-        - schema:
-            type: string
-          name: shoppingCartId
-          in: path
-          required: true
-          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
-        - schema:
-            type: string
-          name: itemId
-          in: path
-          required: true
-          example: "28fcd9fb-4ce7-44d6-9583-14d8b3dc5aff"
-      responses:
-        204:
-          description: OK
   /api/v1/shipping-cost-previews:
     post:
       summary: Preview shipping cost
@@ -431,14 +559,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ShippingCostPreviewInput'
+              $ref: "#/components/schemas/ShippingCostPreviewInput"
       responses:
         200:
           description: Shipping cost preview calculated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ShippingCostPreviewOutput'
+                $ref: "#/components/schemas/ShippingCostPreviewOutput"
         400:
           $ref: "#/components/responses/BadRequest"
         409:
@@ -447,14 +575,30 @@ paths:
           $ref: "#/components/responses/UnprocessableEntity"
         500:
           $ref: "#/components/responses/InternalError"
-        502:
-          $ref: "#/components/responses/BadGateway"
-        504:
-          $ref: "#/components/responses/GatewayTimeout"
-
-
 
 components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      description: >-
+        Access tokens are issued by the AlgaShop Authorization Server.
+        Besides the scopes below, some operations also require a specific user
+        role carried in the token's "role" claim: /me resources demand the
+        CUSTOMER role, while administrative resources demand a non-CUSTOMER
+        role (back-office users). Roles cannot be expressed as scopes, so each
+        operation states its role requirement in the description.
+      flows:
+        authorizationCode:
+          authorizationUrl: "http://auth.algashop.local:9000/oauth2/authorize"
+          tokenUrl: "http://auth.algashop.local:9000/oauth2/token"
+          scopes:
+            customers:read: Read customer data
+            customers:write: Register and update customers
+            orders:read: Read orders
+            orders:write: Place orders
+            shopping-carts:read: Read shopping carts
+            shopping-carts:write: Manage shopping carts
+            shipping-costs:preview: Preview shipping costs
   parameters:
     page:
       schema:
@@ -485,6 +629,14 @@ components:
       in: query
       required: false
   responses:
+    Unauthorized:
+      description: Missing, expired or invalid access token
+    Forbidden:
+      description: Authenticated, but lacking the required scope or role
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
     NotFound:
       description: Resource not found
       content:
@@ -511,22 +663,6 @@ components:
             $ref: "#/components/schemas/ProblemDetail"
     InternalError:
       description: Internal Server Error
-      content:
-        application/problem+json:
-          schema:
-            $ref: "#/components/schemas/ProblemDetail"
-    BadGateway:
-      description: >
-        Uma dependência externa respondeu de forma inválida. O pedido não foi processado,
-        e repetir a chamada pode funcionar se a causa for transitória.
-      content:
-        application/problem+json:
-          schema:
-            $ref: "#/components/schemas/ProblemDetail"
-    GatewayTimeout:
-      description: >
-        Uma dependência externa não respondeu dentro do tempo limite. Diferente do 502,
-        aqui não se sabe se a operação chegou a acontecer do outro lado.
       content:
         application/problem+json:
           schema:
@@ -595,7 +731,6 @@ components:
       required:
         - street
         - number
-        - complement
         - neighborhood
         - city
         - state
@@ -642,7 +777,13 @@ components:
         - firstName
         - lastName
         - email
+        - document
         - phone
+        - birthDate
+        - loyaltyPoints
+        - registeredAt
+        - archivedAt
+        - promotionNotificationsAllowed
         - archived
       properties:
         id:
@@ -657,9 +798,30 @@ components:
         email:
           type: string
           example: "johndoe@email.com"
+        document:
+          type: string
+          example: "12345"
         phone:
           type: string
           example: "1191234564"
+        birthDate:
+          type: string
+          format: date
+          example: "1991-07-05"
+        loyaltyPoints:
+          type: number
+          example: 10
+        registeredAt:
+          type: string
+          format: date-time
+          example: "2024-04-04T00:12:45Z"
+        archivedAt:
+          type: string
+          format: date-time
+          example: "2024-04-04T00:12:45Z"
+        promotionNotificationsAllowed:
+          type: boolean
+          example: false
         archived:
           type: boolean
           example: false
@@ -788,18 +950,14 @@ components:
           type: integer
           example: 150
     OrderWithProductInput:
+      description: Used by Customer via POST /api/v1/customers/me/orders. The customer is derived from the authentication token.
       required:
-        - customerId
         - paymentMethod
         - productId
         - quantity
         - shipping
         - billing
       properties:
-        customerId:
-          type: string
-          example: "6e148bd5-47f6-4022-b9da-07cfaa294f7a"
-          nullable: false
         productId:
           type: string
           example: "28fcd9fb-4ce7-44d6-9583-14d8b3dc5aff"
@@ -822,16 +980,12 @@ components:
         billing:
           $ref: "#/components/schemas/Billing"
     OrderWithShoppingCartInput:
+      description: Used by Customer via POST /api/v1/customers/me/orders. The customer's own shopping cart is implicit (one cart per customer).
       required:
-        - shoppingCartId
         - paymentMethod
         - shipping
         - billing
       properties:
-        shoppingCartId:
-          type: string
-          example: "28fcd9fb-4ce7-44d6-9583-14d8b3dc5aff"
-          nullable: false
         paymentMethod:
           type: string
           example: "GATEWAY_BALANCE"
@@ -1118,7 +1272,7 @@ components:
       properties:
         id:
           type: string
-          example: '277297bf-e586-4389-9f21-b3ce0c3f6580'
+          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
         totalAmount:
           type: number
           example: 41.98
@@ -1127,7 +1281,7 @@ components:
           example: 1
         customerId:
           type: string
-          example: '277297bf-e586-4389-9f21-b3ce0c3f6580'
+          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
         items:
           type: array
           items:
@@ -1144,13 +1298,13 @@ components:
       properties:
         id:
           type: string
-          example: '177297bf-e586-4389-9f21-a3ce0c3f6580'
+          example: "177297bf-e586-4389-9f21-a3ce0c3f6580"
         productId:
           type: string
-          example: '277297bf-e586-4389-9f21-b3ce0c3f6580'
+          example: "277297bf-e586-4389-9f21-b3ce0c3f6580"
         name:
           type: string
-          example: 'Desktop Gamer Dive'
+          example: "Desktop Gamer Dive"
         price:
           type: number
           example: 100.00
@@ -1182,14 +1336,7 @@ components:
           example: 2
         productId:
           type: string
-          example: '6a6ca34c-e65c-496e-adaf-f872e1784003'
-    ShoppingCartInput:
-      required:
-        - customerId
-      properties:
-        customerId:
-          type: string
-          example: '6a6ca34c-e65c-496e-adaf-f872e1784003'
+          example: "6a6ca34c-e65c-496e-adaf-f872e1784003"
     ShippingCostPreviewInput:
       type: object
       required:

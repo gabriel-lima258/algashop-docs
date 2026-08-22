@@ -367,6 +367,21 @@ Ver [OpenID Connect: identidade, sessão e logout](./openid-connect-e-sessao.md)
 
 ---
 
+## 🔄 Escopo deixou de bastar nas escritas
+
+Este documento descreve o mundo em que cada rota exige **um** escopo. Esse mundo acabou para as escritas: um token com o escopo correto, emitido para quem não deveria operar o recurso, passava sem barreira. Todas as anotações de escrita — e todas as de recurso `/me` — passaram a combinar escopo com **público**:
+
+```java
+// era assim                                          // ficou assim
+hasAuthority('SCOPE_products:write')                  hasAuthority('SCOPE_products:write') and not hasRole('CUSTOMER')
+hasAuthority('SCOPE_invoices:write')                  hasAuthority('SCOPE_invoices:write') and @securityCheck.isMachineAuthenticated()
+hasAuthority('SCOPE_shopping-carts:read')             hasAuthority('SCOPE_shopping-carts:read') and hasRole('CUSTOMER')
+```
+
+As matrizes de autorização acompanharam: em vez de três colunas por rota, grupos por público — e casos que falham se a role sumir da expressão. As leituras consumidas por m2m (catálogo, por exemplo) seguem só com escopo, porque máquina não tem role. O racional dos três públicos está em [Recursos `/me` e IDOR](./recursos-me-e-idor.md); os papéis, em [RBAC e controle de acesso](./rbac-e-controle-de-acesso.md).
+
+---
+
 ## Armadilhas
 
 - **`@EnableMethodSecurity` ausente** deixa as anotações decorativas, sem erro nenhum.

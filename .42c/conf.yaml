@@ -1,3 +1,5 @@
 apis:
   openapi/ordering.yml:
     alias: "algashop-ordering"
+  openapi/authorization-server.yml:
+    alias: "algashop-authorization-server"

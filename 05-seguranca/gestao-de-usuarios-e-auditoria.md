@@ -225,6 +225,39 @@ E o `isDisabled()` fecha a porta enquanto isso não acontece: quem não clicou n
 
 ---
 
+## 🔄 O `/me` completou o ciclo: atualizar e excluir o próprio perfil
+
+O `/me` desta fase só lia. O ciclo fechou com `PUT` e `DELETE` — e três decisões que valem registro:
+
+**O self-update tem DTO próprio.** `MyUserUpdateInput` carrega só `name`. O administrativo (`AuthUserUpdateInput`) carrega `name`, `type`, `enabled`. Não é o mesmo input com campos ignorados: é a afirmação, **em tipo**, de que ninguém edita o próprio papel nem se auto-habilita. No serviço, uma sobrecarga `update(UUID, MyUserUpdateInput)` convive com a administrativa.
+
+**Excluir o próprio perfil é privilégio de CUSTOMER.** A anotação compõe as duas condições que este documento apresentou separadas:
+
+```java
+@PreAuthorize("@securityCheck.canAccessOwnProfile() and hasRole('CUSTOMER')")
+public @interface CanDeleteOwnProfile {}
+```
+
+Um MANAGER que se excluísse pelo `/me` deixaria o back-office sem administrador por um clique — conta interna é excluída por outro MANAGER, pela rota administrativa.
+
+**E a camada de aplicação pergunta de novo** — porque o mesmo `anonymize` serve o `DELETE /users/{userId}` administrativo, onde um MANAGER poderia tentar excluir a si mesmo por outra porta:
+
+```java
+if (securityCheck.isMachineAuthenticated()) {
+    return;                                   // ← m2m é sempre administrativo; sem "próprio perfil"
+}
+if (securityCheck.getAuthenticatedUserId().equals(user.getId())
+        && user.getType() != AuthUserType.CUSTOMER) {
+    throw new AccessDeniedException("Only CUSTOMER users can delete their own profile");
+}
+```
+
+A primeira versão desse guard não tinha o `return` de máquina — e `getAuthenticatedUserId()` **lança** para `client_credentials`. O client m2m que tinha acabado de ganhar `users:write` levaria 403 num fluxo legítimo. O guard de aplicação que consulta identidade precisa perguntar *"é máquina?"* antes de perguntar *"quem é?"*.
+
+O padrão `/me` inteiro, atravessando os quatro serviços, está em [Recursos `/me` e IDOR](./recursos-me-e-idor.md).
+
+---
+
 ## Filtros e paginação
 
 Mesmo desenho dos outros serviços (ver [`paginacao.md`](../02-persistencia/paginacao.md)): `AuthUserFilter extends SortablePageFilter`, Criteria API com predicados condicionais, `PageModel` de saída.
@@ -323,7 +356,7 @@ Verificado: dois usuários criados, duas senhas em claro no stdout do servidor, 
 
 **`isMachineAuthenticated()` é heurística.** Um claim explícito no token seria mais robusto.
 
-**Não há `AuthorizationMatrixTest` no authorization server.** Os outros três serviços têm; aqui o `@WebMvcTest` arrastaria a filter chain do protocolo OAuth2 inteira. Detalhado em [`testes-integracao-query-services.md`](../03-testes-integracao/testes-integracao-query-services.md#pendência-registrada).
+**Não há `AuthorizationMatrixTest` no authorization server.** *(✅ resolvida — a matriz existe: importa a filter chain real com os beans OAuth2 mockados e a implementação real do bean `securityCheck`. Ver [Recursos `/me` e IDOR](./recursos-me-e-idor.md).)* Os outros três serviços têm; aqui o `@WebMvcTest` arrastaria a filter chain do protocolo OAuth2 inteira. Detalhado em [`testes-integracao-query-services.md`](../03-testes-integracao/testes-integracao-query-services.md#pendência-registrada).
 
 **A auditoria de máquina é anônima por design** — se um dia for preciso rastrear qual sistema escreveu, é coluna nova.
 

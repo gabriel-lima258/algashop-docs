@@ -92,6 +92,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) | A API de usuários, `/me` como id que o cliente não escolhe, token de pessoa × de máquina — e a auditoria que trocou o `UUID` aleatório pelo `sub` do token |
 | [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) | Como um cliente **sem segredo** prova continuidade; silent refresh por `prompt=none`; cookie de domínio comum, CORS × `frame-ancestors` |
 | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) | O fluxo guiado das quatro camadas: papel no token, client e escopo por papel, regras de negócio e dono do recurso — e a lacuna entre duas tabelas que quebrou a loja |
+| [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) | O id que sai do path e do body nos quatro serviços: `/me` com filtro de dono **na consulta**, os três públicos das anotações (CUSTOMER, interno, máquina) — e a SpEL quebrada que respondia 500 |
 | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
 | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) | O contrato invisível entre o HTML e o filtro, o `_csrf` que o Thymeleaf injeta, consentimento próprio — e por que um teste de login pode passar com a tela quebrada |
 
@@ -121,7 +122,7 @@ Para revisar o conteúdo do zero, nesta ordem:
 [Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) → [Resiliência](./01-arquitetura-design/resiliencia.md) → [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) → [Health check](./04-infraestrutura/health-checks.md)
 
 **4a. Quem pode chamar**
-[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md) → [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) → [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) → [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) → [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) → [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) → [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) → [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) → [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) → [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md)
+[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md) → [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) → [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) → [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) → [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) → [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) → [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) → [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) → [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) → [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) → [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md)
 
 **4b. Quanto o sistema aguenta**
 [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) → [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md)
@@ -195,7 +196,7 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Saber **quem** está chamando, sem acoplar a aplicação ao Spring Security | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
 | Preencher `createdBy` com o usuário de verdade | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
 | Distinguir token de pessoa de token de máquina | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
-| Fazer um endpoint `/me` sem receber id na URL | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
+| Fazer um endpoint `/me` sem receber id na URL | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md), [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
 | Apagar um usuário sem quebrar referência de auditoria | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
 | Autenticar uma SPA ou app mobile sem `client_secret` | [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) |
 | Entender o que o PKCE protege (e o que não protege) | [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) |
@@ -208,6 +209,10 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Limitar escopos por papel, no mesmo client | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) |
 | Fazer alguém ver só os próprios recursos | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) |
 | Decidir entre filtrar a consulta e negar com 403 | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) |
+| Eliminar IDOR em vez de mitigar (id fora do path e do body) | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) |
+| Impedir que um recurso alheio confirme a própria existência | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) |
+| Restringir um endpoint a token de máquina (ou excluir máquina dele) | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) |
+| Preencher um campo do input pelo controller sem o body alcançá-lo | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) |
 | Trocar a tela de login padrão do Spring Security | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
 | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |

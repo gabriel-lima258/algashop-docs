@@ -345,6 +345,33 @@ Duas leituras que valem ser notadas:
 
 ---
 
+## 🔄 O RBAC alcançou os serviços que faltavam
+
+Este documento nasceu cobrindo `ordering`, `authorization-server` e a política do emissor. A fase dos recursos `/me` levou a segunda pergunta — *quem é esta pessoa?* — aos dois serviços que ainda autorizavam escrita só por escopo:
+
+**`product-catalog`.** Toda escrita ganhou `and not hasRole('CUSTOMER')`; o estoque foi mais longe:
+
+```java
+@PreAuthorize("hasAuthority('SCOPE_products:stock:write') and hasRole('MANAGER')")
+public @interface CanWriteProductsStock {}
+```
+
+É a regra mais restritiva do sistema, e exclui máquina **por construção**: `client_credentials` não carrega o claim `role`, logo `hasRole` é falso para qualquer m2m. OPERATOR fica fora por política — a mesma da tabela `auth_user_type_client_scope`, agora espelhada na anotação. As leituras seguem só com escopo, porque quem lê o catálogo (`ecommerce-m2m`, `ordering`) é máquina sem role.
+
+**`billing`.** Três públicos, três formas: fatura própria exige `hasRole('CUSTOMER')`; a leitura geral por `orderId` exige `not hasRole('CUSTOMER')` (nas mãos de um cliente, seria um oráculo de faturas alheias); e **gerar** fatura exige `@securityCheck.isMachineAuthenticated()` — é passo do checkout, nenhum humano dispara, nem MANAGER.
+
+A matriz da seção anterior ganhou, na prática, três linhas novas:
+
+| | MANAGER | OPERATOR | CUSTOMER | máquina |
+|---|---|---|---|---|
+| Escrever catálogo (produtos/categorias) | ✅ | ✅ | ❌ | ✅ |
+| Operar estoque | ✅ | ❌ | ❌ | ❌ |
+| Gerar fatura | ❌ | ❌ | ❌ | ✅ |
+
+O racional completo — e o padrão `/me` que acompanha — está em [Recursos `/me` e IDOR](./recursos-me-e-idor.md).
+
+---
+
 ## Armadilhas
 
 - **`setAuthenticationValidator()` substitui, não acrescenta** — encadeie os validadores padrão ou perca a validação de redirect URI.
