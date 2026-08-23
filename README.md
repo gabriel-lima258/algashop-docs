@@ -93,6 +93,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) | Como um cliente **sem segredo** prova continuidade; silent refresh por `prompt=none`; cookie de domínio comum, CORS × `frame-ancestors` |
 | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) | O fluxo guiado das quatro camadas: papel no token, client e escopo por papel, regras de negócio e dono do recurso — e a lacuna entre duas tabelas que quebrou a loja |
 | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) | O id que sai do path e do body nos quatro serviços: `/me` com filtro de dono **na consulta**, os três públicos das anotações (CUSTOMER, interno, máquina) — e a SpEL quebrada que respondia 500 |
+| [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) | Parameter Store × Secrets Manager, o seed por CSV que aposentou os comandos manuais, `spring.config.import` como dependência de bootstrap — e a chave de assinatura que parou de mudar a cada subida (quase) |
 | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
 | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) | O contrato invisível entre o HTML e o filtro, o `_csrf` que o Thymeleaf injeta, consentimento próprio — e por que um teste de login pode passar com a tela quebrada |
 
@@ -122,7 +123,7 @@ Para revisar o conteúdo do zero, nesta ordem:
 [Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) → [Resiliência](./01-arquitetura-design/resiliencia.md) → [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) → [Health check](./04-infraestrutura/health-checks.md)
 
 **4a. Quem pode chamar**
-[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md) → [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) → [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) → [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) → [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) → [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) → [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) → [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) → [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) → [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) → [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md)
+[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md) → [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) → [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) → [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) → [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) → [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) → [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) → [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) → [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) → [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) → [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) → [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md)
 
 **4b. Quanto o sistema aguenta**
 [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) → [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md)
@@ -158,12 +159,9 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Saber se o serviço pode receber tráfego | [Health check e degradação](./04-infraestrutura/health-checks.md) |
 | Diferença entre liveness e readiness | [Health check e degradação](./04-infraestrutura/health-checks.md) |
 | Dependência opcional fora sem derrubar o serviço | [Health check e degradação](./04-infraestrutura/health-checks.md) |
-| Saber quanto o sistema aguenta | [Testando segurança](./03-testes-integracao/testando-seguranca.md) | Identidade em teste com `@WithSecurityContext`, declarativo × imperativo, o que o `MockJwtDecoder` **não** cobre — e por que teste de asserção negativa dá falso conforto |
-| [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
-| Escolher entre VUs fixos e taxa fixa no k6 | [Testando segurança](./03-testes-integracao/testando-seguranca.md) | Identidade em teste com `@WithSecurityContext`, declarativo × imperativo, o que o `MockJwtDecoder` **não** cobre — e por que teste de asserção negativa dá falso conforto |
-| [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
-| Fazer um teste de carga reprovar de verdade | [Testando segurança](./03-testes-integracao/testando-seguranca.md) | Identidade em teste com `@WithSecurityContext`, declarativo × imperativo, o que o `MockJwtDecoder` **não** cobre — e por que teste de asserção negativa dá falso conforto |
-| [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
+| Saber quanto o sistema aguenta | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
+| Escolher entre VUs fixos e taxa fixa no k6 | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
+| Fazer um teste de carga reprovar de verdade | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
 | Decidir se vale ligar threads virtuais | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) |
 | Descobrir qual recurso satura primeiro | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) |
 | Entender por que o container morreu com exit 137 | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md), [Docker](./04-infraestrutura/docker.md) |
@@ -213,14 +211,14 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Impedir que um recurso alheio confirme a própria existência | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) |
 | Restringir um endpoint a token de máquina (ou excluir máquina dele) | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) |
 | Preencher um campo do input pelo controller sem o body alcançá-lo | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) |
-| Trocar a tela de login padrão do Spring Security | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
-| [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
-| Descobrir por que o login devolve 403 (ou nunca funciona) | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
-| [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
-| Fazer uma tela de consentimento própria | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
-| [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
-| Servir CSS e imagem numa aplicação protegida | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
-| [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
+| Tirar segredos e configuração do YAML versionado | [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) |
+| Decidir entre Parameter Store e Secrets Manager | [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) |
+| Fixar a chave que assina os JWT (e entender o `kid`) | [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) |
+| Semear a AWS local sem comando manual (CSV + init hook) | [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) |
+| Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
+| Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
+| Fazer uma tela de consentimento própria | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
+| Servir CSS e imagem numa aplicação protegida | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Dar baixa em estoque sem vender o que não tem | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) |
 | Fazer duas escritas caírem juntas, ou nenhuma | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
 | Por que `@Transactional` no Mongo pode não fazer nada | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |

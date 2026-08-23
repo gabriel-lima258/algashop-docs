@@ -175,7 +175,7 @@ A tabela que evita 90% dos problemas de "não conecta":
 | Redis | **6379** | 6379 | cache do catálogo (db 0) e do `ordering` (db 1) |
 | WireMock | **8787** | 8080 | mock de APIs externas |
 | FastPay | **9995** | 9995 | gateway de pagamento simulado |
-| LocalStack | **4566** | 4566 | a AWS emulada — só S3, bucket `algashop-product-image` |
+| LocalStack | **4566** | 4566 | a AWS emulada — S3 (bucket `algashop-product-image`), Secrets Manager e Parameter Store (config dos 5 serviços) |
 
 O `authorization-server` roda em **9000** e, desde a Fase 26, **está no compose** — em desenvolvimento ainda dá para subi-lo por `./gradlew bootRun`. Os outros três apontam o `issuer-uri` para `http://auth.algashop.local:9000` e é de lá que buscam as chaves públicas.
 
@@ -463,11 +463,11 @@ spring:
 | `Unable to load region from any of the providers in the chain` | Starter do S3 no classpath sem região configurada | Derruba o contexto **inteiro**, inclusive em teste. `spring.cloud.aws.region.static` resolve |
 | Upload falha no navegador, serviço `UP` | O host da URL assinada não resolve na máquina do cliente | Acrescente as três linhas de LocalStack ao `hosts` |
 | Upload falha no *preflight*, sem mensagem sobre S3 | CORS do bucket não aplicado | `awslocal s3api get-bucket-cors --bucket algashop-product-image`; o `init.sh` aplica na subida |
-| LocalStack morre durante a inicialização | OOM no `s3 sync` das imagens | O limite é 1 GB e o sync roda em processo único — não paralelize |
+| LocalStack morre durante a inicialização | OOM na carga inicial das imagens | O limite é 1 GB e o `init.sh` sobe os objetos um a um (`put-object` via `s3.csv`) — não paralelize |
 | `component 'awsS3' is DEGRADED` | LocalStack parado | Esperado: storage é dependência **opcional**, o `readiness` continua `UP` |
 | `Port 8081 was already in use` ao subir o authorization server | Porta antiga, hoje do `ordering` | Foi corrigida para **9000** na Fase 20 — confira o `application-base.yaml` |
 | `invalid_client` ao pedir token | Cliente inexistente no perfil ativo | Os clientes só estão em `application-development-env.yaml`; o perfil `production` sobe sem nenhum |
-| JWT válido ontem passa a dar `401` hoje | Chave de assinatura não persistida | Sem configuração, o Spring gera par novo a cada subida — reiniciar invalida os tokens |
+| JWT válido ontem passa a dar `401` hoje | A chave RSA foi recriada junto com o LocalStack | A chave vem do Secrets Manager e sobrevive ao restart do auth server, mas o seed a regenera quando o container do LocalStack é recriado — [detalhes](../05-seguranca/segredos-centralizados-e-chave-rsa.md) |
 | Tudo responde `401` depois de subir | Nenhum token sendo enviado | Os três serviços exigem token em toda rota desde a Fase 21 — só `/actuator/health/**` e o webhook do FastPay são públicos |
 | `403` com token que parece certo | Escopo faltando, não autenticação | O corpo não diz qual escopo falta, de propósito; confira a matriz em [`resource-server-e-escopos.md`](../05-seguranca/resource-server-e-escopos.md) |
 | `502` na compra, com o AS fora do ar | O `ordering` pede token e não consegue | Comportamento correto desde a Fase 22: o 401 deixou de virar "produto não encontrado" |

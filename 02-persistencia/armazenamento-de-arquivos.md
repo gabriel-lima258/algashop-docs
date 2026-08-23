@@ -242,7 +242,7 @@ Três detalhes carregam o peso:
 
 - **`awslocal`, não `aws`** — o wrapper já aponta para o endpoint do próprio container. O `aws` puro tentaria falar com a AWS de verdade.
 - **`|| true`** — o script roda de novo a cada recriação do container, e criar bucket que já existe é erro. Sem isso, o erro aborta o resto do arquivo e o CORS nunca é aplicado.
-- **`s3 sync` num processo só** — a versão anterior subia os 23 arquivos em paralelo e estourava a memória do container; o OOM killer derrubava o LocalStack no meio da inicialização. É por isso que o limite aqui é **1 GB**, o dobro dos outros serviços de apoio.
+- **Upload um a um, num processo só** — a primeira versão usava `s3 sync` paralelo e estourava a memória do container; o OOM killer derrubava o LocalStack no meio da inicialização (daí o limite de **1 GB**, o dobro dos outros serviços de apoio). Hoje o `init.sh` lê `etc/aws/s3.csv` e faz `put-object` em loop sequencial, com `--content-type` explícito por linha em vez de inferido pela extensão.
 
 ### CORS não é detalhe
 

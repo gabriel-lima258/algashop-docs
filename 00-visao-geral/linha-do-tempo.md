@@ -743,7 +743,7 @@ E um achado que não deu para observar, mas é estrutural: `@Async` dentro de `@
 - **Pôr o authorization server no compose** — no perfil `docker` o `ordering` não alcança o issuer
 - **Validar audiência (`aud`)** — hoje um token vale em qualquer um dos três serviços
 - **Verificar a origem do webhook do FastPay** — ele muda estado de fatura sem autenticação nenhuma
-- **Persistir a chave de assinatura** — hoje cada reinício invalida todo JWT emitido
+- ~~**Persistir a chave de assinatura** — hoje cada reinício invalida todo JWT emitido~~ — resolvido pela metade no módulo de segredos centralizados: a chave vem do Secrets Manager e sobrevive ao restart do auth server, mas ainda é regenerada quando o LocalStack é recriado ([detalhes](../05-seguranca/segredos-centralizados-e-chave-rsa.md))
 - **`authorization_code` + PKCE e um usuário de verdade** — o fluxo com pessoa ainda não existe
 - **Testes para imagens e storage** — hoje são zero, e o `StorageProviderFakeImpl` existe exatamente para isso sem ser usado por nenhum
 - **Recolher objetos órfãos no bucket** — entre autorizar e reivindicar, o arquivo pode ficar sem dono

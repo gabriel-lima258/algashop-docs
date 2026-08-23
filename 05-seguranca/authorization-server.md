@@ -209,7 +209,7 @@ O `/oauth2/jwks` publica as chaves públicas em JSON:
 
 **Por que um endpoint e não copiar a chave em cada serviço.** Por causa do `kid`. Rotacionar chave exige um período em que a antiga e a nova coexistem — tokens já emitidos precisam continuar válidos. O `kid` no header do JWT diz *qual* chave assinou; o resource server busca o conjunto e escolhe. Com a chave copiada em arquivo, rotação vira deploy coordenado de todos os serviços ao mesmo tempo.
 
-> ⚠️ **Sem configuração de chave, o Spring gera um par novo a cada subida.** É o que acontece hoje aqui: nada no repositório define uma chave persistente. **Reiniciar o servidor invalida todo JWT já emitido** — em desenvolvimento é invisível (o TTL é de 5 minutos), em produção é uma interrupção. Não verificado por execução, mas é o comportamento padrão documentado do projeto.
+> ⚠️ **Sem configuração de chave, o Spring gera um par novo a cada subida.** Era o que acontecia aqui até o módulo de segredos centralizados: nada no repositório definia uma chave persistente, e **reiniciar o servidor invalidava todo JWT já emitido**. 🔄 Resolvido pela metade: hoje um `JWKSource` explícito lê a chave privada do Secrets Manager (o `kid` vem junto), e a chave sobrevive ao restart do servidor — mas ela ainda nasce no seed do LocalStack, então recriar *aquele* container gera chave nova. Ver [Segredos centralizados e a chave RSA](./segredos-centralizados-e-chave-rsa.md).
 
 E o assunto é maior que uma pendência: a chave privada de assinatura é a credencial mais valiosa do sistema inteiro. Quem a tiver **emite tokens válidos para qualquer coisa** — não precisa quebrar nenhum serviço, só assinar o que quiser.
 
@@ -356,7 +356,7 @@ A ordem, porém, está certa. Emitir vem antes de verificar, porque não dá par
 
 - **JWT não é cifrado.** É legível por qualquer um que o tenha.
 - **JWT não é revogável.** O TTL é a única defesa.
-- **Chave efêmera.** Sem configuração, cada reinício invalida os tokens em circulação.
+- **Chave efêmera.** 🔄 Mitigada: a chave agora vem do Secrets Manager e sobrevive ao restart do servidor — mas segue presa ao ciclo de vida do LocalStack em dev.
 - **Segredo em texto puro, versionado.** `{noop}` no repositório é didático e indefensável fora de estudo.
 - **Cliente em memória.** Cadastro é editar YAML e reiniciar.
 - **`production` sobe sem cliente algum.** O grupo é `base + production-env`, e os clientes estão em `development-env`.
@@ -367,12 +367,12 @@ A ordem, porém, está certa. Emitir vem antes de verificar, porque não dá par
 ## Pendências registradas
 
 - [x] ~~**Nenhum resource server configurado.**~~ Resolvido na Fase 21: os três serviços validam token e cada rota exige um escopo, com 142 testes travando a matriz. Ver [Resource servers e escopos](./resource-server-e-escopos.md). Continua faltando a outra ponta — o `ordering` **não propaga token** ao chamar o catálogo, e o 401 resultante chega ao usuário como 422.
-- [ ] **Chave de assinatura não persistida** — reiniciar invalida todo JWT emitido. Ficou mais incômodo desde a Fase 23: os tokens agora sobrevivem ao restart no banco, mas a chave que os assinou não — um refresh válido gera access tokens que nenhum resource server consegue validar até ele buscar o JWKS novo.
-- [ ] **Segredos em texto puro no repositório.** Mínimo aceitável: `{bcrypt}` + variável de ambiente.
+- [x] ~~**Chave de assinatura não persistida** — reiniciar invalida todo JWT emitido.~~ Resolvido no módulo de segredos centralizados: `JwkSourceConfig` lê a chave do Secrets Manager. **A pendência mudou de dono, não morreu**: a chave é gerada no seed do LocalStack, então recriar esse container ainda a troca — produção exige secret criado uma vez + rotação deliberada. Ver [Segredos centralizados e a chave RSA](./segredos-centralizados-e-chave-rsa.md).
+- [x] ~~**Segredos em texto puro no repositório.** Mínimo aceitável: `{bcrypt}` + variável de ambiente.~~ Resolvido: os client secrets viraram `SecureString` com `{bcrypt}` no Parameter Store, e as credenciais saíram do YAML para o Secrets Manager. Ver [Segredos centralizados e a chave RSA](./segredos-centralizados-e-chave-rsa.md).
 - [ ] **`production-env` e `docker-env` vazios** — sem cliente, sem issuer, sem chave.
 - [ ] **Agora depende de Postgres para subir**, e `docker-env`/`production-env` continuam sem datasource.
 - [ ] **Não está no `docker-compose`.** É o segundo serviço fora do compose depois do `billing-scheduler`, e este aqui *é* um serviço que fica de pé.
-- [ ] **Sem Actuator**, ao contrário dos outros quatro. Não há `/actuator/health` para dizer se ele está pronto.
+- [x] ~~**Sem Actuator**, ao contrário dos outros quatro.~~ O starter existe há fases — a pendência estava desatualizada. O risco novo é o inverso: em dev, `/actuator/**` é público e o `env` expõe valores em claro (decisão dev-only; produção não pode herdar o bloco `management`). Ver a armadilha em [Segredos centralizados e a chave RSA](./segredos-centralizados-e-chave-rsa.md).
 - [ ] **Sem teste além do `contextLoads`.** Um teste que peça token com os dois clientes e afirme o formato de cada um caberia em poucas linhas e travaria a configuração.
 - [x] ~~**Sem usuário e sem `authorization_code`**~~ Resolvido na Fase 23: há um usuário (em memória), o fluxo com pessoa funciona, e o consentimento é gravado. Ver [Authorization code e consentimento](./authorization-code-e-consentimento.md).
 - [ ] **A auditoria continua gravando `UUID` aleatório** como autor no `product-catalog`. É a pendência mais antiga do projeto, e agora ela tem para onde ir: o `sub` do token.

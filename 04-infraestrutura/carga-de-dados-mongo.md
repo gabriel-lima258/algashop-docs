@@ -68,6 +68,8 @@ algashop:
         collection: products
 ```
 
+> 🔄 Desde o módulo de segredos centralizados, `enabled` e `auto-drop` não são mais literais no YAML: viraram `${catalog.params.data-load.enabled}` / `${catalog.params.data-load.auto-drop}`, resolvidos do Parameter Store — a externalização subiu um nível. Ver [Segredos centralizados e a chave RSA](../05-seguranca/segredos-centralizados-e-chave-rsa.md).
+
 ```java
 @Component
 @ConfigurationProperties("algashop.data-load")

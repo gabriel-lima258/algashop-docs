@@ -267,7 +267,7 @@ O que reduziria isso: `@ConfigurationProperties` com `@NotBlank` só quando a fu
 ## Pendências registradas
 
 - [x] ~~**O `ordering` não propaga token ao catálogo.**~~ Fechado nesta fase, com teste que falha se o interceptor sair.
-- [ ] **`client-secret: secret123` em texto puro** num arquivo versionado — o par do `{noop}` do lado do authorization server. Mínimo aceitável: variável de ambiente ou cofre.
+- [x] ~~**`client-secret: secret123` em texto puro** num arquivo versionado — o par do `{noop}` do lado do authorization server. Mínimo aceitável: variável de ambiente ou cofre.~~ Resolvido: o segredo vem do Secrets Manager (`${ordering.secrets.oauth2-client.client-secret}`), e o lado do servidor guarda o `{bcrypt}` no Parameter Store. Ver [Segredos centralizados e a chave RSA](./segredos-centralizados-e-chave-rsa.md).
 - ✅ ~~**No perfil `docker` o `ordering` não alcança o authorization server.**~~ — **resolvido na Fase 26**: o AS entrou no `docker-compose.services.yml` e responde por `auth.algashop.local` dentro da rede (o DNS do Docker resolve o `hostname:` do container).
 - [ ] **O `.oauth2Client()` da `SecurityFilterChain` não tem uso hoje.** Ele só passa a ser necessário se o `ordering` ganhar login de usuário com `authorization_code`.
 - [ ] **O cache de token é por instância** (`InMemoryOAuth2AuthorizedClientService`). Com N réplicas, são N tokens em circulação — aceitável, mas multiplica a carga no authorization server proporcionalmente.
