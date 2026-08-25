@@ -207,6 +207,8 @@ Resultado sem essa linha: o `/actuator/health` **nunca sairia de `UNKNOWN`**, e 
 
 > A lição é sobre o `status.order`: colocar `UNKNOWN` acima de `UP` é razoável — "não sei" é pior que "sei que está bem". Mas isso torna **qualquer** indicador mal comportado capaz de derrubar o agregado. Quem escolhe essa ordem assume o trabalho de auditar o que entra no classpath.
 
+> 🔄 **A premissa do passo 3 caiu.** Desde o módulo de service discovery **há** Eureka: os serviços se registram num registry e o `ordering` resolve o catálogo por nome. O indicador que era `UNKNOWN` eterno passaria a reportar estado real — e a linha que o desliga, que aqui removia ruído, hoje esconde sinal. Reativá-lo exige avaliar o efeito no readiness (registry fora do ar não deveria tirar o serviço de rotação). Pendência registrada em [Service discovery](./service-discovery.md).
+
 ---
 
 ## O nome do bean é o contrato

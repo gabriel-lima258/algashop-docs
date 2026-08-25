@@ -261,6 +261,8 @@ O `fault` é o que um stub comum não consegue fazer: ele não responde HTTP, el
 > A troca vale ser notada porque muda o que se está exercitando. Contra o WireMock, a resposta é fixa e o catálogo não precisa estar de pé; contra a 8083, é integração real — e é ela que permite ver o cache client-side funcionando, já que só há o que cachear se houver uma chamada de verdade acontecendo.
 >
 > **Nos testes nada mudou:** o perfil `test` continua apontando para o WireMock local (8781/8780), e é isso que mantém a suíte rodando sem nenhum serviço externo.
+>
+> 🔄 **A URL mudou de natureza de novo.** Desde o módulo de service discovery, `product-catalog.url` não é mais `http://localhost:8083` e sim `http://product-catalog` — o host é um **service ID** resolvido no Eureka pelo builder `@LoadBalanced`, não um endereço. O perfil `test` segue no WireMock, intocado. Ver [Service discovery](../04-infraestrutura/service-discovery.md).
 
 ---
 

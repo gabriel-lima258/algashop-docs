@@ -125,7 +125,7 @@ Desde a Fase 18 o comando é o mais curto possível:
 docker compose up -d
 ```
 
-O `docker-compose.yml` inclui o de serviços, que por sua vez inclui o de tools — um `up` sobe **tudo**: infraestrutura, `ordering` (8081), `billing` (8082), `product-catalog` (8083), o `billing-scheduler` e, desde a Fase 26, o `authorization-server` (9000). Exige que as imagens já existam localmente (`gabriel58221/*:dev`) — ver [`docker.md`](./docker.md).
+O `docker-compose.yml` inclui o de serviços, que por sua vez inclui o de tools — um `up` sobe **tudo**: infraestrutura, `ordering` (8081), `billing` (8082), `product-catalog` (8083), o `billing-scheduler`, desde a Fase 26 o `authorization-server` (9000) e, desde o módulo de service discovery, o `service-registry` (8761 — os quatro clients esperam o healthcheck dele). Exige que as imagens já existam localmente (`gabriel58221/*:dev`) — ver [`docker.md`](./docker.md).
 
 O `billing-scheduler` entrou como o que ele é: um job efêmero. Ele sobe, cancela as faturas vencidas e **encerra com código 0** — por isso `restart: no` e nenhuma porta publicada. Vê-lo como `Exited (0)` no `compose ps` é o comportamento correto, não uma falha. Em produção quem o reexecuta seria um CronJob; aqui, um `docker compose up algashop-billing-scheduler` quando quiser.
 
@@ -164,6 +164,7 @@ A tabela que evita 90% dos problemas de "não conecta":
 | `algashop-ordering` | **8081** | 8081 | PostgreSQL |
 | `algashop-billing` | **8082** | 8082 | PostgreSQL |
 | `product-catalog` | **8083** | 8083 | MongoDB |
+| `service-registry` | **8761** | 8761 | Eureka — dashboard em `http://localhost:8761` |
 | `billing-scheduler` | — | — | sem porta HTTP (só jobs) |
 | `authorization-server` | **9000** | 9000 | PostgreSQL · responde por `auth.algashop.local` |
 | PostgreSQL | **5433** | 5432 | ⚠️ deslocada de propósito |
@@ -440,7 +441,7 @@ spring:
 | Cache nunca popula (`DBSIZE` sempre 0) | Conexão com o Redis falhando em silêncio | O `CacheErrorHandler` engole o erro; confira o log por `Cache GET error` |
 | `NotSerializableException` ao cachear | DTO sem `implements Serializable` | O serializador é o do Java; a exigência é transitiva a todos os campos |
 | Anotações de cache não fazem nada | `spring.cache.type` não é `redis` | Sem ela o `RedisCacheConfig` não é registrado, e o `@EnableCaching` não acontece |
-| `/actuator/health` sempre `UNKNOWN` | Indicador de service discovery registrado por dependência transitiva | `spring.cloud.discovery.client.health-indicator.enabled: false` — [detalhes](./health-checks.md) |
+| `/actuator/health` sempre `UNKNOWN` | Indicador de service discovery registrado por dependência transitiva | `spring.cloud.discovery.client.health-indicator.enabled: false` — [detalhes](./health-checks.md). 🔄 Com o Eureka de pé, a linha passou a esconder sinal — ver [service-discovery](./service-discovery.md) |
 | `/actuator/health` devolve 200 mesmo degradado | `DEGRADED` não é mapeado para 503 | Comportamento conhecido; olhe o corpo, não o código |
 | `cache` reporta `UP` com o Redis parado | Defeito conhecido no indicador | Registrado em [`health-checks.md`](./health-checks.md) |
 | Serviço não acha o `product-catalog` | Nada respondendo na URL configurada | Suba o WireMock ou o Stub Runner |

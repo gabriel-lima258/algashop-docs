@@ -6,7 +6,7 @@
 
 ## O sistema
 
-O AlgaShop é um e-commerce decomposto em quatro microsserviços, cada um com banco próprio e ciclo de deploy independente — mais um **authorization server**, que não é de negócio: ele existe para emitir credencial.
+O AlgaShop é um e-commerce decomposto em quatro microsserviços, cada um com banco próprio e ciclo de deploy independente — mais dois serviços que não são de negócio: o **authorization server**, que emite credencial, e o **service-registry** (Eureka), onde os serviços se anunciam e se descobrem.
 
 ```mermaid
 graph TB
@@ -18,6 +18,7 @@ graph TB
         B["<b>billing</b><br/>:8082<br/>faturas e pagamento"]
         S["<b>billing-scheduler</b><br/>jobs agendados"]
         A["<b>authorization-server</b><br/>:9000<br/>emite tokens OAuth2"]
+        R["<b>service-registry</b><br/>:8761<br/>Eureka"]
     end
 
     subgraph Bancos
@@ -38,6 +39,10 @@ graph TB
     O -->|pede token| A
     C -.->|valida assinatura via /oauth2/jwks| A
     B -.->|valida assinatura via /oauth2/jwks| A
+    O -.->|registra-se / resolve product-catalog| R
+    C -.->|registra-se| R
+    B -.->|registra-se| R
+    A -.->|registra-se| R
 
     O --- PG
     B --- PG
@@ -190,6 +195,8 @@ A diferença entre as duas chamadas de saída do `ordering` merece ser dita aqui
 | `ordering → Rapidex` (frete) | **degrada** — devolve um frete estimado, e o cliente não sabe |
 
 Não dá para inventar o preço de um produto; dá para estimar um frete. Ver [`resiliencia.md`](../01-arquitetura-design/resiliencia.md).
+
+🔄 **E desde o módulo de service discovery, o endereço saiu da configuração.** A URL do catálogo no `ordering` deixou de ser `http://localhost:8083` e virou `http://product-catalog` — o host é um *service ID* resolvido no Eureka por um `RestClient.Builder` `@LoadBalanced`, com balanceamento entre as instâncias registradas. Contrato, cache e resiliência continuam exatamente onde estavam; só o endereçamento mudou de camada. A chamada ao Rapidex segue com URL fixa de propósito (integração externa não mora no registry). Ver [`service-discovery.md`](../04-infraestrutura/service-discovery.md).
 
 ```
 product-catalog  --define-->  contrato  --gera-->  stub

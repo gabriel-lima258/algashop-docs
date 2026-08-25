@@ -15,6 +15,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | **`product-catalog`** | 8083 | MongoDB (replica set) + Redis | Modelagem documental e desnormalização, eventos de domínio, concorrência atômica, transação multi-coleção, cache server-side, REST Docs |
 | **`billing-scheduler`** | — | — | Jobs agendados, cancelamento de faturas expiradas |
 | **`authorization-server`** | 9000 | PostgreSQL | OAuth 2.1 e OIDC, gestão de usuários, PKCE para cliente público, sessão em banco |
+| **`service-registry`** | 8761 | — | Eureka Server: registro e descoberta de serviços, dashboard das instâncias |
 
 > Como os serviços se conectam, quem chama quem e por quê: **[Arquitetura](./00-visao-geral/arquitetura.md)**
 
@@ -27,7 +28,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 30 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 33 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -78,6 +79,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Docker](./04-infraestrutura/docker.md) | Build de imagem, multi-arquitetura com Buildx e publicação em registry |
 | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) | Onde o sistema realmente satura — e por que ligar threads virtuais o deixou **9× pior** |
 | [Jobs agendados](./04-infraestrutura/scheduled-jobs.md) | `@Scheduled`, execução em ambiente distribuído e controle de concorrência |
+| [Service discovery](./04-infraestrutura/service-discovery.md) | O endereço que saiu da configuração: Eureka Server standalone, clients que se anunciam, os dois builders do load balancer — e o jeito novo de falhar que o discovery traz |
 
 ### 05 — Segurança
 
@@ -215,6 +217,9 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Decidir entre Parameter Store e Secrets Manager | [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) |
 | Fixar a chave que assina os JWT (e entender o `kid`) | [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) |
 | Semear a AWS local sem comando manual (CSV + init hook) | [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) |
+| Chamar outro serviço pelo nome, sem URL fixa | [Service discovery](./04-infraestrutura/service-discovery.md) |
+| Balancear chamadas entre réplicas de um serviço | [Service discovery](./04-infraestrutura/service-discovery.md) |
+| Registrar um serviço no Eureka (e saber quem não deve) | [Service discovery](./04-infraestrutura/service-discovery.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Fazer uma tela de consentimento própria | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |

@@ -339,7 +339,7 @@ A Fase 16 protegeu as chamadas e deixou uma pendência: **ninguém sabia se um c
 | `readiness` só com o banco | Cache e circuito fora **não** tiram a instância de rotação; foi verificado |
 | Indicador nativo do Redis desligado | Ele reportaria `DOWN`; para cache isso é grave demais |
 | `@Component("cache")` | O nome do bean é o nome no endpoint — renomear a classe muda o contrato |
-| `discovery.client.health-indicator: false` | Uma dependência transitiva registrava um indicador `UNKNOWN` eterno que envenenava o agregado |
+| `discovery.client.health-indicator: false` | Uma dependência transitiva registrava um indicador `UNKNOWN` eterno que envenenava o agregado. 🔄 Desde a Fase 33 há Eureka de verdade — a linha passou a esconder sinal ([detalhes](../04-infraestrutura/service-discovery.md)) |
 | `DEGRADED` devolvendo **HTTP 200** | Só `DOWN` e `OUT_OF_SERVICE` viram 503 — para um probe, degradado e saudável são iguais |
 | Dockerfile do `product-catalog` | O último serviço sem imagem passou a ter uma, e entrou no compose |
 
@@ -671,7 +671,7 @@ E uma terceira, pequena: o `compileTestJava` passou com **dois imports de uma cl
 
 ---
 
-## Fase 30 — Verificação de e-mail e troca de senha (ago/2026) ← etapa atual
+## Fase 30 — Verificação de e-mail e troca de senha (ago/2026)
 
 A Fase 25 deixou uma pendência constrangedora: o cadastro gerava senha aleatória, **imprimia no stdout** e não entregava a ninguém — o usuário criado pela API nunca conseguia logar. Esta fase fecha isso, e o caminho revela que **definir a primeira senha e recuperar a senha esquecida são a mesma operação**.
 
@@ -691,6 +691,61 @@ A Fase 25 deixou uma pendência constrangedora: o cadastro gerava senha aleatór
 E um achado que não deu para observar, mas é estrutural: `@Async` dentro de `@Transactional` **despacha o e-mail antes do commit**. Entre o envio e a gravação existe uma janela em que o link já está na caixa de entrada e o token ainda não está no banco.
 
 > [`verificacao-de-email-e-troca-de-senha.md`](../05-seguranca/verificacao-de-email-e-troca-de-senha.md)
+
+---
+
+## Fase 31 — Recursos `/me` e o fim do IDOR (ago/2026)
+
+O padrão que a Fase 25 inaugurou no authorization server chegou a todos os recursos de cliente: carrinho (`ordering`), perfil (`PUT`/`DELETE /users/me`), cartões e fatura (`billing`). O `customerId` saiu de todo path e body — o dono do recurso vem do `sub` do token, e a busca filtra por dono **na própria consulta**, tornando o recurso alheio indistinguível de inexistente.
+
+| Marco | O que se aprende |
+|---|---|
+| Controllers `My*` nos três serviços | O id que o cliente não escolhe não pode ser o de outra pessoa |
+| `findByCustomerId` / `findByOrderIdAndCustomerId` | O filtro de dono no `WHERE`, nunca num `if` depois do fetch — 403 seria oráculo |
+| Três públicos nas anotações | `hasRole('CUSTOMER')` nos `/me`, `not hasRole` no administrativo, `@securityCheck.isMachineAuthenticated()` no m2m |
+| `@JsonIgnore` no campo que o controller preenche | E **sem** `@NotNull`: o `@Valid` roda antes do set — um `POST` que respondia 400 para sempre provou |
+| A SpEL quebrada do billing | Parêntese extra + nome de bean errado = 500 em todo POST de fatura; só a matriz percebe antes |
+| Catálogo endurecido | Escrita exige não-CUSTOMER; estoque, só MANAGER humano — máquina fica fora por não ter claim `role` |
+
+**A lição da fase:** eliminar a classe de bug vale mais que proteger contra ela — e o que não é verificado em compilação (SpEL, nome de bean) precisa de um teste que o perceba quebrar.
+
+> [`recursos-me-e-idor.md`](../05-seguranca/recursos-me-e-idor.md)
+
+---
+
+## Fase 32 — Segredos centralizados na AWS (ago/2026)
+
+A configuração dos cinco serviços saiu do YAML versionado: Parameter Store para config (`/config/...`), Secrets Manager para segredo (`/secret/...`, JSON multi-chave), tudo emulado no LocalStack e semeado por CSV num init hook — fim dos comandos manuais. E a pendência mais antiga da segurança caiu pela metade: a chave que assina os JWT agora vem do cofre via `JWKSource` explícito, em vez de nascer nova a cada subida.
+
+| Marco | O que se aprende |
+|---|---|
+| `spring.config.import` | Dependência de **bootstrap**: sem o cofre de pé, o serviço nem monta o `Environment` |
+| Namespace `shared` | A URL do issuer vive uma vez e todos importam — fonte única virou infraestrutura |
+| Seed por CSV + `ready.d` | Comando manual é conhecimento que evapora; CSV com script é conhecimento que executa |
+| `{bcrypt}` × texto | O mesmo segredo em duas representações: quem verifica guarda hash, quem envia precisa do texto |
+| `JwkSourceConfig` | O comportamento indesejado vinha de **não ter escrito nada** — a autoconfig gerava par novo por ausência de bean |
+| A pendência mudou de dono | A chave sobrevive ao restart do auth server, mas o seed a regenera com o LocalStack |
+
+> [`segredos-centralizados-e-chave-rsa.md`](../05-seguranca/segredos-centralizados-e-chave-rsa.md)
+
+---
+
+## Fase 33 — Service discovery com Eureka (ago/2026) ← etapa atual
+
+O endereço saiu da configuração: um `service-registry` (Eureka, 8761) virou o sexto serviço, quatro serviços se registram nele, e a chamada `ordering → product-catalog` resolve o destino por **service ID** com balanceamento — `http://product-catalog`, não mais `http://localhost:8083`.
+
+| Marco | O que se aprende |
+|---|---|
+| `registerWithEureka/fetchRegistry: false` no servidor | Todo Eureka Server embute um client; standalone precisa desligá-lo |
+| `${shared.params.service-registry-url}` | O segundo parâmetro compartilhado, depois do issuer — o padrão `shared` pagou de novo |
+| Dois `RestClient.Builder` | `@LoadBalanced` para quem mora no registry; `@Primary` cru para o Rapidex externo — declarar um remove o default de todos |
+| A porta hexagonal não percebeu | `HttpServiceProxyFactory`, OAuth2 e timeouts intactos — o discovery entrou por baixo do builder |
+| `catch` alargado para `Exception` | Sem instância registrada, o LB falha **antes** do HTTP, fora de `RestClientException` — discovery é um jeito novo de falhar |
+| O override que quase quebrou o docker | O `docker-env` reintroduzia endereço fixo com nome errado — override de perfil vence o Parameter Store |
+
+**A lição da fase:** endereço deixou de ser configuração e virou estado de runtime — e cada camada que já existia (contrato, cache, resiliência) continuou no lugar, porque o endereçamento mudou na camada certa.
+
+> [`service-discovery.md`](../04-infraestrutura/service-discovery.md)
 
 ---
 
@@ -728,6 +783,9 @@ E um achado que não deu para observar, mas é estrutural: `@Async` dentro de `@
 - Telas próprias de login, logout e consentimento em Thymeleaf, com suíte de fumaça sobre o HTML
 - Identidade declarativa em teste (`@WithMockJwt`) e as três camadas de teste de segurança do `ordering`
 - Verificação de e-mail e troca de senha por token com hash em banco, orquestrada pelo agregado
+- Recursos `/me` em todos os serviços de negócio, com filtro de dono na consulta e anotações por público
+- Configuração e segredos no Parameter Store/Secrets Manager (LocalStack), com seed por CSV e chave RSA no cofre
+- Service registry Eureka com quatro clients e balanceamento na chamada `ordering → product-catalog`
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
