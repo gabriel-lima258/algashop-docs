@@ -125,7 +125,7 @@ Desde a Fase 18 o comando é o mais curto possível:
 docker compose up -d
 ```
 
-O `docker-compose.yml` inclui o de serviços, que por sua vez inclui o de tools — um `up` sobe **tudo**: infraestrutura, `ordering` (8081), `billing` (8082), `product-catalog` (8083), o `billing-scheduler`, desde a Fase 26 o `authorization-server` (9000) e, desde o módulo de service discovery, o `service-registry` (8761 — os quatro clients esperam o healthcheck dele). Exige que as imagens já existam localmente (`gabriel58221/*:dev`) — ver [`docker.md`](./docker.md).
+O `docker-compose.yml` inclui o de serviços, que por sua vez inclui o de tools — um `up` sobe **tudo**: infraestrutura, `ordering` (8081), `billing` (8082), `product-catalog` (8083), o `billing-scheduler`, desde a Fase 26 o `authorization-server` (9000) e, desde os módulos de service discovery e API gateway, o `service-registry` (8761 — os quatro clients esperam o healthcheck dele) e o `api-gateway` (9999 — espera o registry e o authorization server, porque o `issuer-uri` roda no bootstrap). Exige que as imagens já existam localmente (`gabriel58221/*:dev`) — ver [`docker.md`](./docker.md).
 
 O `billing-scheduler` entrou como o que ele é: um job efêmero. Ele sobe, cancela as faturas vencidas e **encerra com código 0** — por isso `restart: no` e nenhuma porta publicada. Vê-lo como `Exited (0)` no `compose ps` é o comportamento correto, não uma falha. Em produção quem o reexecuta seria um CronJob; aqui, um `docker compose up algashop-billing-scheduler` quando quiser.
 
@@ -165,6 +165,7 @@ A tabela que evita 90% dos problemas de "não conecta":
 | `algashop-billing` | **8082** | 8082 | PostgreSQL |
 | `product-catalog` | **8083** | 8083 | MongoDB |
 | `service-registry` | **8761** | 8761 | Eureka — dashboard em `http://localhost:8761` |
+| `api-gateway` | **9999** | 9999 | porta única de entrada — roteia por service ID via Eureka |
 | `billing-scheduler` | — | — | sem porta HTTP (só jobs) |
 | `authorization-server` | **9000** | 9000 | PostgreSQL · responde por `auth.algashop.local` |
 | PostgreSQL | **5433** | 5432 | ⚠️ deslocada de propósito |
@@ -212,6 +213,8 @@ Desde a Fase 17 os três serviços com HTTP expõem Actuator:
 curl -s localhost:8081/actuator/health | jq            # tudo: banco, cache, circuitos
 curl -s localhost:8081/actuator/health/readiness | jq  # só o essencial para atender
 curl -s localhost:8081/actuator/info | jq
+curl -s localhost:9999/actuator/health | jq            # o gateway (público de propósito)
+curl -s localhost:9999/actuator/gateway/routes | jq    # a tabela de rotas VIVA do gateway
 ```
 
 O `readiness` inclui **só o banco** — cache e circuitos fora do ar não tiram a instância de rotação. Ver [`health-checks.md`](./health-checks.md).
@@ -444,6 +447,7 @@ spring:
 | `/actuator/health` sempre `UNKNOWN` | Indicador de service discovery registrado por dependência transitiva | `spring.cloud.discovery.client.health-indicator.enabled: false` — [detalhes](./health-checks.md). 🔄 Com o Eureka de pé, a linha passou a esconder sinal — ver [service-discovery](./service-discovery.md) |
 | `/actuator/health` devolve 200 mesmo degradado | `DEGRADED` não é mapeado para 503 | Comportamento conhecido; olhe o corpo, não o código |
 | `cache` reporta `UP` com o Redis parado | Defeito conhecido no indicador | Registrado em [`health-checks.md`](./health-checks.md) |
+| `403` no gateway fora de `/api/**` | `anyExchange().denyAll()` — a security decide antes do roteamento | Toda rota nova precisa casar predicate **e** `authorizeExchange` — [detalhes](./api-gateway.md) |
 | Serviço não acha o `product-catalog` | Nada respondendo na URL configurada | Suba o WireMock ou o Stub Runner |
 | Pastas de submódulo vazias | Clone sem `--recurse-submodules` | `git submodule update --init --recursive` |
 | Alterações de um serviço somem | `git submodule update` sem `--remote` | Sempre cheque o status antes |

@@ -730,7 +730,7 @@ A configuração dos cinco serviços saiu do YAML versionado: Parameter Store pa
 
 ---
 
-## Fase 33 — Service discovery com Eureka (ago/2026) ← etapa atual
+## Fase 33 — Service discovery com Eureka (ago/2026)
 
 O endereço saiu da configuração: um `service-registry` (Eureka, 8761) virou o sexto serviço, quatro serviços se registram nele, e a chamada `ordering → product-catalog` resolve o destino por **service ID** com balanceamento — `http://product-catalog`, não mais `http://localhost:8083`.
 
@@ -746,6 +746,27 @@ O endereço saiu da configuração: um `service-registry` (Eureka, 8761) virou o
 **A lição da fase:** endereço deixou de ser configuração e virou estado de runtime — e cada camada que já existia (contrato, cache, resiliência) continuou no lugar, porque o endereçamento mudou na camada certa.
 
 > [`service-discovery.md`](../04-infraestrutura/service-discovery.md)
+
+---
+
+## Fase 34 — API Gateway (ago/2026) ← etapa atual
+
+O discovery resolveu o endereço *entre* serviços; faltava a borda. Um Spring Cloud Gateway (porta 9999) virou a porta única de entrada: rotas declaradas à mão com `lb://<service-id>` resolvidas no Eureka, CORS global, e o token validado antes de a requisição tocar qualquer serviço — com a autorização fina continuando onde sempre esteve.
+
+| Marco | O que se aprende |
+|---|---|
+| Rotas à mão, não `discovery.locator` | Rota automática exporia `/SERVICE-ID/**` de tudo que está no registry — superfície de exposição se declara |
+| A ordem das rotas é regra de negócio | Billing antes de ordering em `/api/v1/customers/**` — invertê-las manda fatura e cartão para o serviço errado |
+| `fetchRegistry` sem `registerWithEureka` | O gateway descobre todo mundo e ninguém o descobre — o espelho invertido do Eureka server |
+| Resource server na borda | Assinatura/`iss`/`exp` no gateway; escopo, papel e dono seguem nos serviços — o token é validado duas vezes, de propósito |
+| `denyAll` matou uma rota | `/products/**` com RewritePath nunca funcionou: a security decide **antes** do roteamento — 403 que parece bug de rota |
+| CORS num lugar só (quase) | `globalcors` + `DedupeResponseHeader RETAIN_FIRST`; o authorization server mantém o dele porque o SPA fala com ele direto |
+| `issuer-uri` reacopla a subida | O que a Fase 22 desfez no ordering, a borda reintroduz sabendo: gateway sem AS de pé não serve a ninguém |
+| O índice do git guardava outro serviço | Dockerfile staged com `service-registry.jar` — o que vai no commit é o índice, não o editor |
+
+**A lição da fase:** a borda concentra o que é de borda — endereço, CORS, anonimato — e devolve o resto para dentro. Um gateway que tentasse concentrar *toda* a segurança desfaria três fases de autorização fina nos serviços.
+
+> [`api-gateway.md`](../04-infraestrutura/api-gateway.md)
 
 ---
 
@@ -786,6 +807,7 @@ O endereço saiu da configuração: um `service-registry` (Eureka, 8761) virou o
 - Recursos `/me` em todos os serviços de negócio, com filtro de dono na consulta e anotações por público
 - Configuração e segredos no Parameter Store/Secrets Manager (LocalStack), com seed por CSV e chave RSA no cofre
 - Service registry Eureka com quatro clients e balanceamento na chamada `ordering → product-catalog`
+- API Gateway como porta única (9999): rotas por service ID, CORS global e token validado na borda
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar

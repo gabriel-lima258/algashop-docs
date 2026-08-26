@@ -6,7 +6,7 @@
 
 ## O sistema
 
-O AlgaShop é um e-commerce decomposto em quatro microsserviços, cada um com banco próprio e ciclo de deploy independente — mais dois serviços que não são de negócio: o **authorization server**, que emite credencial, e o **service-registry** (Eureka), onde os serviços se anunciam e se descobrem.
+O AlgaShop é um e-commerce decomposto em quatro microsserviços, cada um com banco próprio e ciclo de deploy independente — mais três serviços que não são de negócio: o **authorization server**, que emite credencial; o **service-registry** (Eureka), onde os serviços se anunciam e se descobrem; e o **api-gateway**, a porta única de entrada.
 
 ```mermaid
 graph TB
@@ -19,6 +19,7 @@ graph TB
         S["<b>billing-scheduler</b><br/>jobs agendados"]
         A["<b>authorization-server</b><br/>:9000<br/>emite tokens OAuth2"]
         R["<b>service-registry</b><br/>:8761<br/>Eureka"]
+        G["<b>api-gateway</b><br/>:9999<br/>porta única de entrada"]
     end
 
     subgraph Bancos
@@ -29,8 +30,11 @@ graph TB
     FP[FastPay<br/>gateway externo<br/>:9995]
     RX[Rapidex<br/>transportadora]
 
-    Cliente --> O
-    Cliente --> C
+    Cliente --> G
+    G --> O
+    G --> C
+    G --> B
+    G -->|/api/v1/users| A
     O -->|HTTP: dados do produto| C
     O -->|evento: pedido confirmado| B
     B -->|HTTP| FP
@@ -43,6 +47,8 @@ graph TB
     C -.->|registra-se| R
     B -.->|registra-se| R
     A -.->|registra-se| R
+    G -.->|consulta sem se registrar| R
+    G -.->|valida assinatura via /oauth2/jwks| A
 
     O --- PG
     B --- PG
@@ -195,6 +201,8 @@ A diferença entre as duas chamadas de saída do `ordering` merece ser dita aqui
 | `ordering → Rapidex` (frete) | **degrada** — devolve um frete estimado, e o cliente não sabe |
 
 Não dá para inventar o preço de um produto; dá para estimar um frete. Ver [`resiliencia.md`](../01-arquitetura-design/resiliencia.md).
+
+🔄 **De fora para dentro, o caminho agora é um só.** Desde o módulo de API gateway, o cliente não chama mais `:8081`/`:8083` — ele chama o **api-gateway** (`:9999`), que valida o token na borda (assinatura, `iss`, `exp` — a autorização fina continua nos serviços), responde o CORS num lugar só e roteia por *service ID* no Eureka, na ordem declarada das rotas. As portas dos serviços seguem publicadas no host por enquanto — porta única por convenção, não por topologia. Ver [`api-gateway.md`](../04-infraestrutura/api-gateway.md). (Atenção ao vocabulário: o FastPay é *gateway de pagamento* — outro conceito, sem parentesco.)
 
 🔄 **E desde o módulo de service discovery, o endereço saiu da configuração.** A URL do catálogo no `ordering` deixou de ser `http://localhost:8083` e virou `http://product-catalog` — o host é um *service ID* resolvido no Eureka por um `RestClient.Builder` `@LoadBalanced`, com balanceamento entre as instâncias registradas. Contrato, cache e resiliência continuam exatamente onde estavam; só o endereçamento mudou de camada. A chamada ao Rapidex segue com URL fixa de propósito (integração externa não mora no registry). Ver [`service-discovery.md`](../04-infraestrutura/service-discovery.md).
 
