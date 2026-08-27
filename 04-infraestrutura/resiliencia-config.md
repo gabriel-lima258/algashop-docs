@@ -9,6 +9,8 @@
 
 ## A biblioteca: não é Resilience4j
 
+> 🔄 **Este título envelheceu bem — pela metade.** Desde a fase de resiliência na borda, o projeto tem **duas** bibliotecas: os serviços seguem no framework-retry descrito abaixo, e o **API Gateway usa Resilience4j de verdade** (`spring-cloud-starter-circuitbreaker-reactor-resilience4j`), com `resilience4j.circuitbreaker.instances.*` no YAML e janela deslizante + limiar percentual — todas as três coisas da coluna "o que se procura" da tabela abaixo existem agora, só que **na borda**. Qual biblioteca você está lendo depende de onde está: stack bloqueante → framework-retry; WebFlux → Resilience4j reactor. Ver [Resiliência na borda](./resiliencia-no-gateway.md).
+
 Vale abrir por aqui, porque é a primeira coisa que confunde quem procura material.
 
 | O que se procura | O que está no código |

@@ -16,7 +16,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | **`billing-scheduler`** | — | — | Jobs agendados, cancelamento de faturas expiradas |
 | **`authorization-server`** | 9000 | PostgreSQL | OAuth 2.1 e OIDC, gestão de usuários, PKCE para cliente público, sessão em banco |
 | **`service-registry`** | 8761 | — | Eureka Server: registro e descoberta de serviços, dashboard das instâncias |
-| **`api-gateway`** | 9999 | — | Spring Cloud Gateway: porta única de entrada, rotas por service ID, CORS global, token validado na borda |
+| **`api-gateway`** | 9999 | Redis (rate limit) | Spring Cloud Gateway: porta única de entrada, rotas por service ID, CORS global, token na borda — e resiliência completa: timeout, retry, circuit breaker, cache local e rate limit |
 
 > Como os serviços se conectam, quem chama quem e por quê: **[Arquitetura](./00-visao-geral/arquitetura.md)**
 
@@ -29,7 +29,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 34 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 35 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -82,6 +82,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Jobs agendados](./04-infraestrutura/scheduled-jobs.md) | `@Scheduled`, execução em ambiente distribuído e controle de concorrência |
 | [Service discovery](./04-infraestrutura/service-discovery.md) | O endereço que saiu da configuração: Eureka Server standalone, clients que se anunciam, os dois builders do load balancer — e o jeito novo de falhar que o discovery traz |
 | [API Gateway](./04-infraestrutura/api-gateway.md) | A porta de entrada virou uma só: rotas à mão por service ID (e por que a ordem delas é regra de negócio), CORS global, token na borda — e a rota que o `denyAll` matou antes do roteamento |
+| [Resiliência na borda](./04-infraestrutura/resiliencia-no-gateway.md) | Os cinco padrões chegam ao gateway com OUTRA biblioteca (Resilience4j reactor): retry que muda a unidade da janela do breaker, cache sobre cache, e rate limit por usuário que falha aberto — de propósito |
 
 ### 05 — Segurança
 
@@ -225,6 +226,9 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Ter uma porta só de entrada para o front | [API Gateway](./04-infraestrutura/api-gateway.md) |
 | Configurar CORS num lugar só | [API Gateway](./04-infraestrutura/api-gateway.md) |
 | Barrar requisição sem token antes de chegar no serviço | [API Gateway](./04-infraestrutura/api-gateway.md) |
+| Limitar requisições por usuário (rate limit) | [Resiliência na borda](./04-infraestrutura/resiliencia-no-gateway.md) |
+| Cachear resposta na borda (e somar as camadas de cache) | [Resiliência na borda](./04-infraestrutura/resiliencia-no-gateway.md) |
+| Impedir que um serviço lento derrube o gateway | [Resiliência na borda](./04-infraestrutura/resiliencia-no-gateway.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Fazer uma tela de consentimento própria | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |

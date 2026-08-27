@@ -749,7 +749,7 @@ O endereço saiu da configuração: um `service-registry` (Eureka, 8761) virou o
 
 ---
 
-## Fase 34 — API Gateway (ago/2026) ← etapa atual
+## Fase 34 — API Gateway (ago/2026)
 
 O discovery resolveu o endereço *entre* serviços; faltava a borda. Um Spring Cloud Gateway (porta 9999) virou a porta única de entrada: rotas declaradas à mão com `lb://<service-id>` resolvidas no Eureka, CORS global, e o token validado antes de a requisição tocar qualquer serviço — com a autorização fina continuando onde sempre esteve.
 
@@ -767,6 +767,28 @@ O discovery resolveu o endereço *entre* serviços; faltava a borda. Um Spring C
 **A lição da fase:** a borda concentra o que é de borda — endereço, CORS, anonimato — e devolve o resto para dentro. Um gateway que tentasse concentrar *toda* a segurança desfaria três fases de autorização fina nos serviços.
 
 > [`api-gateway.md`](../04-infraestrutura/api-gateway.md)
+
+---
+
+## Fase 35 — Resiliência na borda (ago/2026) ← etapa atual
+
+A Fase 16 blindou as três integrações de saída; a borda estava nua — e a borda multiplica: uma dependência lenta atrás do gateway pendura o tráfego de todos. Esta fase leva os padrões ao gateway com **outra biblioteca**: o Resilience4j (reactor) entra no projeto pela primeira vez, e um padrão novo chega junto — rate limit por usuário, com token bucket no Redis.
+
+| Marco | O que se aprende |
+|---|---|
+| Duas bibliotecas convivendo | framework-retry nos serviços (bloqueante), Resilience4j reactor na borda — a tabela "não é Resilience4j" ganhou os dois lados |
+| Retry em `default-filters` | `methods: GET,PUT` é idempotência declarada em YAML — POST nunca é retentado, a decisão do `capture` virou config |
+| Retry por FORA do breaker | Cada tentativa conta na janela: 1 requisição pode preencher 4 das 8 posições — a janela mede tentativas, não requisições |
+| `statusCodes` no breaker | 500 é sucesso de transporte; sem a lista, o circuito só enxergaria exceção |
+| Sem `fallbackUri`, por escolha | 503 honesto > resposta inventada — o "fallback que mente" da Fase 16, decidido de novo na borda |
+| Cache local sobre cache remoto | Caffeine in-process na borda + Redis no catálogo + max-age no cliente: a idade do dado é a SOMA das camadas |
+| Token bucket em Lua no Redis | Um balde por `sub` do JWT; `deny-empty-key` e o fallback `anonymous`; estourou = 429 com `X-RateLimit-*` |
+| Rate limit falha ABERTO | Redis fora → passa sem limitar: certo para limite, oposto do instinto de segurança — por isso está escrito |
+| A ordem, segunda temporada | O `permitAll` do webhook ficou atrás do `authenticated` de `/api/**` e o FastPay tomaria 401 — a lição das rotas, cobrada na security |
+
+**A lição da fase:** resiliência na borda não substitui a dos serviços — soma. E cada peça nova (retry, cache, limite) muda a **unidade de medida** das outras: a janela do breaker passa a contar tentativas, o limite passa a contar misses. Empilhar padrões exige reler o que cada um enxerga.
+
+> [`resiliencia-no-gateway.md`](../04-infraestrutura/resiliencia-no-gateway.md)
 
 ---
 
@@ -808,6 +830,7 @@ O discovery resolveu o endereço *entre* serviços; faltava a borda. Um Spring C
 - Configuração e segredos no Parameter Store/Secrets Manager (LocalStack), com seed por CSV e chave RSA no cofre
 - Service registry Eureka com quatro clients e balanceamento na chamada `ordering → product-catalog`
 - API Gateway como porta única (9999): rotas por service ID, CORS global e token validado na borda
+- Timeout, retry, circuit breaker (Resilience4j), cache local e rate limit por usuário na ENTRADA, no gateway
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar

@@ -1,7 +1,7 @@
 # API Gateway: a porta de entrada virou uma só
 
 > O [service discovery](./service-discovery.md) tirou o endereço da configuração para as chamadas *entre* serviços. Faltava a outra direção: quem vem de fora ainda conhecia quatro portas, e cada serviço barrava anônimo e negociava CORS por conta própria. Esta fase põe um Spring Cloud Gateway na frente de tudo — porta 9999, rotas resolvidas no Eureka, CORS num lugar só e token validado antes de a requisição tocar qualquer serviço.
-> Código real: `microservices/api-gateway` (novo) — `application.yaml` (rotas, globalcors), `GatewayEcommerceSecurityConfig` (resource server reativo), `EurekaClientConfig` · `docker-compose.services.yml`.
+> Código real: `microservices/api-gateway` (novo) — `application.yaml` (rotas, globalcors), `GatewayEcommerceSecurityConfig` (resource server reativo), `EurekaClientConfig`, `RateLimitConfig` · `docker-compose.services.yml`.
 > A resolução por service ID em [Service discovery](./service-discovery.md) · quem valida o quê em [Resource servers e escopos](../05-seguranca/resource-server-e-escopos.md) · o acoplamento de subida que voltou em [OAuth2 client e token](../05-seguranca/oauth2-client-e-token.md).
 
 **Aviso de vocabulário:** neste projeto "gateway" já era o FastPay — *gateway de pagamento*. São coisas sem parentesco: o FastPay é um provedor externo que o billing chama; o API gateway é a porta de entrada HTTP do sistema. Este documento é sobre o segundo.
@@ -91,7 +91,7 @@ O que a borda verifica: assinatura (via `/oauth2/jwks` do issuer), `iss`, `exp`.
 
 ### `denyAll` como default — e a rota que morreu por causa dele
 
-Tudo que não é `/api/**` nem `/actuator/health` responde 403. Esse default fechado teve uma vítima ilustrativa: existia uma rota de estudo `Path=/products/**` com `RewritePath` reescrevendo para `/api/v1/products/...` — e ela **nunca funcionou**, porque `/products/**` não casa com nenhum `pathMatchers` permitido e o 403 acontece **antes de o roteamento rodar**. A rota foi removida nesta fase; o filtro fica registrado como exemplo:
+Tudo que não é `/api/**` nem Actuator responde 403. (🔄 Na fase de resiliência, `/actuator/**` inteiro ficou **público em dev**, de propósito — `gateway/routes` e `circuitbreakers` são o laboratório do módulo; produção exige voltar ao health-only. E a mesma fase quase repetiu o erro da ordem na *security*: o `permitAll` do webhook chegou a ficar depois do `authenticated` de `/api/**` — ver [Resiliência na borda](./resiliencia-no-gateway.md).) Esse default fechado teve uma vítima ilustrativa: existia uma rota de estudo `Path=/products/**` com `RewritePath` reescrevendo para `/api/v1/products/...` — e ela **nunca funcionou**, porque `/products/**` não casa com nenhum `pathMatchers` permitido e o 403 acontece **antes de o roteamento rodar**. A rota foi removida nesta fase; o filtro fica registrado como exemplo:
 
 ```yaml
 filters:
@@ -149,7 +149,7 @@ spring.security.oauth2.resourceserver.jwt.issuer-uri: http://auth.algashop.local
 
 ## Pendências registradas
 
-- [ ] **Importar a config do Parameter Store** (`shared/auth-server-url`, `shared/service-registry-url`) em vez de duplicá-la — exige o starter da AWS e o `depends_on` do LocalStack.
+- [ ] **Importar a config do Parameter Store** (`shared/auth-server-url`, `shared/service-registry-url`) em vez de duplicá-la — exige o starter da AWS e o `depends_on` do LocalStack. 🔄 A fase de resiliência **ampliou** a dívida: host, porta, db e **senha** do Redis do rate limiter também estão no YAML versionado.
 - [ ] **Fechar as portas dos serviços no host** quando o front migrar para o gateway — porta única de verdade.
 - [ ] **Apontar o `webhook-url` do FastPay para o gateway** — a rota `billing-webhook-route` existe e não recebe tráfego.
 - [ ] **`api.algashop.local`** no hosts e no CORS/redirects, dando nome à borda.

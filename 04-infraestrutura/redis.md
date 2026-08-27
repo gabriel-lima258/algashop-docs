@@ -175,7 +175,7 @@ spring:
       host: localhost
       port: 6379
       password: algashop
-      database: 0        # o ordering usa o 1
+      database: 0        # o ordering usa o 1; o gateway usa o 3 (rate limiter) - ver tabela abaixo
       timeout: 600
 ```
 
@@ -203,7 +203,7 @@ Duas coisas para não errar:
 ## Pendências registradas
 
 - [ ] **O cache não popula, mesmo com o Redis acessível.** Depois da correção da senha, `redis-cli -a algashop ping` responde e o servidor está saudável — mas com a aplicação de pé e servindo requisições, `DBSIZE` continua em `0` e `connected_clients` mostra que ela **nem abre conexão**. A causa está do lado da aplicação, não do Redis, e não foi identificada. Ver [`cache.md`](../01-arquitetura-design/cache.md#-o-estado-real-o-cache-não-popula-na-aplicação-rodando).
-- [ ] **Um Redis para dois serviços.** Bancos lógicos separam namespace, não memória: o `maxmemory` é do processo inteiro, e o `allkeys-lru` despeja chaves de qualquer banco. Um serviço pode expulsar o cache do outro.
+- [ ] **Um Redis para dois serviços.** 🔄 Agora **três**: o gateway guarda os contadores do rate limiter no db 3. Bancos lógicos separam namespace, não memória: o `maxmemory` é do processo inteiro, e o `allkeys-lru` despeja chaves de qualquer banco. Um serviço pode expulsar o cache do outro — e, pior, **o cache pode expulsar os contadores do limite**, que resetam em silêncio. Cache perdido se repõe; contador perdido mente. Ver [Resiliência na borda](./resiliencia-no-gateway.md).
 - [ ] **Sem TLS e sem ACL.** Senha única compartilhada, em texto no `.env` versionado. Aceitável localmente; num ambiente real seriam usuários por serviço com ACL restringindo comandos, e TLS no transporte.
 - [ ] **`--requirepass` continua interpolado do `.env`.** Funciona, mas o `environment:` do serviço ficou lá sem uso — duas fontes para a mesma informação é o que causou o problema original.
 - [ ] **Cache configurado só em `development`.** Nem `docker` nem `production` definem `spring.cache.type`.

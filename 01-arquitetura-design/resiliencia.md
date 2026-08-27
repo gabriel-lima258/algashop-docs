@@ -135,6 +135,8 @@ return circuitBreaker.run(() -> loadProduct(productId));
 
 > ⚠️ **Não há limiar de falhas.** **Uma única** execução que termine em exceção leva CLOSED → OPEN. É uma diferença grande em relação ao Resilience4j, cujo padrão é abrir por **percentual de falha numa janela deslizante**. Aqui um pico isolado abre o circuito.
 
+> 🔄 O contraste deixou de ser teórico: desde a fase de resiliência na borda, o **API Gateway usa exatamente esse outro modelo** — Resilience4j reactor, `slidingWindowSize: 8`, `failureRateThreshold: 50%`. As duas bibliotecas convivem no sistema, cada uma na stack que a exige. Ver [Resiliência na borda](../04-infraestrutura/resiliencia-no-gateway.md).
+
 ### Fallback — a pergunta que ele obriga a responder
 
 *Existe resposta aproximada aceitável?* E a resposta honesta quase sempre é "depende do que a resposta significa".
