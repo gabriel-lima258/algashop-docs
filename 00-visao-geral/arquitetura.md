@@ -6,11 +6,12 @@
 
 ## O sistema
 
-O AlgaShop é um e-commerce decomposto em quatro microsserviços, cada um com banco próprio e ciclo de deploy independente — mais três serviços que não são de negócio: o **authorization server**, que emite credencial; o **service-registry** (Eureka), onde os serviços se anunciam e se descobrem; e o **api-gateway**, a porta única de entrada.
+O AlgaShop é um e-commerce decomposto em quatro microsserviços, cada um com banco próprio e ciclo de deploy independente — mais quatro serviços que não são de negócio: o **authorization server** (credencial), o **service-registry** (Eureka), e **dois API gateways, um por público**: `api-gateway-ecommerce` (9999) e `api-gateway-admin` (9998). E, desde a Fase 36, os dois **frontends** vivem no repositório: a SPA do admin (Angular, :4200) e o app server-side do e-commerce (Spring + Thymeleaf, :9080) — o BFF.
 
 ```mermaid
 graph TB
-    Cliente([Cliente])
+    SPA["<b>admin-app</b><br/>:4200<br/>SPA Angular · PKCE"]
+    ECA["<b>ecommerce-app</b><br/>:9080<br/>Spring + Thymeleaf · BFF"]
 
     subgraph Serviços
         O["<b>ordering</b><br/>:8081<br/>pedidos e carrinho"]
@@ -19,7 +20,8 @@ graph TB
         S["<b>billing-scheduler</b><br/>jobs agendados"]
         A["<b>authorization-server</b><br/>:9000<br/>emite tokens OAuth2"]
         R["<b>service-registry</b><br/>:8761<br/>Eureka"]
-        G["<b>api-gateway</b><br/>:9999<br/>porta única de entrada"]
+        G["<b>api-gateway-ecommerce</b><br/>:9999"]
+        GA["<b>api-gateway-admin</b><br/>:9998"]
     end
 
     subgraph Bancos
@@ -30,11 +32,18 @@ graph TB
     FP[FastPay<br/>gateway externo<br/>:9995]
     RX[Rapidex<br/>transportadora]
 
-    Cliente --> G
+    ECA --> G
+    SPA --> GA
+    SPA -.->|login, PKCE, silent refresh| A
+    ECA -.->|OIDC + authorization_code| A
     G --> O
     G --> C
     G --> B
     G -->|/api/v1/users| A
+    GA --> O
+    GA --> C
+    GA --> B
+    GA -->|/api/v1/users| A
     O -->|HTTP: dados do produto| C
     O -->|evento: pedido confirmado| B
     B -->|HTTP| FP
@@ -48,7 +57,9 @@ graph TB
     B -.->|registra-se| R
     A -.->|registra-se| R
     G -.->|consulta sem se registrar| R
+    GA -.->|consulta sem se registrar| R
     G -.->|valida assinatura via /oauth2/jwks| A
+    GA -.->|valida assinatura via /oauth2/jwks| A
 
     O --- PG
     B --- PG
@@ -202,7 +213,7 @@ A diferença entre as duas chamadas de saída do `ordering` merece ser dita aqui
 
 Não dá para inventar o preço de um produto; dá para estimar um frete. Ver [`resiliencia.md`](../01-arquitetura-design/resiliencia.md).
 
-🔄 **De fora para dentro, o caminho agora é um só.** Desde o módulo de API gateway, o cliente não chama mais `:8081`/`:8083` — ele chama o **api-gateway** (`:9999`), que valida o token na borda (assinatura, `iss`, `exp` — a autorização fina continua nos serviços), responde o CORS num lugar só e roteia por *service ID* no Eureka, na ordem declarada das rotas. As portas dos serviços seguem publicadas no host por enquanto — porta única por convenção, não por topologia. Ver [`api-gateway.md`](../04-infraestrutura/api-gateway.md). (Atenção ao vocabulário: o FastPay é *gateway de pagamento* — outro conceito, sem parentesco.)
+🔄 **De fora para dentro, o caminho é a borda — e desde a Fase 36 são duas, uma por público.** O cliente não chama mais `:8081`/`:8083`: o app do e-commerce (BFF server-side, :9080) entra pelo `api-gateway-ecommerce` (:9999) e a SPA do admin (:4200) pelo `api-gateway-admin` (:9998). Cada borda valida o token (assinatura, `iss`, `exp` — a autorização fina continua nos serviços), roteia por *service ID* no Eureka e carrega o que o SEU público precisa: CORS e JSON enxuto no admin, cache local e composição da home no e-commerce. O login nunca passa pelos gateways — os dois apps falam direto com o authorization server. As portas dos serviços seguem publicadas no host por enquanto. Ver [`api-gateway.md`](../04-infraestrutura/api-gateway.md) e [`bff-e-gateways-por-cliente.md`](../04-infraestrutura/bff-e-gateways-por-cliente.md). (Vocabulário: FastPay é *gateway de pagamento*; e **BFF ≠ gateway** — o BFF é o app do e-commerce.)
 
 🔄 **E desde o módulo de service discovery, o endereço saiu da configuração.** A URL do catálogo no `ordering` deixou de ser `http://localhost:8083` e virou `http://product-catalog` — o host é um *service ID* resolvido no Eureka por um `RestClient.Builder` `@LoadBalanced`, com balanceamento entre as instâncias registradas. Contrato, cache e resiliência continuam exatamente onde estavam; só o endereçamento mudou de camada. A chamada ao Rapidex segue com URL fixa de propósito (integração externa não mora no registry). Ver [`service-discovery.md`](../04-infraestrutura/service-discovery.md).
 

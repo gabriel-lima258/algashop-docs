@@ -770,7 +770,7 @@ O discovery resolveu o endereço *entre* serviços; faltava a borda. Um Spring C
 
 ---
 
-## Fase 35 — Resiliência na borda (ago/2026) ← etapa atual
+## Fase 35 — Resiliência na borda (ago/2026)
 
 A Fase 16 blindou as três integrações de saída; a borda estava nua — e a borda multiplica: uma dependência lenta atrás do gateway pendura o tráfego de todos. Esta fase leva os padrões ao gateway com **outra biblioteca**: o Resilience4j (reactor) entra no projeto pela primeira vez, e um padrão novo chega junto — rate limit por usuário, com token bucket no Redis.
 
@@ -789,6 +789,28 @@ A Fase 16 blindou as três integrações de saída; a borda estava nua — e a b
 **A lição da fase:** resiliência na borda não substitui a dos serviços — soma. E cada peça nova (retry, cache, limite) muda a **unidade de medida** das outras: a janela do breaker passa a contar tentativas, o limite passa a contar misses. Empilhar padrões exige reler o que cada um enxerga.
 
 > [`resiliencia-no-gateway.md`](../04-infraestrutura/resiliencia-no-gateway.md)
+
+---
+
+## Fase 36 — BFF: a borda por cliente, e o front no repositório (ago/2026) ← etapa atual
+
+A "porta única" durou duas fases — e a divisão não foi acidente. A borda virou **duas, uma por público** (`api-gateway-ecommerce` 9999, `api-gateway-admin` 9998), e os frontends entraram como submódulos: a SPA Angular do admin e o app server-side do e-commerce — o **BFF de verdade**, que guarda o token em sessão no Redis e nunca o entrega ao navegador.
+
+| Marco | O que se aprende |
+|---|---|
+| Dois gateways por público | Rotas do tamanho do uso real de cada cliente — rota que ninguém chama é superfície de ataque de graça |
+| Cache por necessidade, não por endpoint | O admin perdeu o cache local (quem escreve lê a própria escrita) e o catálogo trocou `max-age` por `no-cache` — a política de cache é do PÚBLICO |
+| API composition na borda | `Mono.zip` + unwrap do envelope + `Map` sem DTO; o token repassado; a primeira autorização por ESCOPO no gateway |
+| O timeout que não cobria | O `response-timeout` do gateway é do proxy — o `WebClient` da composição precisou do próprio `.timeout()` e de degradação por ramo |
+| JSON por cliente, duas técnicas | Composição (e-commerce) e `RemoveJsonAttributesResponseBody` recursivo em rota dedicada (admin) — que escapou do rate limit por ordem, terceira temporada da lição |
+| BFF ≠ gateway | Client confidencial + sessão server-side dispensam PKCE; a SPA pública precisa dele — o modelo de token segue o modelo do cliente |
+| Consent é para terceiros | `require-authorization-consent: false` no client first-party — a tela continua para quem não for da casa |
+| Healthy ≠ pronto | O LocalStack só fica healthy com o seed COMPLETO (`init/ready` completed: true) — o catálogo chegou a subir antes de o secret existir |
+| Produção fail-fast | `production-env` lê env vars SEM default: faltou variável, o boot morre cedo com nome de propriedade |
+
+**A lição da fase:** a borda certa tem o formato do cliente que a usa. Generalizar a borda foi útil por duas fases; especializá-la é o que permitiu dar a cada público o cache, o CORS, o JSON e o modelo de token que ele precisa — sem contorcer o outro.
+
+> [`bff-e-gateways-por-cliente.md`](../04-infraestrutura/bff-e-gateways-por-cliente.md)
 
 ---
 
@@ -831,6 +853,8 @@ A Fase 16 blindou as três integrações de saída; a borda estava nua — e a b
 - Service registry Eureka com quatro clients e balanceamento na chamada `ordering → product-catalog`
 - API Gateway como porta única (9999): rotas por service ID, CORS global e token validado na borda
 - Timeout, retry, circuit breaker (Resilience4j), cache local e rate limit por usuário na ENTRADA, no gateway
+- A borda dividida por público: dois gateways com rotas, cache e CORS por cliente, config no Parameter Store
+- Os dois frontends no repositório: SPA Angular (PKCE) e BFF server-side (sessão em Redis), com composição na borda
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
@@ -843,11 +867,11 @@ A Fase 16 blindou as três integrações de saída; a borda estava nua — e a b
 - **Permitir back-office fazer pedido em nome do cliente** — hoje `verifyCanOrderFor` exige ser o próprio
 - **Fazer `prompt=none` responder `login_required`** — hoje ele redireciona para `/login` e o iframe da SPA fica em silêncio
 - **Claim explícito de tipo de token** — hoje "máquina ou pessoa?" é deduzido comparando `aud` e `sub`
-- **Pôr o authorization server no compose** — no perfil `docker` o `ordering` não alcança o issuer
+- ~~**Pôr o authorization server no compose** — no perfil `docker` o `ordering` não alcança o issuer~~ — no compose desde a Fase 26; com healthcheck desde a Fase 36
 - **Validar audiência (`aud`)** — hoje um token vale em qualquer um dos três serviços
 - **Verificar a origem do webhook do FastPay** — ele muda estado de fatura sem autenticação nenhuma
 - ~~**Persistir a chave de assinatura** — hoje cada reinício invalida todo JWT emitido~~ — resolvido pela metade no módulo de segredos centralizados: a chave vem do Secrets Manager e sobrevive ao restart do auth server, mas ainda é regenerada quando o LocalStack é recriado ([detalhes](../05-seguranca/segredos-centralizados-e-chave-rsa.md))
-- **`authorization_code` + PKCE e um usuário de verdade** — o fluxo com pessoa ainda não existe
+- ~~**`authorization_code` + PKCE e um usuário de verdade** — o fluxo com pessoa ainda não existe~~ — existe desde as Fases 23-28, e a Fase 36 pôs os dois modelos lado a lado: SPA pública com PKCE e BFF confidencial com sessão
 - **Testes para imagens e storage** — hoje são zero, e o `StorageProviderFakeImpl` existe exatamente para isso sem ser usado por nenhum
 - **Recolher objetos órfãos no bucket** — entre autorizar e reivindicar, o arquivo pode ficar sem dono
 - **Tirar as duas chamadas HTTP de dentro da `@Transactional` do `buyNow`** — o `billing` já fez o equivalente na Fase 16

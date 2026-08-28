@@ -16,7 +16,10 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | **`billing-scheduler`** | — | — | Jobs agendados, cancelamento de faturas expiradas |
 | **`authorization-server`** | 9000 | PostgreSQL | OAuth 2.1 e OIDC, gestão de usuários, PKCE para cliente público, sessão em banco |
 | **`service-registry`** | 8761 | — | Eureka Server: registro e descoberta de serviços, dashboard das instâncias |
-| **`api-gateway`** | 9999 | Redis (rate limit) | Spring Cloud Gateway: porta única de entrada, rotas por service ID, CORS global, token na borda — e resiliência completa: timeout, retry, circuit breaker, cache local e rate limit |
+| **`api-gateway-ecommerce`** | 9999 | Redis (rate limit, db 3) | Borda do e-commerce: rotas por service ID, token na borda, cache local, API composition da home e resiliência completa |
+| **`api-gateway-admin`** | 9998 | Redis (rate limit, db 5) | Borda do admin: CORS da SPA, JSON enxuto na listagem (`RemoveJsonAttributesResponseBody`), mesmas fundações de resiliência |
+| **`ecommerce-app`** | 9080 | Redis (sessão, db 4) | O BFF: Spring + Thymeleaf, OAuth2 client confidencial, token em sessão — o navegador nunca o vê |
+| **`admin-app`** | 4200 | — | SPA Angular 17 com PKCE, falando direto com o authorization server para login |
 
 > Como os serviços se conectam, quem chama quem e por quê: **[Arquitetura](./00-visao-geral/arquitetura.md)**
 
@@ -29,7 +32,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 35 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 36 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -83,6 +86,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Service discovery](./04-infraestrutura/service-discovery.md) | O endereço que saiu da configuração: Eureka Server standalone, clients que se anunciam, os dois builders do load balancer — e o jeito novo de falhar que o discovery traz |
 | [API Gateway](./04-infraestrutura/api-gateway.md) | A porta de entrada virou uma só: rotas à mão por service ID (e por que a ordem delas é regra de negócio), CORS global, token na borda — e a rota que o `denyAll` matou antes do roteamento |
 | [Resiliência na borda](./04-infraestrutura/resiliencia-no-gateway.md) | Os cinco padrões chegam ao gateway com OUTRA biblioteca (Resilience4j reactor): retry que muda a unidade da janela do breaker, cache sobre cache, e rate limit por usuário que falha aberto — de propósito |
+| [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) | A borda dividida por público: cache por necessidade, JSON do tamanho do cliente, API composition com degradação por ramo — e por que BFF não é sinônimo de gateway |
 
 ### 05 — Segurança
 
@@ -223,12 +227,15 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Chamar outro serviço pelo nome, sem URL fixa | [Service discovery](./04-infraestrutura/service-discovery.md) |
 | Balancear chamadas entre réplicas de um serviço | [Service discovery](./04-infraestrutura/service-discovery.md) |
 | Registrar um serviço no Eureka (e saber quem não deve) | [Service discovery](./04-infraestrutura/service-discovery.md) |
-| Ter uma porta só de entrada para o front | [API Gateway](./04-infraestrutura/api-gateway.md) |
-| Configurar CORS num lugar só | [API Gateway](./04-infraestrutura/api-gateway.md) |
+| Ter uma borda de entrada para cada front | [API Gateway](./04-infraestrutura/api-gateway.md), [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) |
+| Configurar CORS na borda certa (e saber quando nem precisa) | [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) |
 | Barrar requisição sem token antes de chegar no serviço | [API Gateway](./04-infraestrutura/api-gateway.md) |
 | Limitar requisições por usuário (rate limit) | [Resiliência na borda](./04-infraestrutura/resiliencia-no-gateway.md) |
 | Cachear resposta na borda (e somar as camadas de cache) | [Resiliência na borda](./04-infraestrutura/resiliencia-no-gateway.md) |
 | Impedir que um serviço lento derrube o gateway | [Resiliência na borda](./04-infraestrutura/resiliencia-no-gateway.md) |
+| Montar um BFF (e entender por que ele dispensa PKCE) | [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) |
+| Compor respostas de vários endpoints numa só | [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) |
+| Otimizar o JSON por tipo de cliente | [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Fazer uma tela de consentimento própria | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |

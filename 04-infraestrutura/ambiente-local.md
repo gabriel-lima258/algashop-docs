@@ -78,12 +78,14 @@ docker compose -f docker-compose.tools.yml up -d
 
 ### Os nomes `*.algashop.local` no `/etc/hosts`
 
-Desde a Fase 26 o projeto usa três nomes sob um domínio-pai comum, e **todos** precisam resolver na máquina de quem desenvolve:
+Desde a Fase 26 o projeto usa nomes sob um domínio-pai comum, e **todos** precisam resolver na máquina de quem desenvolve — com a Fase 36, as bordas ganharam nome também:
 
 ```
-127.0.0.1 algashop.local          # o e-commerce (9080)
-127.0.0.1 admin.algashop.local    # a SPA de administração (4200)
-127.0.0.1 auth.algashop.local     # o authorization server (9000)
+127.0.0.1 algashop.local           # o e-commerce app (9080)
+127.0.0.1 admin.algashop.local     # a SPA de administração (4200)
+127.0.0.1 auth.algashop.local      # o authorization server (9000)
+127.0.0.1 api.algashop.local       # gateway do e-commerce (9999)
+127.0.0.1 admin-api.algashop.local # gateway do admin (9998)
 ```
 
 A lista completa está em `etc/hostnames/hostnames`, para copiar no `/etc/hosts`.
@@ -125,7 +127,7 @@ Desde a Fase 18 o comando é o mais curto possível:
 docker compose up -d
 ```
 
-O `docker-compose.yml` inclui o de serviços, que por sua vez inclui o de tools — um `up` sobe **tudo**: infraestrutura, `ordering` (8081), `billing` (8082), `product-catalog` (8083), o `billing-scheduler`, desde a Fase 26 o `authorization-server` (9000) e, desde os módulos de service discovery e API gateway, o `service-registry` (8761 — os quatro clients esperam o healthcheck dele) e o `api-gateway` (9999 — espera o registry e o authorization server, porque o `issuer-uri` roda no bootstrap). Exige que as imagens já existam localmente (`gabriel58221/*:dev`) — ver [`docker.md`](./docker.md).
+O `docker-compose.yml` inclui o de serviços, que por sua vez inclui o de tools — um `up` sobe **tudo**: infraestrutura, os quatro serviços de negócio, o `authorization-server` (9000), o `service-registry` (8761), **os dois gateways** (`api-gateway-ecommerce` 9999 e `api-gateway-admin` 9998 — esperam registry, authorization server, Redis e LocalStack healthy) e, desde a Fase 36, **os dois apps**: `algashop-admin-app` (4200→80, nginx) e `algashop-ecommerce-app` (9080). Exige que as imagens já existam localmente (`gabriel58221/*:dev` e `algashop/*:dev`) — o **`build-dev-docker.sh`** na raiz constrói todas de uma vez (`bash build-dev-docker.sh`); ver também [`docker.md`](./docker.md).
 
 O `billing-scheduler` entrou como o que ele é: um job efêmero. Ele sobe, cancela as faturas vencidas e **encerra com código 0** — por isso `restart: no` e nenhuma porta publicada. Vê-lo como `Exited (0)` no `compose ps` é o comportamento correto, não uma falha. Em produção quem o reexecuta seria um CronJob; aqui, um `docker compose up algashop-billing-scheduler` quando quiser.
 
@@ -165,7 +167,10 @@ A tabela que evita 90% dos problemas de "não conecta":
 | `algashop-billing` | **8082** | 8082 | PostgreSQL |
 | `product-catalog` | **8083** | 8083 | MongoDB |
 | `service-registry` | **8761** | 8761 | Eureka — dashboard em `http://localhost:8761` |
-| `api-gateway` | **9999** | 9999 | porta única de entrada — roteia por service ID via Eureka |
+| `api-gateway-ecommerce` | **9999** | 9999 | borda do e-commerce — service ID via Eureka, cache local, composição |
+| `api-gateway-admin` | **9998** | 9998 | borda do admin — CORS da SPA, JSON enxuto na listagem |
+| `admin-app` | **4200** | 80 | SPA Angular servida por nginx |
+| `ecommerce-app` | **9080** | 9080 | app server-side (BFF) — Thymeleaf + sessão no Redis |
 | `billing-scheduler` | — | — | sem porta HTTP (só jobs) |
 | `authorization-server` | **9000** | 9000 | PostgreSQL · responde por `auth.algashop.local` |
 | PostgreSQL | **5433** | 5432 | ⚠️ deslocada de propósito |
@@ -213,8 +218,9 @@ Desde a Fase 17 os três serviços com HTTP expõem Actuator:
 curl -s localhost:8081/actuator/health | jq            # tudo: banco, cache, circuitos
 curl -s localhost:8081/actuator/health/readiness | jq  # só o essencial para atender
 curl -s localhost:8081/actuator/info | jq
-curl -s localhost:9999/actuator/health | jq            # o gateway (público de propósito)
-curl -s localhost:9999/actuator/gateway/routes | jq    # a tabela de rotas VIVA do gateway
+curl -s localhost:9999/actuator/health | jq            # gateway do e-commerce (público de propósito)
+curl -s localhost:9999/actuator/gateway/routes | jq    # a tabela de rotas VIVA de cada gateway
+curl -s localhost:9998/actuator/gateway/routes | jq    # idem, borda do admin
 ```
 
 O `readiness` inclui **só o banco** — cache e circuitos fora do ar não tiram a instância de rotação. Ver [`health-checks.md`](./health-checks.md).

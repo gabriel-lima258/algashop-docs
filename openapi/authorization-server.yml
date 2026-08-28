@@ -19,7 +19,7 @@ info:
     url: https://docs.spring.io/spring-security/reference/servlet/oauth2/authorization-server/index.html
 
 servers:
-  - url: http://127.0.0.1:8081
+  - url: http://auth.algashop.local:9000
     description: Servidor local de desenvolvimento
 
 tags:

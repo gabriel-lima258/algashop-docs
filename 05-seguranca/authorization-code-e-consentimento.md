@@ -304,6 +304,10 @@ E o mesmo endpoint ganhou um uso novo: com `prompt=none`, o `/oauth2/authorize` 
 
 ---
 
+## 🔄 Consentimento desligado para o client first-party (Fase 36)
+
+O `algashop-ecommerce-web` passou a ter `require-authorization-consent: false`. Não é recuo da Fase 28 — é o entendimento fino do que o consentimento protege: **o usuário contra terceiros**. Quando o client é a própria loja (first-party), a tela perguntando "você autoriza a nós mesmos a ver seus pedidos?" é atrito sem informação. A tela continua existindo, e volta a aparecer para qualquer client que não seja da casa. Ver [BFF e gateways por cliente](../04-infraestrutura/bff-e-gateways-por-cliente.md).
+
 ## 🔄 A tela de consentimento agora é nossa (Fase 28)
 
 O `consentPage("/oauth2/consent")` tira do Spring a tela padrão. O `AuthorizationConsentController` recebe os parâmetros do servidor, separa o que já foi aprovado do que falta, e traduz cada escopo em frase legível — `products:read` vira *"Read products."*.

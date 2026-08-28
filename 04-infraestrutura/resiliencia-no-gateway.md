@@ -1,5 +1,7 @@
 # Resiliência na borda: os cinco padrões chegam ao gateway — com outra biblioteca
 
+> 🔄 **Desde a Fase 36 são DOIS gateways** (`api-gateway-ecommerce` 9999 e `api-gateway-admin` 9998), e tudo aqui vale para ambos — com os parâmetros de httpclient e Redis vindos do Parameter Store, por gateway. As diferenças (cache só no ecommerce, dbs separados) estão em [BFF e gateways por cliente](./bff-e-gateways-por-cliente.md).
+
 > A [Resiliência](../01-arquitetura-design/resiliencia.md) blindou as três integrações de **saída** (ordering→catálogo, ordering→Rapidex, billing→FastPay). A borda ficou nua — e a borda multiplica: uma dependência lenta atrás do gateway pendura conexões de **todo** o tráfego, não de um cliente. Esta fase leva timeout, retry, circuit breaker, cache e um padrão novo — rate limit — para o [API Gateway](./api-gateway.md). E traz, pela primeira vez no projeto, o Resilience4j de verdade.
 > Código real: `microservices/api-gateway` — `application.yaml` (`httpclient`, `default-filters`, filtros por rota, `resilience4j.circuitbreaker.instances`) e `config/security/RateLimitConfig.java`.
 > Os cinco padrões em [Resiliência](../01-arquitetura-design/resiliencia.md) · a configuração dos serviços em [Resiliência na prática](./resiliencia-config.md) · o Redis compartilhado em [Redis na prática](./redis.md).
@@ -162,8 +164,8 @@ No meio deste diff, a regra `.pathMatchers("/api/**").authenticated()` foi parar
 
 ## Armadilhas
 
-- **`allkeys-lru` pode despejar os contadores do rate limiter.** O Redis é compartilhado (db 0 catálogo, db 1 ordering, db 3 gateway) e a política de eviction **não respeita banco lógico**: sob pressão de memória, o cache de produto pode expulsar as chaves do limitador — e chave despejada = balde cheio de novo, **limite resetado em silêncio**. Cache perdido se repõe; contador perdido mente.
-- **O Redis do gateway está hardcoded — host, senha e db no YAML versionado.** Sem perfil, sem entrada no `etc/hostnames/hostnames` (não há `algashop-redis` lá) e fora do Parameter Store. Fora do Docker, o gateway não resolve o host, não conecta — e o rate limit **falha aberto sem nenhum aviso**. E se alguém trocar a senha via `.env`, tudo continua funcionando *menos* o limite.
+- **`allkeys-lru` pode despejar os contadores do rate limiter.** O Redis é compartilhado (🔄 mapa atual: db 0 cache do catálogo, db 1 cache do ordering, db 3 buckets do ecommerce-gateway, db 4 sessões do ecommerce-app, db 5 buckets do admin-gateway) e a política de eviction **não respeita banco lógico**: sob pressão de memória, o cache de produto pode expulsar as chaves do limitador — e chave despejada = balde cheio de novo, **limite resetado em silêncio**. Cache perdido se repõe; contador perdido mente.
+- ~~**O Redis do gateway está hardcoded — host, senha e db no YAML versionado.**~~ 🔄 Resolvida na Fase 36: host/porta/db no Parameter Store, senha no Secrets Manager, perfis por ambiente. Sobrevive como lição: enquanto durou, o rate limit **falhava aberto sem aviso** fora do Docker — o modo de falha silencioso é o que torna config errada de limitador invisível.
 - **`/actuator/**` inteiro está público** — incluindo `/actuator/gateway/routes` (a tabela de roteamento com service IDs) e `/actuator/circuitbreakers`. Decisão deliberada e **restrita a desenvolvimento** (é o laboratório do módulo); produção exige voltar ao health-only.
 - **O 504 não é retentado, mas abre o circuito** — a assimetria `statuses` × `statusCodes` descrita acima.
 - **`TRACE`/`DEBUG` de logging seguem ligados** — pendência da Fase 34, ainda de pé; o log do KeyResolver foi rebaixado para `debug` nesta fase (era uma linha com o `sub` do usuário por requisição).
@@ -172,7 +174,7 @@ No meio deste diff, a regra `.pathMatchers("/api/**").authenticated()` foi parar
 ## Pendências registradas
 
 - [ ] **Redis do rate limiter sob política segura** — instância própria, ou eviction que preserve os contadores; hoje o LRU do cache pode zerar limites.
-- [ ] **Config do gateway no Parameter Store** — a pendência da Fase 34 cresceu: agora são issuer, registry e **quatro valores de Redis, um deles senha**, duplicados no YAML.
+- [x] ~~**Config do gateway no Parameter Store**~~ Resolvida na Fase 36 — 11 parâmetros + 2 segredos, sem duplicação. Ver [BFF e gateways por cliente](./bff-e-gateways-por-cliente.md).
 - [ ] **Circuit breaker nas demais rotas** — só o ordering tem; billing, catálogo e auth-server podem cair sem nada abrir na borda.
 - [ ] **`fallbackUri` quando existir degradação honesta** — hoje 503 cru, por escolha documentada.
 - [ ] **Timeout por rota (`metadata`)** — 5s únicos para leituras baratas e escritas transacionais.

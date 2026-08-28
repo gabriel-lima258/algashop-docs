@@ -6,6 +6,8 @@
 
 **Aviso de vocabulário:** neste projeto "gateway" já era o FastPay — *gateway de pagamento*. São coisas sem parentesco: o FastPay é um provedor externo que o billing chama; o API gateway é a porta de entrada HTTP do sistema. Este documento é sobre o segundo.
 
+> 🔄 **A porta única durou duas fases — e este documento descreve exatamente elas.** Na Fase 36 a borda se dividiu por público: o repo virou `microservices/api-gateway-ecommerce` (9999) e nasceu o `api-gateway-admin` (9998), cada um com rotas, CORS e cache do seu cliente. O que está escrito aqui continua valendo como fundamento (rotas à mão, ordem, token na borda) — a divisão e seus porquês estão em [BFF e gateways por cliente](./bff-e-gateways-por-cliente.md).
+
 ---
 
 ## O problema: N portas, N configurações de borda
@@ -70,7 +72,7 @@ eureka:
 
 ## Token na borda, autorização no destino
 
-O gateway **é um resource server** — o quinto do sistema, e o primeiro reativo (WebFlux, `SecurityWebFilterChain` em vez de `SecurityFilterChain`):
+O gateway **é um resource server** — o quinto do sistema (🔄 sexto, desde o gateway admin da Fase 36), e o primeiro reativo (WebFlux, `SecurityWebFilterChain` em vez de `SecurityFilterChain`):
 
 ```java
 http.cors(Customizer.withDefaults())
@@ -149,10 +151,10 @@ spring.security.oauth2.resourceserver.jwt.issuer-uri: http://auth.algashop.local
 
 ## Pendências registradas
 
-- [ ] **Importar a config do Parameter Store** (`shared/auth-server-url`, `shared/service-registry-url`) em vez de duplicá-la — exige o starter da AWS e o `depends_on` do LocalStack. 🔄 A fase de resiliência **ampliou** a dívida: host, porta, db e **senha** do Redis do rate limiter também estão no YAML versionado.
-- [ ] **Fechar as portas dos serviços no host** quando o front migrar para o gateway — porta única de verdade.
+- [x] ~~**Importar a config do Parameter Store**~~ 🔄 Resolvida na Fase 36: 11 parâmetros + 2 segredos nos namespaces `gateway-ecommerce`/`gateway-admin`, com perfis por ambiente e produção fail-fast por env var. Ver [BFF e gateways por cliente](./bff-e-gateways-por-cliente.md).
+- [ ] **Fechar as portas dos serviços no host** — 🔄 a condição chegou: os fronts migraram para os gateways na Fase 36; falta só fechar.
 - [ ] **Apontar o `webhook-url` do FastPay para o gateway** — a rota `billing-webhook-route` existe e não recebe tráfego.
-- [ ] **`api.algashop.local`** no hosts e no CORS/redirects, dando nome à borda.
+- [x] ~~**`api.algashop.local`** no hosts e no CORS/redirects, dando nome à borda.~~ Resolvida na Fase 36: `api.algashop.local` (9999) e `admin-api.algashop.local` (9998) no `etc/hostnames/hostnames`, consumidos pelos apps.
 - [ ] **Baixar o logging** para INFO com chave de ambiente.
 - [ ] **Testes: zero** — não há `src/test/`; um `@WebFluxTest`-like das regras de security e um teste de rotas seriam o mínimo.
 - [ ] **Healthcheck HTTP real** — o do compose é teste de porta (`/dev/tcp`), pelo mesmo motivo do registry: a imagem temurin-jre não traz curl.

@@ -228,6 +228,8 @@ Um produto em cache continua servindo o **nome antigo da categoria** até o TTL 
 
 **A resposta escolhida foi encurtar o TTL, não acoplar o listener ao cache.** O TTL de `algashop:products:v1` passou de 5 para 1 minuto — que é também o `max-age` que o `ProductController` publica, então as duas camadas passaram a contar a mesma história.
 
+> 🔄 **E na Fase 36 o `max-age` do detalhe de produto morreu de vez** — `findById` passou a responder `Cache-Control: no-cache`. O motivo não foi o dado, foi o **cliente**: o admin agora escreve no catálogo pela mesma API que lê, e quem escreve precisa ler a própria escrita. O cache client-side recuou; o cache na borda ficou só no gateway do e-commerce, cujo público apenas lê. A camada certa de cache depende de *quem* consome — ver [BFF e gateways por cliente](../04-infraestrutura/bff-e-gateways-por-cliente.md).
+
 A troca, dita por inteiro: o listener publicaria uma evicção precisa e a janela iria a zero, ao custo de a infraestrutura de eventos passar a conhecer a de cache, e de um produto ficar sem cache logo depois de qualquer renomeação de categoria. Um minuto de nome de categoria desatualizado num catálogo é um preço baixo. **Numa aplicação onde não fosse, a conta daria outro resultado — e o ponto é que essa é uma decisão de produto, não de engenharia.**
 
 ---
