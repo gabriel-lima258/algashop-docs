@@ -147,6 +147,8 @@ A consequência que muda arquitetura: no log, a **expansão de consumidores é r
 
 E a fronteira borrou de propósito: **RabbitMQ Streams** (daí o "queue / stream" do diagrama) acrescenta um log retido ao broker de filas — mais um motivo para decidir pelo papel, não pelo logotipo.
 
+> 🔄 O mecanismo por trás da coluna Kafka — partições, offsets, consumer groups, o cluster e o KRaft — está destrinchado em [Kafka a fundo](./kafka-fundamentos.md).
+
 ---
 
 ## Coreografia × orquestração: quem rege o fluxo
@@ -200,4 +202,4 @@ O mapa do módulo que este documento abre:
 - [Enterprise Integration Patterns — Hohpe & Woolf](https://www.enterpriseintegrationpatterns.com/) (ponta-a-ponta, pub-sub, canais)
 - [Kafka — Introduction](https://kafka.apache.org/documentation/#gettingStarted) · [RabbitMQ — Concepts](https://www.rabbitmq.com/tutorials/amqp-concepts)
 - [Microservices.io — Saga](https://microservices.io/patterns/data/saga.html) · [Transactional Outbox](https://microservices.io/patterns/data/transactional-outbox.html)
-- [Eventos e listeners](../01-arquitetura-design/eventos-e-listeners.md) · [CQS e CQRS](../01-arquitetura-design/cqrs.md) · [Normalizado × desnormalizado](../02-persistencia/desnormalizacao-mongo.md) · [Jobs agendados](../04-infraestrutura/scheduled-jobs.md)
+- [Kafka a fundo](./kafka-fundamentos.md) · [Eventos e listeners](../01-arquitetura-design/eventos-e-listeners.md) · [CQS e CQRS](../01-arquitetura-design/cqrs.md) · [Normalizado × desnormalizado](../02-persistencia/desnormalizacao-mongo.md) · [Jobs agendados](../04-infraestrutura/scheduled-jobs.md)

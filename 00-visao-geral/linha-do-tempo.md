@@ -825,8 +825,9 @@ Fase de **estudo**, não de implementação: antes do primeiro broker, o mapa co
 | Notification × ECST × Sourcing | Do evento magro ao evento-como-verdade — e por que "usar Kafka" não é event sourcing |
 | Fila × log | RabbitMQ remove no ack; Kafka retém e o consumidor carrega o offset — no log, a expansão de consumidores é RETROATIVA |
 | Coreografia × orquestração | Fluxo que emerge das assinaturas × maestro que rege — e a regra: compensação pede orquestração |
+| Kafka por dentro | Record × message; a partição como unidade de ordem E de paralelismo; leader/follower e KRaft — reter tudo é barato porque o broker faz quase nada |
 
-> [`fundamentos-eda.md`](../06-mensageria/fundamentos-eda.md)
+> [`fundamentos-eda.md`](../06-mensageria/fundamentos-eda.md) · [`kafka-fundamentos.md`](../06-mensageria/kafka-fundamentos.md)
 
 ---
 
