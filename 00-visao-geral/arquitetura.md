@@ -229,7 +229,7 @@ product-catalog  --define-->  contrato  --gera-->  stub
 
 ### O que ainda não existe
 
-Mensageria (RabbitMQ/Kafka) entre serviços. Os eventos hoje são **internos ao processo** que os publica, em dois serviços:
+Mensageria (RabbitMQ/Kafka) entre serviços. 🔄 O estudo conceitual começou — [Fundamentos de EDA](../06-mensageria/fundamentos-eda.md) mapeia os padrões, a diferença fila × log e coreografia × orquestração antes do primeiro broker. Os eventos hoje são **internos ao processo** que os publica, em dois serviços:
 
 | Onde | Como |
 |---|---|

@@ -350,7 +350,7 @@ ProductPlacedOnSaleEvent: ProductPlacedOnSaleEvent(productId=..., ...)
 - [ ] **Os eventos de domínio não têm consumidor de verdade.** `ProductEventListener` só registra em log — o que é proposital nesta etapa, para tornar visível *quando* cada evento sai.
 - [ ] **Duas portas gêmeas de publicação.** `ApplicationMessagePublisher` e `DomainEventPublisher` têm a mesma assinatura e o mesmo bean por trás; a separação é de camada, e o custo é escolher a errada sem perceber.
 - [ ] **Os eventos de estoque publicam sem rede nenhuma.** Sem transação e sem `@Async`: falha na publicação significa estoque alterado e ninguém avisado, sem reparo posterior.
-- [ ] **Mensageria entre serviços continua não existindo.** Os eventos são internos ao processo, aqui e no `ordering`. Ver [`arquitetura.md`](../00-visao-geral/arquitetura.md).
+- [ ] **Mensageria entre serviços continua não existindo.** Os eventos são internos ao processo, aqui e no `ordering`. Ver [`arquitetura.md`](../00-visao-geral/arquitetura.md). 🔄 O estudo começou: os fundamentos (padrões, fila × log, coreografia × orquestração) estão em [Fundamentos de EDA](../06-mensageria/fundamentos-eda.md).
 
 ---
 
@@ -381,4 +381,4 @@ ProductPlacedOnSaleEvent: ProductPlacedOnSaleEvent(productId=..., ...)
 - [`ports-hexagonal.md`](./ports-hexagonal.md) — a porta de saída que a `ApplicationMessagePublisher` implementa
 - [`concorrencia-e-atomicidade.md`](../02-persistencia/concorrencia-e-atomicidade.md) — a escrita que não passa pelo repositório, e por que ela exigiu uma terceira porta
 - [`nosql-conceitos.md`](../02-persistencia/nosql-conceitos.md) — BASE, CAP e a consistência eventual em teoria
-- [`arquitetura.md`](../00-visao-geral/arquitetura.md) — a mensageria entre serviços que ainda não existe
+- [`arquitetura.md`](../00-visao-geral/arquitetura.md) — a mensageria entre serviços que ainda não existe · [Fundamentos de EDA](../06-mensageria/fundamentos-eda.md) — o mapa conceitual dela

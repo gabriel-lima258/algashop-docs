@@ -32,7 +32,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 36 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 37 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -103,6 +103,12 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) | O fluxo guiado das quatro camadas: papel no token, client e escopo por papel, regras de negócio e dono do recurso — e a lacuna entre duas tabelas que quebrou a loja |
 | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) | O id que sai do path e do body nos quatro serviços: `/me` com filtro de dono **na consulta**, os três públicos das anotações (CUSTOMER, interno, máquina) — e a SpEL quebrada que respondia 500 |
 | [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) | Parameter Store × Secrets Manager, o seed por CSV que aposentou os comandos manuais, `spring.config.import` como dependência de bootstrap — e a chave de assinatura que parou de mudar a cada subida (quase) |
+
+### 06 — Mensageria
+
+| Documento | O que você aprende |
+|---|---|
+| [Fundamentos de EDA](./06-mensageria/fundamentos-eda.md) | O mapa antes do broker: os 4 pilares de um evento, notification × ECST × sourcing, fila × log (RabbitMQ × Kafka), coreografia × orquestração — e o que o projeto já pratica sem saber |
 | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
 | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) | O contrato invisível entre o HTML e o filtro, o `_csrf` que o Thymeleaf injeta, consentimento próprio — e por que um teste de login pode passar com a tela quebrada |
 
@@ -236,6 +242,9 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Montar um BFF (e entender por que ele dispensa PKCE) | [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) |
 | Compor respostas de vários endpoints numa só | [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) |
 | Otimizar o JSON por tipo de cliente | [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) |
+| Entender EDA antes de escolher broker | [Fundamentos de EDA](./06-mensageria/fundamentos-eda.md) |
+| Decidir entre fila e log (RabbitMQ × Kafka) | [Fundamentos de EDA](./06-mensageria/fundamentos-eda.md) |
+| Escolher entre coreografia e orquestração | [Fundamentos de EDA](./06-mensageria/fundamentos-eda.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Fazer uma tela de consentimento própria | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |

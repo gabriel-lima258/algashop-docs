@@ -792,7 +792,7 @@ A Fase 16 blindou as três integrações de saída; a borda estava nua — e a b
 
 ---
 
-## Fase 36 — BFF: a borda por cliente, e o front no repositório (ago/2026) ← etapa atual
+## Fase 36 — BFF: a borda por cliente, e o front no repositório (ago/2026)
 
 A "porta única" durou duas fases — e a divisão não foi acidente. A borda virou **duas, uma por público** (`api-gateway-ecommerce` 9999, `api-gateway-admin` 9998), e os frontends entraram como submódulos: a SPA Angular do admin e o app server-side do e-commerce — o **BFF de verdade**, que guarda o token em sessão no Redis e nunca o entrega ao navegador.
 
@@ -811,6 +811,22 @@ A "porta única" durou duas fases — e a divisão não foi acidente. A borda vi
 **A lição da fase:** a borda certa tem o formato do cliente que a usa. Generalizar a borda foi útil por duas fases; especializá-la é o que permitiu dar a cada público o cache, o CORS, o JSON e o modelo de token que ele precisa — sem contorcer o outro.
 
 > [`bff-e-gateways-por-cliente.md`](../04-infraestrutura/bff-e-gateways-por-cliente.md)
+
+---
+
+## Fase 37 — Fundamentos de EDA (ago/2026) ← etapa atual
+
+Fase de **estudo**, não de implementação: antes do primeiro broker, o mapa conceitual da mensageria — e a descoberta de que o projeto já pratica metade dela sem saber. Os eventos in-process das Fases 8-12 são o vocabulário; a categoria desnormalizada é event-carried state transfer sem canal; o `SKIP LOCKED` do scheduler é uma work queue em Postgres.
+
+| Marco | O que se aprende |
+|---|---|
+| Os 4 pilares | Evento (fato imutável, no passado), produtor (esquece), canal, consumidor — e a inversão: quem quiser saber, que escute |
+| Domain × integration event | Dentro do contexto, a língua do agregado; entre serviços, contrato público versionado — o Spring Cloud Contract da mensageria |
+| Notification × ECST × Sourcing | Do evento magro ao evento-como-verdade — e por que "usar Kafka" não é event sourcing |
+| Fila × log | RabbitMQ remove no ack; Kafka retém e o consumidor carrega o offset — no log, a expansão de consumidores é RETROATIVA |
+| Coreografia × orquestração | Fluxo que emerge das assinaturas × maestro que rege — e a regra: compensação pede orquestração |
+
+> [`fundamentos-eda.md`](../06-mensageria/fundamentos-eda.md)
 
 ---
 
