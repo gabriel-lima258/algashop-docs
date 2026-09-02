@@ -814,7 +814,7 @@ A "porta única" durou duas fases — e a divisão não foi acidente. A borda vi
 
 ---
 
-## Fase 37 — Fundamentos de EDA (ago/2026) ← etapa atual
+## Fase 37 — Fundamentos de EDA (ago/2026)
 
 Fase de **estudo**, não de implementação: antes do primeiro broker, o mapa conceitual da mensageria — e a descoberta de que o projeto já pratica metade dela sem saber. Os eventos in-process das Fases 8-12 são o vocabulário; a categoria desnormalizada é event-carried state transfer sem canal; o `SKIP LOCKED` do scheduler é uma work queue em Postgres.
 
@@ -828,6 +828,25 @@ Fase de **estudo**, não de implementação: antes do primeiro broker, o mapa co
 | Kafka por dentro | Record × message; a partição como unidade de ordem E de paralelismo; leader/follower e KRaft — reter tudo é barato porque o broker faz quase nada |
 
 > [`fundamentos-eda.md`](../06-mensageria/fundamentos-eda.md) · [`kafka-fundamentos.md`](../06-mensageria/kafka-fundamentos.md)
+
+---
+
+## Fase 38 — Kafka na prática (set/2026) ← etapa atual
+
+O broker sai do papel: cluster de **3 nós KRaft** (modo combinado) no compose, e o primeiro evento de integração atravessa a fronteira — o catálogo publica produto adicionado/listado/deslistado em `product-catalog.product.events` (3 partições, replicação 3, `min.insync.replicas=2`, key = id do produto) e o `ordering` consome com dispatch por tipo e handler default para o desconhecido.
+
+| Marco | O que se aprende |
+|---|---|
+| Segunda porta de saída | `LocalEventPublisher` (in-process) × `ProductIntegrationEventPublisher` (broker) — nem todo evento de domínio merece atravessar |
+| Key = id do agregado | Cronologia por produto, não global — a decisão mais importante do tópico mora no próprio evento (`getAggregateId()`) |
+| `__TypeId__` lógico | `type.mapping` dos dois lados: o contrato é um nome + a forma do JSON, nunca classe compartilhada |
+| Handler default | Evento não mapeado degrada para `ObjectNode` + log — `ProductAdded` fora do mapping DE PROPÓSITO, como prova viva |
+| Dois advertised listeners | `PLAINTEXT` interno (9090) × `EXTERNAL` (`localhost:9092-9094`) — e por que o perfil docker sobrescreve o bootstrap |
+| O que falta, com nome | Outbox (o dual-write está exposto), DLQ/retry, efeito de negócio no consumidor, testes, métrica de lag |
+
+**A lição da fase:** o evento atravessou, mas atravessa **no fio da navalha** — sem outbox, o `save()` commita e o `send()` pode falhar em silêncio. Subir o broker é a parte fácil; mensageria confiável é o que as pendências agora nomeiam uma a uma.
+
+> [`kafka-na-pratica.md`](../06-mensageria/kafka-na-pratica.md)
 
 ---
 
@@ -872,6 +891,7 @@ Fase de **estudo**, não de implementação: antes do primeiro broker, o mapa co
 - Timeout, retry, circuit breaker (Resilience4j), cache local e rate limit por usuário na ENTRADA, no gateway
 - A borda dividida por público: dois gateways com rotas, cache e CORS por cliente, config no Parameter Store
 - Os dois frontends no repositório: SPA Angular (PKCE) e BFF server-side (sessão em Redis), com composição na borda
+- Cluster Kafka de 3 nós no compose e o primeiro evento de integração real: catálogo → ordering, com key por agregado e `__TypeId__` lógico
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
@@ -896,9 +916,9 @@ Fase de **estudo**, não de implementação: antes do primeiro broker, o mapa co
 - **Teste automatizado do cache** — hoje nenhum `*IT` exercita `@Cacheable`/`@CacheEvict`, e a corretude depende de leitura de código
 - Métrica de taxa de acerto do cache (`keyspace_hits`/`keyspace_misses` existem e ninguém coleta)
 - Cache nos perfis `docker` e `production`, que hoje rodam sem nenhum
-- Mensageria real entre serviços (hoje os eventos são internos ao processo, aqui e no `ordering`)
+- ~~Mensageria real entre serviços~~ — parcialmente resolvida na Fase 38: os eventos de produto atravessam via Kafka (catálogo → ordering); a categoria, o estoque e tudo no `ordering` seguem internos ao processo
 - Retentativa, dead letter e reconciliação para a propagação da categoria e para os eventos de estoque
-- Outbox para o evento que precisar sair do serviço — a transação resolve as escritas locais, não a integração
+- **Outbox para o evento que precisar sair do serviço** — ficou AGUDA na Fase 38: o evento de produto já sai sem ela, com o dual-write exposto no listener síncrono
 - Endpoint de histórico de movimentação (a coleção existe e ninguém a lê)
 - Contratos Spring Cloud Contract para `/restock` e `/withdraw`
 - Perfis `docker-env` e `production-env`, hoje referenciados e inexistentes

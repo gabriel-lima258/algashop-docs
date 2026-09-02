@@ -197,11 +197,13 @@ O quarto caso parece bravata até olhar o design. O log é rápido **porque** é
 
 Continuação do mapa do módulo, agora com forma concreta:
 
-- [ ] **Subir o Kafka no compose** — KRaft em **modo combinado** (um processo, broker + controller), o formato certo para dev.
-- [ ] **O primeiro tópico**: `pedido confirmado` com **key = id do pedido** — a cronologia que o billing precisa é por pedido.
-- [ ] **Serialização e contrato do record** — JSON? Avro? O `value` é contrato público; a decisão pede o rigor do Spring Cloud Contract.
-- [ ] **Partições do primeiro tópico** — decidir olhando o paralelismo que o billing pode querer, não o que precisa hoje.
-- [ ] **Monitorar consumer lag desde o primeiro consumidor** — a métrica entra junto com o grupo, não depois do primeiro incidente.
+> 🔄 **Retrofit (Fase 38):** o broker chegou — [Kafka na prática](./kafka-na-pratica.md) documenta a implementação. O saldo, item a item:
+
+- [x] ~~**Subir o Kafka no compose** — KRaft em **modo combinado** (um processo, broker + controller), o formato certo para dev.~~ — fechada, mas não como previsto: o modo é combinado, porém com **3 nós**, não um processo — o formato mais pesado comprou o que "um processo" jamais ensinaria: replicação 3 e `min.insync.replicas=2` de verdade, com failover observável ao derrubar um broker.
+- [x] ~~**O primeiro tópico**: `pedido confirmado` com **key = id do pedido** — a cronologia que o billing precisa é por pedido.~~ — o rumo mudou: o primeiro foi `product-catalog.product.events`, com **key = id do produto** (catálogo → ordering). O princípio previsto se manteve — a key é a entidade cuja cronologia importa — só a entidade mudou. O `pedido confirmado` continua no mapa.
+- [x] ~~**Serialização e contrato do record** — JSON? Avro? O `value` é contrato público; a decisão pede o rigor do Spring Cloud Contract.~~ — **meio**-fechada: JSON via `JacksonJsonSerializer`, com `__TypeId__` lógico desacoplando pacotes. O rigor do SCC **não** chegou à mensageria: o contrato é cópia manual de POJO, sem teste que o trave.
+- [x] ~~**Partições do primeiro tópico** — decidir olhando o paralelismo que o billing pode querer, não o que precisa hoje.~~ — fechada: 3 partições, olhando o crescimento futuro do grupo `ordering`, não a carga atual.
+- [ ] **Monitorar consumer lag desde o primeiro consumidor** — continua aberta: o grupo existe, a Kafka UI (9084) mostra o lag, nenhuma métrica o coleta.
 
 ## Checklist de revisão
 

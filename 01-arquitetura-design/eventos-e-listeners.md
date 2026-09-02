@@ -1,7 +1,7 @@
 # Eventos, Listeners e Consistência Eventual
 
 > Como o `product-catalog` passou a anunciar fatos em vez de só gravar estado — e como a cópia da categoria dentro de cada produto se mantém em dia sem travar quem chamou a API.
-> Código real: `domain/product/Product.java`, `domain/product/StockService.java`, `application/ApplicationMessagePublisher.java`, `domain/DomainEventPublisher.java`, `infrastructure/listener/`, `infrastructure/persistence/category/ProductCategoryUpdater.java`.
+> Código real: `domain/product/Product.java`, `domain/product/StockService.java`, `application/LocalEventPublisher.java`, `domain/DomainEventPublisher.java`, `infrastructure/listener/`, `infrastructure/persistence/category/ProductCategoryUpdater.java`.
 
 > Este documento é a continuação de [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md). Lá se decidiu **copiar** o nome da categoria para dentro do produto; aqui se paga a conta dessa decisão.
 
@@ -37,7 +37,7 @@ O serviço tem **três** famílias de evento, e elas não são a mesma coisa com
 |---|---|---|---|
 | Quem registra | o próprio agregado | o application service, explicitamente | o `StockService`, explicitamente |
 | Quando é publicado | no `productRepository.save()` | na chamada a `send()` | na chamada a `publish()` |
-| Quem publica | `EventPublishingRepositoryProxyPostProcessor` (Spring Data) | `ApplicationMessagePublisher` | `DomainEventPublisher` |
+| Quem publica | `EventPublishingRepositoryProxyPostProcessor` (Spring Data) | `LocalEventPublisher` | `DomainEventPublisher` |
 | Onde mora a classe | `domain/product/` | `application/category/event/` | `domain/product/` |
 | Listener | `ProductEventListener`, **síncrono** (exceto `PriceChanged`) | `CategoryEventListener`, **`@Async`** | `ProductEventListener`, **síncrono** |
 | Se o listener falhar | a exceção sobe para quem salvou | vira log, e a cópia fica velha | **o rollback desfaz o ajuste de estoque** |
@@ -48,7 +48,7 @@ O terceiro é de domínio como o primeiro — `ProductSoldOutEvent` é um fato s
 
 > #### Nota de estudo: duas portas quase idênticas, de propósito
 >
-> `ApplicationMessagePublisher` (na `application`) e `DomainEventPublisher` (no `domain`) têm a mesma assinatura e são implementadas pelo **mesmo** `ApplicationEventPublisher` do Spring, em dois `@Configuration` separados. Parece duplicação, e em parte é — mas o que as separa é **camada**, não comportamento: o domínio não pode depender de uma interface declarada na `application`, ou a seta de dependência aponta para o lado errado.
+> `LocalEventPublisher` (na `application`) e `DomainEventPublisher` (no `domain`) têm a mesma assinatura e são implementadas pelo **mesmo** `ApplicationEventPublisher` do Spring, em dois `@Configuration` separados. Parece duplicação, e em parte é — mas o que as separa é **camada**, não comportamento: o domínio não pode depender de uma interface declarada na `application`, ou a seta de dependência aponta para o lado errado.
 >
 > O custo está registrado: duas interfaces gêmeas e dois beans para manter, e um leitor desavisado escolhe a errada com facilidade. A alternativa — uma porta só, no domínio — economizaria código ao preço de fazer o `CategoryUpdatedEvent`, que não é evento de domínio, viajar por uma porta do domínio. Foi essa a troca escolhida; vale conhecer as duas pontas.
 
@@ -136,8 +136,8 @@ Está tudo coberto em `src/test/.../domain/product/ProductTest.java`, que inspec
 A aplicação declara **o que precisa**, sem dizer como:
 
 ```java
-// application/ApplicationMessagePublisher.java
-public interface ApplicationMessagePublisher {
+// application/LocalEventPublisher.java
+public interface LocalEventPublisher {
     void send(Object message);
 }
 ```
@@ -145,15 +145,17 @@ public interface ApplicationMessagePublisher {
 E a infraestrutura fornece o como:
 
 ```java
-// infrastructure/message/ApplicationMessagePublisherConfig.java
+// infrastructure/message/LocalEventPublisherConfig.java
 @Bean
-public ApplicationMessagePublisher applicationMessagePublisher(
+public LocalEventPublisher localEventPublisher(
         ApplicationEventPublisher applicationEventPublisher) {
     return applicationEventPublisher::publishEvent;
 }
 ```
 
 Uma *method reference* basta — a interface tem um método só. É [porta e adaptador](./ports-hexagonal.md) no formato mais enxuto possível, e o ganho é concreto: o `CategoryManagementApplicationService` não importa nada de Spring para publicar, e o dia em que isso virar RabbitMQ ou Kafka, **quem muda é o `@Bean`** — nenhum service é tocado.
+
+> 🔄 **Retrofit (Fase 38):** o dia chegou — e a resposta **não** foi trocar o `@Bean`. O catálogo criou uma **segunda porta** (`ProductIntegrationEventPublisher`, implementada sobre `KafkaTemplate` no `KafkaConfig`), porque nem todo evento de domínio merece atravessar a fronteira do serviço: a `LocalEventPublisher` continua entregando in-process, e só os eventos **promovidos** a evento de integração saem pelo broker. A previsão acertou o mecanismo (a mudança ficou na infraestrutura) e errou a forma: porta nova, não bean trocado. As classes também foram renomeadas — `ApplicationMessagePublisher` virou `LocalEventPublisher` (os trechos acima já refletem o nome novo), justamente para o par local × integração ficar legível. Ver [Kafka na prática](../06-mensageria/kafka-na-pratica.md).
 
 O publicador:
 
@@ -348,9 +350,9 @@ ProductPlacedOnSaleEvent: ProductPlacedOnSaleEvent(productId=..., ...)
 - [ ] **A propagação escapa do `@Version`.** Escrita por `MongoOperations` não incrementa a versão do produto.
 - [ ] **`updateMulti` não usa índice.** Ver [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md).
 - [ ] **Os eventos de domínio não têm consumidor de verdade.** `ProductEventListener` só registra em log — o que é proposital nesta etapa, para tornar visível *quando* cada evento sai.
-- [ ] **Duas portas gêmeas de publicação.** `ApplicationMessagePublisher` e `DomainEventPublisher` têm a mesma assinatura e o mesmo bean por trás; a separação é de camada, e o custo é escolher a errada sem perceber.
+- [ ] **Duas portas gêmeas de publicação.** `LocalEventPublisher` e `DomainEventPublisher` têm a mesma assinatura e o mesmo bean por trás; a separação é de camada, e o custo é escolher a errada sem perceber.
 - [ ] **Os eventos de estoque publicam sem rede nenhuma.** Sem transação e sem `@Async`: falha na publicação significa estoque alterado e ninguém avisado, sem reparo posterior.
-- [ ] **Mensageria entre serviços continua não existindo.** Os eventos são internos ao processo, aqui e no `ordering`. Ver [`arquitetura.md`](../00-visao-geral/arquitetura.md). 🔄 O estudo começou: os fundamentos (padrões, fila × log, coreografia × orquestração) estão em [Fundamentos de EDA](../06-mensageria/fundamentos-eda.md).
+- [x] ~~**Mensageria entre serviços continua não existindo.**~~ 🔄 Parcialmente fechada na Fase 38: os eventos de produto (added/listed/delisted) atravessam via Kafka para o `ordering` — [Kafka na prática](../06-mensageria/kafka-na-pratica.md). Os demais (categoria, estoque, e tudo no `ordering`) seguem internos ao processo.
 
 ---
 
@@ -361,7 +363,7 @@ ProductPlacedOnSaleEvent: ProductPlacedOnSaleEvent(productId=..., ...)
 - [ ] Sei por que ler um produto do banco não dispara `ProductAddedEvent`
 - [ ] Entendo por que `changePrice` pode emitir dois eventos, e por que pode não emitir nenhum
 - [ ] Sei explicar a guarda `wasEnabled != null` do `setEnabled`
-- [ ] Entendo o que a `ApplicationMessagePublisher` isola, e o que mudaria ao trocar por um broker
+- [ ] Entendo o que a `LocalEventPublisher` isola, e o que mudaria ao trocar por um broker
 - [ ] Sei por que o evento é publicado depois do `save()`, e nunca antes
 - [ ] Sei o que o `@Async` compra e o que ele cobra
 - [ ] Sei apontar, na lista, tudo que falta para isso virar mensageria de verdade
@@ -378,7 +380,7 @@ ProductPlacedOnSaleEvent: ProductPlacedOnSaleEvent(productId=..., ...)
 - [Spring Framework — Asynchronous Execution (`@Async`)](https://docs.spring.io/spring-framework/reference/integration/scheduling.html#scheduling-annotation-support-async)
 - [Martin Fowler — Domain Event](https://martinfowler.com/eaaDev/DomainEvent.html)
 - [`desnormalizacao-mongo.md`](../02-persistencia/desnormalizacao-mongo.md) — a decisão de modelagem que criou a necessidade destes eventos
-- [`ports-hexagonal.md`](./ports-hexagonal.md) — a porta de saída que a `ApplicationMessagePublisher` implementa
+- [`ports-hexagonal.md`](./ports-hexagonal.md) — a porta de saída que a `LocalEventPublisher` implementa
 - [`concorrencia-e-atomicidade.md`](../02-persistencia/concorrencia-e-atomicidade.md) — a escrita que não passa pelo repositório, e por que ela exigiu uma terceira porta
 - [`nosql-conceitos.md`](../02-persistencia/nosql-conceitos.md) — BASE, CAP e a consistência eventual em teoria
 - [`arquitetura.md`](../00-visao-geral/arquitetura.md) — a mensageria entre serviços que ainda não existe · [Fundamentos de EDA](../06-mensageria/fundamentos-eda.md) — o mapa conceitual dela

@@ -178,8 +178,8 @@ A regra prática que este módulo vai testar: **fluxo curto, linear e estável �
 
 O mapa do módulo que este documento abre:
 
-- [ ] **Escolher o broker** — pelo papel: o fluxo pedido→fatura precisa de fila ou de log? Consumidores futuros precisarão do passado?
-- [ ] **O primeiro evento a atravessar a fronteira**: `pedido confirmado` (ordering → billing), hoje interno ao processo.
+- [x] ~~**Escolher o broker** — pelo papel: o fluxo pedido→fatura precisa de fila ou de log? Consumidores futuros precisarão do passado?~~ — 🔄 Kafka (Fase 38): consumidores futuros dos eventos de catálogo precisam do passado, e a expansão retroativa só o log dá. Ver [Kafka na prática](./kafka-na-pratica.md).
+- [x] ~~**O primeiro evento a atravessar a fronteira**: `pedido confirmado` (ordering → billing), hoje interno ao processo.~~ — 🔄 atravessou na Fase 38, mas por outro par: produto listado/deslistado (**catálogo → ordering**), key = id do produto. O `pedido confirmado` continua no mapa.
 - [ ] **Outbox no produtor** — a pendência da Fase 12 vence quando o broker chegar.
 - [ ] **Contrato de evento versionado** — o equivalente de mensageria do Spring Cloud Contract, com teste que o trave.
 - [ ] **DLQ, retentativa e reconciliação** — já listadas na linha do tempo; ganham dono quando houver canal.

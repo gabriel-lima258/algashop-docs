@@ -129,6 +129,8 @@ docker compose up -d
 
 O `docker-compose.yml` inclui o de serviços, que por sua vez inclui o de tools — um `up` sobe **tudo**: infraestrutura, os quatro serviços de negócio, o `authorization-server` (9000), o `service-registry` (8761), **os dois gateways** (`api-gateway-ecommerce` 9999 e `api-gateway-admin` 9998 — esperam registry, authorization server, Redis e LocalStack healthy) e, desde a Fase 36, **os dois apps**: `algashop-admin-app` (4200→80, nginx) e `algashop-ecommerce-app` (9080). Exige que as imagens já existam localmente (`gabriel58221/*:dev` e `algashop/*:dev`) — o **`build-dev-docker.sh`** na raiz constrói todas de uma vez (`bash build-dev-docker.sh`); ver também [`docker.md`](./docker.md).
 
+Desde a Fase 38, `product-catalog` e `ordering` **esperam os 3 brokers Kafka ficarem healthy** antes de subir (o catálogo declara o tópico com `admin.fail-fast: true` — sem broker, o boot cai) — por isso o `up` completo demora alguns segundos a mais: o quorum KRaft precisa se eleger primeiro.
+
 O `billing-scheduler` entrou como o que ele é: um job efêmero. Ele sobe, cancela as faturas vencidas e **encerra com código 0** — por isso `restart: no` e nenhuma porta publicada. Vê-lo como `Exited (0)` no `compose ps` é o comportamento correto, não uma falha. Em produção quem o reexecuta seria um CronJob; aqui, um `docker compose up algashop-billing-scheduler` quando quiser.
 
 Para subir só a infraestrutura, sem os quatro serviços:
@@ -183,6 +185,12 @@ A tabela que evita 90% dos problemas de "não conecta":
 | WireMock | **8787** | 8080 | mock de APIs externas |
 | FastPay | **9995** | 9995 | gateway de pagamento simulado |
 | LocalStack | **4566** | 4566 | a AWS emulada — S3 (bucket `algashop-product-image`), Secrets Manager e Parameter Store (config dos 5 serviços) |
+| Kafka broker 1 | **9092** | 9092 | listener `EXTERNAL` — anuncia `localhost:9092` para clientes no host |
+| Kafka broker 2 | **9093** | 9092 | listener `EXTERNAL` — anuncia `localhost:9093` |
+| Kafka broker 3 | **9094** | 9092 | listener `EXTERNAL` — anuncia `localhost:9094` |
+| Kafka UI | **9084** | 8080 | tópicos, partições, offsets e consumer lag em <http://localhost:9084> |
+
+> Desde a Fase 38 o cluster Kafka (3 nós KRaft, modo combinado) está no tools. De **dentro** da rede os clientes usam o listener interno `algashop-kafka-N:9090`; do **host**, os `EXTERNAL` acima — e os hostnames `algashop-kafka-1/2/3` precisam estar no `/etc/hosts` (já estão em `etc/hostnames/hostnames`), porque é esse o nome no bootstrap do perfil de desenvolvimento. O porquê dos dois endereços está em [Kafka na prática](../06-mensageria/kafka-na-pratica.md).
 
 O `authorization-server` roda em **9000** e, desde a Fase 26, **está no compose** — em desenvolvimento ainda dá para subi-lo por `./gradlew bootRun`. Os outros três apontam o `issuer-uri` para `http://auth.algashop.local:9000` e é de lá que buscam as chaves públicas.
 
