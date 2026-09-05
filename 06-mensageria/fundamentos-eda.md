@@ -101,6 +101,8 @@ A tese da separação: **aprenda os papéis, não os produtos.** "Message broker
 O evento leva os dados que o consumidor precisa; ninguém volta para perguntar. O consumidor mantém a **própria cópia** e vive dela.
 
 > O projeto **já pratica ECST** — sem broker. A categoria desnormalizada dentro do produto ([Normalizado × desnormalizado](../02-persistencia/desnormalizacao-mongo.md)) é exatamente isso: o evento `CategoryUpdated` carrega o estado novo, o listener atualiza a cópia embutida, e as leituras nunca voltam à origem. Todo o aprendizado daquele doc — a cópia que cobra, a janela de desatualização, a propagação como responsabilidade — é o aprendizado de ECST. Só falta o canal atravessar a fronteira.
+>
+> 🔄 **Retrofit (Fase 39):** o canal atravessou. `ProductPriceChangedV2IntegrationEvent` carrega os preços pelo Kafka e o `ordering` atualiza os carrinhos **sem consultar o catálogo** — ECST de verdade, entre serviços. E no mesmo listener, Listed/Delisted fazem notification: os dois padrões desta seção, lado a lado em código, em [ECST e validação de eventos](./ecst-e-validacao-de-eventos.md).
 
 ### Event sourcing — os eventos são a verdade
 

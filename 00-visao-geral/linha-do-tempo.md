@@ -831,7 +831,7 @@ Fase de **estudo**, não de implementação: antes do primeiro broker, o mapa co
 
 ---
 
-## Fase 38 — Kafka na prática (set/2026) ← etapa atual
+## Fase 38 — Kafka na prática (set/2026)
 
 O broker sai do papel: cluster de **3 nós KRaft** (modo combinado) no compose, e o primeiro evento de integração atravessa a fronteira — o catálogo publica produto adicionado/listado/deslistado em `product-catalog.product.events` (3 partições, replicação 3, `min.insync.replicas=2`, key = id do produto) e o `ordering` consome com dispatch por tipo e handler default para o desconhecido.
 
@@ -847,6 +847,25 @@ O broker sai do papel: cluster de **3 nós KRaft** (modo combinado) no compose, 
 **A lição da fase:** o evento atravessou, mas atravessa **no fio da navalha** — sem outbox, o `save()` commita e o `send()` pode falhar em silêncio. Subir o broker é a parte fácil; mensageria confiável é o que as pendências agora nomeiam uma a uma.
 
 > [`kafka-na-pratica.md`](../06-mensageria/kafka-na-pratica.md)
+
+---
+
+## Fase 39 — ECST e validação de eventos (set/2026) ← etapa atual
+
+O consumidor deixa de logar e passa a **reagir**: Listed/Delisted flipam a disponibilidade do item nos carrinhos (notification), e o novo `ProductPriceChangedV2IntegrationEvent` carrega os preços para o `ordering` atualizar os carrinhos **sem consultar o catálogo** (ECST). Bean Validation entra nos dois lados do fio, e o cache client-side de produto ganha invalidação por evento.
+
+| Marco | O que se aprende |
+|---|---|
+| Notification × ECST em código | No mesmo listener: evento magro (fato + id) × evento que carrega o estado — e por que preço pediu ECST |
+| V2 sem V1 | A versão do contrato viaja no nome lógico (`__TypeId__`) — versionar ANTES de precisar é o que permite a V3 conviver depois |
+| Validação nos dois lados | Produtor barra antes do `send()` (`BeanValidationUtil`); consumidor precisa plugar validator (`KafkaListenerConfigurer`) ou o `@Valid` no payload não faz NADA |
+| O destino do evento que falha | O default do spring-kafka NÃO é retry infinito: 10 tentativas sem intervalo e **descarte silencioso** com offset commitado — pior que loop |
+| Cache invalidado por evento | A premissa "só resta o TTL" caiu; e a API programática do cache passa por FORA do `CacheErrorHandler` |
+| Agregado × bulk | O caminho novo via agregado convive com o bulk pronto e testado que ficou no banco — trade-off documentado, não acidente |
+
+**A lição da fase:** validar o evento nos dois lados é barato e local — o caro é o que acontece com o evento **depois** que ele falha: sem DLQ, o default do framework descarta em silêncio, e "não quebrar" vira "perder dados sem avisar".
+
+> [`ecst-e-validacao-de-eventos.md`](../06-mensageria/ecst-e-validacao-de-eventos.md)
 
 ---
 
@@ -892,6 +911,7 @@ O broker sai do papel: cluster de **3 nós KRaft** (modo combinado) no compose, 
 - A borda dividida por público: dois gateways com rotas, cache e CORS por cliente, config no Parameter Store
 - Os dois frontends no repositório: SPA Angular (PKCE) e BFF server-side (sessão em Redis), com composição na borda
 - Cluster Kafka de 3 nós no compose e o primeiro evento de integração real: catálogo → ordering, com key por agregado e `__TypeId__` lógico
+- O consumidor reagindo: notification e ECST no mesmo listener, Bean Validation nos dois lados e cache invalidado por evento
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
@@ -918,7 +938,7 @@ O broker sai do papel: cluster de **3 nós KRaft** (modo combinado) no compose, 
 - Cache nos perfis `docker` e `production`, que hoje rodam sem nenhum
 - ~~Mensageria real entre serviços~~ — parcialmente resolvida na Fase 38: os eventos de produto atravessam via Kafka (catálogo → ordering); a categoria, o estoque e tudo no `ordering` seguem internos ao processo
 - Retentativa, dead letter e reconciliação para a propagação da categoria e para os eventos de estoque
-- **Outbox para o evento que precisar sair do serviço** — ficou AGUDA na Fase 38: o evento de produto já sai sem ela, com o dual-write exposto no listener síncrono
+- **Outbox para o evento que precisar sair do serviço** — ficou AGUDA na Fase 38 e piorou na 39: o evento de preço sai de um handler `@Async` — a falha de publicação nem chega ao chamador, vira log em outra thread
 - Endpoint de histórico de movimentação (a coleção existe e ninguém a lê)
 - Contratos Spring Cloud Contract para `/restock` e `/withdraw`
 - Perfis `docker-env` e `production-env`, hoje referenciados e inexistentes

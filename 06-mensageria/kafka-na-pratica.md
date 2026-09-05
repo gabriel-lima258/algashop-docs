@@ -114,8 +114,8 @@ O bootstrap é só o primeiro passo: o cliente conecta, recebe o **endereço anu
 ## Pendências registradas
 
 - [ ] **Outbox no catálogo** — a mais aguda: o evento já sai, e sai no fio da navalha do dual-write
-- [ ] **Retry com backoff + DLQ** no listener do ordering (`DefaultErrorHandler`/`DeadLetterPublishingRecoverer`)
-- [ ] **Reagir ao evento no ordering** — efeito de negócio idempotente (o log já mostra a key e o offset que a idempotência usará)
+- [ ] **Retry com backoff + DLQ** no listener do ordering (`DefaultErrorHandler`/`DeadLetterPublishingRecoverer`) — 🔄 a Fase 39 corrigiu o diagnóstico: o default **não** é retry infinito, é 10 tentativas e **descarte silencioso** com offset commitado — pior, e mais urgente ([detalhes](./ecst-e-validacao-de-eventos.md))
+- [x] ~~**Reagir ao evento no ordering** — efeito de negócio idempotente (o log já mostra a key e o offset que a idempotência usará)~~ — 🔄 fechada pela metade na [Fase 39](./ecst-e-validacao-de-eventos.md): os handlers atualizam carrinhos (disponibilidade e preço) e invalidam o cache — mas a **idempotência** ainda não veio; `changedAt`/`old*` chegam no evento e são ignorados
 - [ ] **Teste com `spring-kafka-test`** — o starter já está lá; produzir → consumir num broker embarcado
 - [ ] **Contrato de mensageria com teste** — o equivalente do SCC para o JSON do evento
 - [ ] **Métrica de consumer lag** — sai da UI e entra no actuator/alerta

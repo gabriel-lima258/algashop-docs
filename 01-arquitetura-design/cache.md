@@ -167,6 +167,8 @@ O `ordering` cacheia a **resposta HTTP** do catálogo. Funciona porque o bean é
 >
 > No `ordering`, o dado é de outro serviço, e **ele não fica sabendo quando muda**. Não há `@CacheEvict` possível: não existe evento, não existe callback, não existe nada. Sobra o TTL — e o TTL não é uma escolha de performance, é a única ferramenta disponível.
 >
+> 🔄 **Retrofit (Fase 39):** a premissa caiu — passou a existir evento. Os eventos Kafka de produto disparam o evict programático (`ProductCacheManager`), e o TTL virou a **segunda** linha de defesa, para o evento que se perder no caminho. Ver [ECST e validação de eventos](../06-mensageria/ecst-e-validacao-de-eventos.md).
+>
 > É por isso que a pergunta "qual TTL manda?" tem uma resposta desconfortável: **manda o maior**. Adiantar de nada reduzir o TTL do Mongo para o catálogo se o ordering guarda a resposta por cinco minutos e o navegador por mais um. A idade máxima de um dado é a soma das camadas, não a menor delas.
 
 ---
