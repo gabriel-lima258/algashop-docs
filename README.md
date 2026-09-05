@@ -32,7 +32,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 39 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 40 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -112,6 +112,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Kafka a fundo](./06-mensageria/kafka-fundamentos.md) | Record × message, a partição como unidade de ordem E de paralelismo, consumer groups com dois padrões no mesmo tópico, pull × push, leader/follower e KRaft — e por que reter tudo é barato |
 | [Kafka na prática](./06-mensageria/kafka-na-pratica.md) | O primeiro evento de integração ponta a ponta: catálogo publica com key por agregado, ordering consome com `__TypeId__` lógico e handler default — cluster de 3 nós KRaft no compose, e o dual-write exposto à espera da outbox |
 | [ECST e validação de eventos](./06-mensageria/ecst-e-validacao-de-eventos.md) | O consumidor reage: notification × ECST lado a lado no mesmo listener, o V2 que nasceu sem V1, Bean Validation nos dois lados do fio — e o que o Kafka faz de verdade com o evento que falha (descarta em silêncio) |
+| [AsyncAPI: contratos](./06-mensageria/asyncapi-contratos.md) | O contrato da mensageria escrito: canais × operações (send/receive por perspectiva), mensagens compartilhadas via `$ref`, bindings Kafka, `__TypeId__` como const — e a lição do contrato que nasceu mentindo porque nada o valida contra o código |
 | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
 | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) | O contrato invisível entre o HTML e o filtro, o `_csrf` que o Thymeleaf injeta, consentimento próprio — e por que um teste de login pode passar com a tela quebrada |
 
@@ -254,6 +255,7 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Desacoplar pacotes de produtor e consumidor (`__TypeId__`) | [Kafka na prática](./06-mensageria/kafka-na-pratica.md) |
 | Aplicar ECST e reagir a eventos no consumidor | [ECST e validação de eventos](./06-mensageria/ecst-e-validacao-de-eventos.md) |
 | Validar eventos com Bean Validation (produtor e consumidor) | [ECST e validação de eventos](./06-mensageria/ecst-e-validacao-de-eventos.md) |
+| Documentar contratos de eventos (AsyncAPI) | [AsyncAPI: contratos](./06-mensageria/asyncapi-contratos.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Fazer uma tela de consentimento própria | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |

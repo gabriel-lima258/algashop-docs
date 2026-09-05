@@ -46,6 +46,8 @@ O detalhe que não é óbvio: **`@Valid` num `@Payload` de Kafka não faz nada s
 
 E por que validar dos dois lados, se o produtor já barrou? Porque o consumidor **não confia no produtor** — o contrato é uma cópia manual de POJO casada por forma de JSON; um produtor de outra versão, um replay antigo ou um evento publicado à mão pela UI chegam do mesmo jeito. Defesa em profundidade, agora no fio da mensageria.
 
+> 🔄 **Retrofit (Fase 40):** a "cópia manual sem nada escrito" ganhou a primeira metade da resposta — os contratos agora estão declarados em [AsyncAPI](./asyncapi-contratos.md), com payload, `__TypeId__` e key num documento único. A segunda metade (o teste que compara contrato × código) segue pendente — e a Fase 40 mostrou na prática por quê: o primeiro YAML nasceu com o `__TypeId__` do V2 errado, e nada acusou.
+
 ## O destino do evento inválido — corrigindo o doc anterior
 
 A [Fase 38](./kafka-na-pratica.md) registrou: "uma exceção num handler vira retentativa infinita do container". **Estava errado — e a verdade é pior.** O `DefaultErrorHandler` padrão do spring-kafka faz `FixedBackOff(0, 9)`: **10 tentativas sem intervalo** e depois **descarta a mensagem, commitando o offset**. Para um erro de validação as 10 tentativas são inúteis (o payload não vai mudar), e o descarte é **perda silenciosa de dados**: um evento de preço malformado some, o carrinho fica com o preço velho para sempre, e o único vestígio é um log de erro que ninguém alertou. Não há DLQ. A pendência de retry/DLQ deixou de ser "evitar loop infinito" e virou "parar de perder eventos em silêncio" — mais urgente, não menos.

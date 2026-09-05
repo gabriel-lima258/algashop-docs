@@ -1,0 +1,189 @@
+asyncapi: 3.1.0
+
+info:
+  title: AlgaShop Messages Components AsyncAPI
+  version: "1.0"
+
+# EVENTOS
+components:
+  messages:
+    ProductAddedEvent:
+      name: ProductAddedEvent
+      title: Product Added Event
+      summary: Published when a new product is added.
+      contentType: application/json
+      tags:
+        - name: Products
+      payload:
+        type: object
+        required:
+          - productId
+          - addedAt
+        properties:
+          productId:
+            $ref: "#/components/schemas/ProductId"
+          addedAt:
+            type: string
+            format: date-time
+            description: Date and time when a product was added.
+      headers:
+        type: object
+        required:
+          - __TypeId__
+        properties:
+          __TypeId__:
+            type: string
+            const: "ProductCatalog.ProductAddedIntegrationEvent"
+            description: Type of the event for deserialization
+      traits:
+        - $ref: "#/components/messageTraits/KafkaProductKey"
+    ProductListedEvent:
+      name: ProductListedEvent
+      title: Product Listed Event
+      summary: Published when a product becomes visible in the storefront again.
+      contentType: application/json
+      tags:
+        - name: Products
+      payload:
+        type: object
+        required:
+          - productId
+          - listedAt
+        properties:
+          productId:
+            $ref: "#/components/schemas/ProductId"
+          listedAt:
+            type: string
+            format: date-time
+            description: Date and time when the product was listed.
+      headers:
+        type: object
+        required:
+          - __TypeId__
+        properties:
+          __TypeId__:
+            type: string
+            const: "ProductCatalog.ProductListedIntegrationEvent"
+            description: Type of the event for deserialization
+      traits:
+        - $ref: "#/components/messageTraits/KafkaProductKey"
+    ProductDelistedEvent:
+      name: ProductDelistedEvent
+      title: Product Delisted Event
+      summary: Published when a product is removed from the storefront (disabled, not deleted).
+      contentType: application/json
+      tags:
+        - name: Products
+      payload:
+        type: object
+        required:
+          - productId
+          - delistedAt
+        properties:
+          productId:
+            $ref: "#/components/schemas/ProductId"
+          delistedAt:
+            type: string
+            format: date-time
+            description: Date and time when the product was delisted.
+      headers:
+        type: object
+        required:
+          - __TypeId__
+        properties:
+          __TypeId__:
+            type: string
+            const: "ProductCatalog.ProductDelistedIntegrationEvent"
+            description: Type of the event for deserialization
+      traits:
+        - $ref: "#/components/messageTraits/KafkaProductKey"
+    ProductPriceChangedEvent:
+      name: ProductPriceChangedEvent
+      title: Product Price Changed Event
+      deprecated: true
+      contentType: application/json
+      tags:
+        - name: Products
+      headers:
+        type: object
+        required:
+          - __TypeId__
+        properties:
+          __TypeId__:
+            type: string
+            const: "ProductCatalog.ProductPriceChangedEventIntegrationEvent"
+      payload:
+        type: object
+        deprecated: true
+        required:
+          - productId
+          - changedAt
+        properties:
+          productId:
+            $ref: "#/components/schemas/ProductId"
+          changedAt:
+            type: string
+            format: date-time
+            example: "2024-04-04T00:12:45Z"
+      traits:
+        - $ref: "#/components/messageTraits/KafkaProductKey"
+    ProductPriceChangedEventV2:
+      name: ProductPriceChangedEventV2
+      title: Product Price Changed Event (v2)
+      contentType: application/json
+      tags:
+        - name: Products
+      headers:
+        type: object
+        required:
+          - __TypeId__
+        properties:
+          __TypeId__:
+            type: string
+            const: "ProductCatalog.ProductPriceChangedV2IntegrationEvent"
+      payload:
+        type: object
+        required:
+          - productId
+          - changedAt
+          - oldRegularPrice
+          - oldSalePrice
+          - newRegularPrice
+          - newSalePrice
+        properties:
+          productId:
+            $ref: "#/components/schemas/ProductId"
+          changedAt:
+            type: string
+            format: date-time
+            example: "2024-04-04T00:12:45Z"
+          oldRegularPrice:
+            $ref: "#/components/schemas/Money"
+          oldSalePrice:
+            $ref: "#/components/schemas/Money"
+          newRegularPrice:
+            $ref: "#/components/schemas/Money"
+          newSalePrice:
+            $ref: "#/components/schemas/Money"
+      traits:
+        - $ref: "#/components/messageTraits/KafkaProductKey"
+
+  schemas:
+    ProductId:
+      type: string
+      description: ID of product
+      example: "fcc2897f-70a8-4c87-a4d0-26a4e0bb36dc"
+    Money:
+      type: number
+      format: double
+      example: 24.99
+
+  messageTraits:
+    KafkaProductKey:
+      bindings:
+        kafka:
+          key:
+            type: string
+            description: Product id
+            example: "fcc2897f-70a8-4c87-a4d0-26a4e0bb36dc"
+          bindingVersion: "0.5.0"

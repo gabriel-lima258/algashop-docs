@@ -1,0 +1,50 @@
+asyncapi: 3.1.0
+
+info:
+  title: AlgaShop - Product Catalog AsyncAPI
+  version: "1.0"
+
+servers:
+  development:
+    host: "algashop-kafka-1:9092"
+    protocol: kafka
+    description: Development
+
+channels:
+  productEvents:
+    address: product-catalog.product.events
+    title: Product Events
+    messages:
+      productAdded:
+        $ref: "./messages.yml#/components/messages/ProductAddedEvent"
+      productListed:
+        $ref: "./messages.yml#/components/messages/ProductListedEvent"
+      productDelisted:
+        $ref: "./messages.yml#/components/messages/ProductDelistedEvent"
+      productPriceChanged:
+        $ref: "./messages.yml#/components/messages/ProductPriceChangedEvent"
+      productPriceChangedV2:
+        $ref: "./messages.yml#/components/messages/ProductPriceChangedEventV2"
+    bindings:
+      kafka:
+        topic: product-catalog.product.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+operations:
+  sendProductEvents:
+    action: send # Producer
+    channel:
+      $ref: "#/channels/productEvents"
+    summary: Publishes product events
+    tags:
+      - name: Products
+    messages:
+      - $ref: "#/channels/productEvents/messages/productAdded"
+      - $ref: "#/channels/productEvents/messages/productListed"
+      - $ref: "#/channels/productEvents/messages/productDelisted"
+      - $ref: "#/channels/productEvents/messages/productPriceChanged"
+      - $ref: "#/channels/productEvents/messages/productPriceChangedV2"

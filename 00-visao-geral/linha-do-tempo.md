@@ -850,7 +850,7 @@ O broker sai do papel: cluster de **3 nós KRaft** (modo combinado) no compose, 
 
 ---
 
-## Fase 39 — ECST e validação de eventos (set/2026) ← etapa atual
+## Fase 39 — ECST e validação de eventos (set/2026)
 
 O consumidor deixa de logar e passa a **reagir**: Listed/Delisted flipam a disponibilidade do item nos carrinhos (notification), e o novo `ProductPriceChangedV2IntegrationEvent` carrega os preços para o `ordering` atualizar os carrinhos **sem consultar o catálogo** (ECST). Bean Validation entra nos dois lados do fio, e o cache client-side de produto ganha invalidação por evento.
 
@@ -866,6 +866,25 @@ O consumidor deixa de logar e passa a **reagir**: Listed/Delisted flipam a dispo
 **A lição da fase:** validar o evento nos dois lados é barato e local — o caro é o que acontece com o evento **depois** que ele falha: sem DLQ, o default do framework descarta em silêncio, e "não quebrar" vira "perder dados sem avisar".
 
 > [`ecst-e-validacao-de-eventos.md`](../06-mensageria/ecst-e-validacao-de-eventos.md)
+
+---
+
+## Fase 40 — Contratos AsyncAPI (set/2026) ← etapa atual
+
+O contrato da mensageria sai da memória e vira documento: `docs/asyncapi/` descreve os eventos do tópico em **AsyncAPI 3.1.0** — um documento por serviço e por perspectiva (catálogo `send`, ordering `receive`), mensagens compartilhadas via `$ref`, bindings Kafka com a topologia real, `__TypeId__` como `const` e a key como trait. Validado com `asyncapi validate`.
+
+| Marco | O que se aprende |
+|---|---|
+| AsyncAPI = OpenAPI da mensageria | O que ele descreve (canais, operações, mensagens, servidores) — e o que NÃO faz sozinho (nada liga o YAML ao código) |
+| Canal × operação (3.x) | O tópico é o substantivo; `send`/`receive` são o verbo que cada serviço conjuga — um documento por perspectiva |
+| `messages.yml` via `$ref` | O primeiro artefato ÚNICO do contrato — os POJOs são cópias, o arquivo de mensagens é um só |
+| `__TypeId__` como `const` | O fio invisível entre os `type.mapping` virou contrato escrito e legível |
+| `deprecated` + V2 no mesmo canal | Como um contrato envelhece no documento (V1 ilustrativo — o evento nasceu V2) |
+| O contrato que mente | O primeiro YAML saiu com o `__TypeId__` do V2 errado e sem Listed/Delisted — e o `validate` não pega, porque só valida estrutura |
+
+**A lição da fase:** escrever o contrato é fácil — o difícil, e ainda pendente, é impedi-lo de mentir. O primeiro YAML nasceu com o header errado e mensagens faltando, estruturalmente perfeito, e nada acusou: contrato sem teste que o trave é documentação com data de validade.
+
+> [`asyncapi-contratos.md`](../06-mensageria/asyncapi-contratos.md)
 
 ---
 
@@ -912,6 +931,7 @@ O consumidor deixa de logar e passa a **reagir**: Listed/Delisted flipam a dispo
 - Os dois frontends no repositório: SPA Angular (PKCE) e BFF server-side (sessão em Redis), com composição na borda
 - Cluster Kafka de 3 nós no compose e o primeiro evento de integração real: catálogo → ordering, com key por agregado e `__TypeId__` lógico
 - O consumidor reagindo: notification e ECST no mesmo listener, Bean Validation nos dois lados e cache invalidado por evento
+- Contratos AsyncAPI dos eventos Kafka: perspectivas send/receive, mensagens compartilhadas e topologia documentada
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
