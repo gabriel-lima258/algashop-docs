@@ -161,6 +161,8 @@ SELECT * FROM invoice
 
 O `SKIP LOCKED` faz com que linhas já travadas por outra transação sejam **ignoradas** em vez de causar espera. Isso transforma o banco em uma fila de trabalho segura sem precisar de Kafka/RabbitMQ.
 
+> 🔄 **Retrofit (Fase 41):** o projeto ganhou a ferramenta IRMÃ desta: **ShedLock**, no `ordering` (outbox dispatcher e limpeza de idempotência). A diferença de propósito vale fixar — `SKIP LOCKED` faz as instâncias **dividirem** o trabalho (cada uma pega linhas diferentes da fila); ShedLock faz uma instância **excluir** as outras (o job roda inteiro em um só lugar). Fila de trabalho pede a primeira; job singleton pede a segunda. Ver [Resiliência no consumer](../06-mensageria/resiliencia-consumer-kafka.md).
+
 ### 4. Optimistic Locking (versionamento)
 
 Quando o risco de concorrência é baixo e você só quer detectar conflitos, usa-se uma coluna `@Version` (JPA). Se duas instâncias tentarem atualizar a mesma linha, a segunda recebe `OptimisticLockException` e pode reprocessar.

@@ -182,9 +182,9 @@ O mapa do módulo que este documento abre:
 
 - [x] ~~**Escolher o broker** — pelo papel: o fluxo pedido→fatura precisa de fila ou de log? Consumidores futuros precisarão do passado?~~ — 🔄 Kafka (Fase 38): consumidores futuros dos eventos de catálogo precisam do passado, e a expansão retroativa só o log dá. Ver [Kafka na prática](./kafka-na-pratica.md).
 - [x] ~~**O primeiro evento a atravessar a fronteira**: `pedido confirmado` (ordering → billing), hoje interno ao processo.~~ — 🔄 atravessou na Fase 38, mas por outro par: produto listado/deslistado (**catálogo → ordering**), key = id do produto. O `pedido confirmado` continua no mapa.
-- [ ] **Outbox no produtor** — a pendência da Fase 12 vence quando o broker chegar.
+- [x] ~~**Outbox no produtor** — a pendência da Fase 12 vence quando o broker chegar.~~ — 🔄 venceu e foi paga na Fase 41: [outbox completa no ordering](./outbox-e-checkout-assincrono.md) (recorder transacional + polling publisher), e o catálogo com o desenho alternativo (transação estendida). O Command Message e o Listen to Yourself entraram junto.
 - [ ] **Contrato de evento versionado** — o equivalente de mensageria do Spring Cloud Contract, com teste que o trave.
-- [ ] **DLQ, retentativa e reconciliação** — já listadas na linha do tempo; ganham dono quando houver canal.
+- [x] ~~**DLQ, retentativa e reconciliação**~~ — 🔄 retentativa (backoff exponencial) e DLQ fecharam na Fase 41 ([Resiliência no consumer](./resiliencia-consumer-kafka.md)); reconciliação segue aberta.
 - [ ] **Correlação ponta a ponta** — o id que conta a história de um pedido através dos serviços.
 
 ## Checklist de revisão

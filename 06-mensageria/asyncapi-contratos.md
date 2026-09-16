@@ -86,6 +86,7 @@ Todas consertadas nesta fase — mas o padrão é claro: **escrever o contrato �
 - [ ] **Travar o contrato no CI** — `asyncapi validate` no pipeline é a parte barata; a valiosa é um teste que compare o YAML com o código (consts do `__TypeId__` × `type.mapping`, `required` × campos dos POJOs) — o equivalente de mensageria do que o SCC faz no REST
 - [ ] **Gerar o HTML no pipeline** — documentação renderizada publicada a cada mudança de contrato
 - [ ] **Declarar o destino do ProductAdded** — nenhum contrato `receive` o lista (coerente com o handler default do ordering); quando ganhar consumidor, o contrato do serviço novo nasce junto
+- [ ] 🔄 **O drift previsto já aconteceu (Fase 41)**: o ordering ganhou DOIS tópicos novos (`ordering.order.commands`, `ordering.order.events`) e três DLTs — nenhum tem contrato AsyncAPI. O documento ficou defasado uma fase depois de nascer, exatamente como este doc avisou que aconteceria sem validação no CI
 - [ ] **`correlationId` nas mensagens** — o campo existe na spec e a correlação ponta a ponta segue pendente desde os fundamentos de EDA
 - [ ] **Avaliar schema registry/Avro** — o passo além do JSON schema inline, quando os contratos multiplicarem
 

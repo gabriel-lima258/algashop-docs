@@ -32,7 +32,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 40 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 41 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -113,6 +113,9 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Kafka na prática](./06-mensageria/kafka-na-pratica.md) | O primeiro evento de integração ponta a ponta: catálogo publica com key por agregado, ordering consome com `__TypeId__` lógico e handler default — cluster de 3 nós KRaft no compose, e o dual-write exposto à espera da outbox |
 | [ECST e validação de eventos](./06-mensageria/ecst-e-validacao-de-eventos.md) | O consumidor reage: notification × ECST lado a lado no mesmo listener, o V2 que nasceu sem V1, Bean Validation nos dois lados do fio — e o que o Kafka faz de verdade com o evento que falha (descarta em silêncio) |
 | [AsyncAPI: contratos](./06-mensageria/asyncapi-contratos.md) | O contrato da mensageria escrito: canais × operações (send/receive por perspectiva), mensagens compartilhadas via `$ref`, bindings Kafka, `__TypeId__` como const — e a lição do contrato que nasceu mentindo porque nada o valida contra o código |
+| [Resiliência no producer](./06-mensageria/resiliencia-producer-kafka.md) | O que o produtor pode AFIRMAR: acks/min.insync, idempotência de transporte, a cadeia de timeouts até o gateway — e a transação estendida: falha no Kafka vira rollback no Mongo e 503 |
+| [Resiliência no consumer](./06-mensageria/resiliencia-consumer-kafka.md) | Backoff exponencial, retryable × não-retryable, DLT com partição preservada — e a idempotência de negócio por INSERT-first numa PK, na mesma transação do efeito |
+| [Outbox e checkout assíncrono](./06-mensageria/outbox-e-checkout-assincrono.md) | 202 Accepted + Command Message + Listen to Yourself + a outbox finalmente: recorder MANDATORY, polling publisher com ordem por aggregate — e a starvation do findBatch sem WHERE como armadilha central |
 | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
 | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) | O contrato invisível entre o HTML e o filtro, o `_csrf` que o Thymeleaf injeta, consentimento próprio — e por que um teste de login pode passar com a tela quebrada |
 
@@ -256,6 +259,10 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Aplicar ECST e reagir a eventos no consumidor | [ECST e validação de eventos](./06-mensageria/ecst-e-validacao-de-eventos.md) |
 | Validar eventos com Bean Validation (produtor e consumidor) | [ECST e validação de eventos](./06-mensageria/ecst-e-validacao-de-eventos.md) |
 | Documentar contratos de eventos (AsyncAPI) | [AsyncAPI: contratos](./06-mensageria/asyncapi-contratos.md) |
+| Garantir entrega no producer (acks, idempotence, rollback) | [Resiliência no producer](./06-mensageria/resiliencia-producer-kafka.md) |
+| Tratar falha no consumo (retry, backoff, DLT) | [Resiliência no consumer](./06-mensageria/resiliencia-consumer-kafka.md) |
+| Deduplicar mensagens (idempotência de negócio) | [Resiliência no consumer](./06-mensageria/resiliencia-consumer-kafka.md) |
+| Implementar outbox e checkout assíncrono (202) | [Outbox e checkout assíncrono](./06-mensageria/outbox-e-checkout-assincrono.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Fazer uma tela de consentimento própria | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |

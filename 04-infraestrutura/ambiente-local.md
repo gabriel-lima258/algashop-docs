@@ -185,12 +185,12 @@ A tabela que evita 90% dos problemas de "não conecta":
 | WireMock | **8787** | 8080 | mock de APIs externas |
 | FastPay | **9995** | 9995 | gateway de pagamento simulado |
 | LocalStack | **4566** | 4566 | a AWS emulada — S3 (bucket `algashop-product-image`), Secrets Manager e Parameter Store (config dos 5 serviços) |
-| Kafka broker 1 | **9092** | 9092 | listener `EXTERNAL` — anuncia `localhost:9092` para clientes no host |
-| Kafka broker 2 | **9093** | 9092 | listener `EXTERNAL` — anuncia `localhost:9093` |
-| Kafka broker 3 | **9094** | 9092 | listener `EXTERNAL` — anuncia `localhost:9094` |
+| Kafka broker 1 | **9092** | 9092 | listener `EXTERNAL` — anuncia `localhost:9092`; interno `PLAINTEXT` 9081 |
+| Kafka broker 2 | **9093** | 9093 | listener `EXTERNAL` — anuncia `localhost:9093`; interno 9082 |
+| Kafka broker 3 | **9094** | 9094 | listener `EXTERNAL` — anuncia `localhost:9094`; interno 9083 |
 | Kafka UI | **9084** | 8080 | tópicos, partições, offsets e consumer lag em <http://localhost:9084> |
 
-> Desde a Fase 38 o cluster Kafka (3 nós KRaft, modo combinado) está no tools. De **dentro** da rede os clientes usam o listener interno `algashop-kafka-N:9090`; do **host**, os `EXTERNAL` acima — e os hostnames `algashop-kafka-1/2/3` precisam estar no `/etc/hosts` (já estão em `etc/hostnames/hostnames`), porque é esse o nome no bootstrap do perfil de desenvolvimento. O porquê dos dois endereços está em [Kafka na prática](../06-mensageria/kafka-na-pratica.md).
+> Desde a Fase 38 o cluster Kafka (3 nós KRaft, modo combinado) está no tools. De **dentro** da rede os clientes usam o listener interno — desde a Fase 41 com porta ÚNICA por nó (`algashop-kafka-1:9081`, `-2:9082`, `-3:9083`) e mapping 1:1 nos EXTERNAL, para que um `docker stop` num broker seja diagnosticável pelo número da porta no log ([Resiliência no producer](../06-mensageria/resiliencia-producer-kafka.md)). Do **host**, os `EXTERNAL` acima — e os hostnames `algashop-kafka-1/2/3` precisam estar no `/etc/hosts` (já estão em `etc/hostnames/hostnames`). O porquê dos dois endereços está em [Kafka na prática](../06-mensageria/kafka-na-pratica.md).
 
 O `authorization-server` roda em **9000** e, desde a Fase 26, **está no compose** — em desenvolvimento ainda dá para subi-lo por `./gradlew bootRun`. Os outros três apontam o `issuer-uri` para `http://auth.algashop.local:9000` e é de lá que buscam as chaves públicas.
 

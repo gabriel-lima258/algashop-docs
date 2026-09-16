@@ -33,7 +33,9 @@ httpclient:
 
 Sem `response-timeout`, uma chamada pendurada não é falha — é espera. É o timeout que a transforma em evento contável, e portanto é ele que permite ao Retry retentar e ao circuito abrir. A tese central do doc de resiliência, agora na borda.
 
-O que **não** existe: override por rota (o SCG aceita `metadata: {connect-timeout, response-timeout}` por rota). O mesmo teto de 5s vale para o `GET /api/v1/products` (leitura barata, com duas camadas de cache) e para o `POST /api/v1/orders` (escrita transacional). Pendência registrada.
+> 🔄 **Retrofit (Fase 41):** o `response-timeout` subiu de 5s para **60s** (e entrou um TimeLimiter de 60s no Resilience4j): a escrita do catálogo agora publica no Kafka DENTRO da transação, com `get()` de até 40s — o gateway precisa esperar mais que isso para o rollback acontecer antes do 504 ([Resiliência no producer](../06-mensageria/resiliencia-producer-kafka.md)). O preço: com 60s, o circuito demora MUITO mais para enxergar chamadas penduradas — a calibração fina deste doc foi trocada por um teto largo. O `connect-timeout` tinha ido junto para 60s e **voltou para 1s** (conectar na mesma rede é milissegundos; 60s ali só prendia thread). A pendência abaixo ficou AGUDA.
+
+O que **não** existe: override por rota (o SCG aceita `metadata: {connect-timeout, response-timeout}` por rota). O mesmo teto — agora de 60s — vale para o `GET /api/v1/products` (leitura barata, com duas camadas de cache) e para o `POST` de escrita que o justificou. Pendência registrada, e desde a Fase 41 AGUDA.
 
 ---
 

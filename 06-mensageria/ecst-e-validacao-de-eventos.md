@@ -85,9 +85,9 @@ Três decisões com história:
 
 ## Pendências registradas
 
-- [ ] **Idempotência no consumo de preço** — usar `changedAt`/`old*` que já chegam no evento (compare-and-set)
-- [ ] **Retry com backoff + DLQ** — `DefaultErrorHandler(DeadLetterPublishingRecoverer, ExponentialBackOff)`; o descarte silencioso de hoje é perda de dados
-- [ ] **Outbox no catálogo** — a mais aguda, e o `@Async` no handler de preço a deixou ainda mais silenciosa
+- [x] ~~**Idempotência no consumo de preço**~~ — 🔄 fechada na Fase 41, por mecanismo mais geral que o compare-and-set: guarda de idempotência por chave (INSERT-first na PK de `processed_message`, mesma transação do efeito) — [Resiliência no consumer](./resiliencia-consumer-kafka.md)
+- [x] ~~**Retry com backoff + DLQ**~~ — 🔄 FECHADA na Fase 41 exatamente com esse desenho; o descarte silencioso acabou ([Resiliência no consumer](./resiliencia-consumer-kafka.md))
+- [x] ~~**Outbox no catálogo**~~ — 🔄 Fase 41: o catálogo foi de **transação estendida** (o `@Async` do preço caiu; falha na publicação agora é rollback) e a outbox de verdade nasceu no ordering — [os dois desenhos comparados](./outbox-e-checkout-assincrono.md)
 - [ ] **Testes**: caminho triste da validação (dois lados), handler → carrinho → total recalculado, e decidir o destino do `ShoppingCartUpdateProviderIT`
 - [ ] **Trocar para o caminho bulk quando o N+1 doer** — o código já existe e está testado
 - [ ] **Paginar/limitar `findAllContainingItem`** — hoje carrega todos os carrinhos afetados de uma vez

@@ -113,8 +113,8 @@ O bootstrap é só o primeiro passo: o cliente conecta, recebe o **endereço anu
 
 ## Pendências registradas
 
-- [ ] **Outbox no catálogo** — a mais aguda: o evento já sai, e sai no fio da navalha do dual-write
-- [ ] **Retry com backoff + DLQ** no listener do ordering (`DefaultErrorHandler`/`DeadLetterPublishingRecoverer`) — 🔄 a Fase 39 corrigiu o diagnóstico: o default **não** é retry infinito, é 10 tentativas e **descarte silencioso** com offset commitado — pior, e mais urgente ([detalhes](./ecst-e-validacao-de-eventos.md))
+- [x] ~~**Outbox no catálogo** — a mais aguda: o evento já sai, e sai no fio da navalha do dual-write~~ — 🔄 resolvida na Fase 41 por OUTRO caminho: o catálogo escolheu **transação estendida** (send síncrono dentro do @Transactional — falha no Kafka = rollback no Mongo), não outbox; quem ganhou [outbox de verdade](./outbox-e-checkout-assincrono.md) foi o ordering. Os dois desenhos convivem de propósito, para comparação ([detalhes](./resiliencia-producer-kafka.md))
+- [x] ~~**Retry com backoff + DLQ** no listener do ordering~~ — 🔄 FECHADA na Fase 41: `DefaultErrorHandler` com backoff exponencial (2s/4s/8s), exceções de negócio sem retry, e `DeadLetterPublishingRecoverer` publicando em `ordering.dlt.*` com a mesma partição ([Resiliência no consumer](./resiliencia-consumer-kafka.md))
 - [x] ~~**Reagir ao evento no ordering** — efeito de negócio idempotente (o log já mostra a key e o offset que a idempotência usará)~~ — 🔄 fechada pela metade na [Fase 39](./ecst-e-validacao-de-eventos.md): os handlers atualizam carrinhos (disponibilidade e preço) e invalidam o cache — mas a **idempotência** ainda não veio; `changedAt`/`old*` chegam no evento e são ignorados
 - [ ] **Teste com `spring-kafka-test`** — o starter já está lá; produzir → consumir num broker embarcado
 - [ ] **Contrato de mensageria com teste** — 🔄 metade fechada na Fase 40: o contrato agora **existe por escrito** ([AsyncAPI](./asyncapi-contratos.md) — payload, `__TypeId__`, key, topologia); o teste que o impede de mentir continua pendente

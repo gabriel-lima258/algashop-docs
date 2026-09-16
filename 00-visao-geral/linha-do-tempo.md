@@ -869,7 +869,7 @@ O consumidor deixa de logar e passa a **reagir**: Listed/Delisted flipam a dispo
 
 ---
 
-## Fase 40 — Contratos AsyncAPI (set/2026) ← etapa atual
+## Fase 40 — Contratos AsyncAPI (set/2026)
 
 O contrato da mensageria sai da memória e vira documento: `docs/asyncapi/` descreve os eventos do tópico em **AsyncAPI 3.1.0** — um documento por serviço e por perspectiva (catálogo `send`, ordering `receive`), mensagens compartilhadas via `$ref`, bindings Kafka com a topologia real, `__TypeId__` como `const` e a key como trait. Validado com `asyncapi validate`.
 
@@ -885,6 +885,26 @@ O contrato da mensageria sai da memória e vira documento: `docs/asyncapi/` desc
 **A lição da fase:** escrever o contrato é fácil — o difícil, e ainda pendente, é impedi-lo de mentir. O primeiro YAML nasceu com o header errado e mensagens faltando, estruturalmente perfeito, e nada acusou: contrato sem teste que o trave é documentação com data de validade.
 
 > [`asyncapi-contratos.md`](../06-mensageria/asyncapi-contratos.md)
+
+---
+
+## Fase 41 — Resiliência em Kafka (set/2026) ← etapa atual
+
+O maior módulo de mensageria: 33 aulas em três frentes, documentadas em três partes. O **producer** aprende a não mentir (acks=all + min.insync=2, idempotência de transporte, e a transação estendida: `send().get()` dentro do `@Transactional` — falha no Kafka = rollback no Mongo = 503). O **consumer** aprende a não perder nem repetir (backoff exponencial, DLT com partição preservada, idempotência de negócio por INSERT-first em PK). E o checkout vira **assíncrono**: 202 Accepted, Command Message com snapshot congelado, Listen to Yourself — e a **outbox**, a pendência mais antiga do módulo, finalmente paga (recorder MANDATORY + polling publisher com ordem por aggregate e ShedLock).
+
+| Marco | O que se aprende |
+|---|---|
+| acks e a cadeia de timeouts | O que o produtor pode AFIRMAR — e por que cada timeout engloba o de dentro, até o gateway (60s) |
+| Transação estendida × outbox | Os DOIS desenhos de consistência, lado a lado no projeto: catálogo estende a transação; ordering grava outbox |
+| Retryable × não-retryable + DLT | Retry de BusinessException é inútil; a mensagem que esgota vai ao DLT na MESMA partição, por 30 dias |
+| Idempotência de negócio | INSERT-first na PK, na mesma transação do efeito — marca e efeito commitam juntos ou nenhum |
+| Command Message + Listen to Yourself | O 202 que aceita rápido e o processamento que acontece do outro lado do tópico, no mesmo serviço |
+| A starvation do findBatch | Sem WHERE, as mensagens mortas monopolizam o batch e o outbox trava — e o filtro certo é por AGGREGATE, não por linha |
+| Cluster com portas por nó | 9081/9082/9083: derrubar um broker e SABER qual caiu pelo número no log |
+
+**A lição da fase:** resiliência não é uma feature que se liga — é a soma de decisões pequenas em todas as camadas (ack, timeout, retry, guarda, lock, WHERE), e a corrente vale o elo mais fraco: a outbox inteira estava a um WHERE de travar para sempre.
+
+> [`resiliencia-producer-kafka.md`](../06-mensageria/resiliencia-producer-kafka.md) · [`resiliencia-consumer-kafka.md`](../06-mensageria/resiliencia-consumer-kafka.md) · [`outbox-e-checkout-assincrono.md`](../06-mensageria/outbox-e-checkout-assincrono.md)
 
 ---
 
@@ -932,6 +952,9 @@ O contrato da mensageria sai da memória e vira documento: `docs/asyncapi/` desc
 - Cluster Kafka de 3 nós no compose e o primeiro evento de integração real: catálogo → ordering, com key por agregado e `__TypeId__` lógico
 - O consumidor reagindo: notification e ECST no mesmo listener, Bean Validation nos dois lados e cache invalidado por evento
 - Contratos AsyncAPI dos eventos Kafka: perspectivas send/receive, mensagens compartilhadas e topologia documentada
+- Producer resiliente no catálogo: acks=all, idempotência e rollback transacional quando o broker não confirma
+- Consumer resiliente no ordering: backoff exponencial, DLT por tópico e idempotência de negócio em tabela
+- Checkout assíncrono com 202, Command Message, Listen to Yourself e outbox com polling publisher
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
@@ -958,7 +981,7 @@ O contrato da mensageria sai da memória e vira documento: `docs/asyncapi/` desc
 - Cache nos perfis `docker` e `production`, que hoje rodam sem nenhum
 - ~~Mensageria real entre serviços~~ — parcialmente resolvida na Fase 38: os eventos de produto atravessam via Kafka (catálogo → ordering); a categoria, o estoque e tudo no `ordering` seguem internos ao processo
 - Retentativa, dead letter e reconciliação para a propagação da categoria e para os eventos de estoque
-- **Outbox para o evento que precisar sair do serviço** — ficou AGUDA na Fase 38 e piorou na 39: o evento de preço sai de um handler `@Async` — a falha de publicação nem chega ao chamador, vira log em outra thread
+- ~~**Outbox para o evento que precisar sair do serviço**~~ — paga na Fase 41: outbox completa no `ordering` (comando de checkout e OrderPlaced saem por ela); o catálogo escolheu transação estendida como desenho alternativo consciente. Pendências novas da própria outbox: replay do `failedAt`, notificação dos pedidos V2, consumidor para `ordering.order.events`
 - Endpoint de histórico de movimentação (a coleção existe e ninguém a lê)
 - Contratos Spring Cloud Contract para `/restock` e `/withdraw`
 - Perfis `docker-env` e `production-env`, hoje referenciados e inexistentes
