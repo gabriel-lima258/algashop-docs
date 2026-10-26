@@ -1,0 +1,213 @@
+asyncapi: 3.1.0
+
+info:
+  title: AlgaShop - Billing AsyncAPI
+  version: "1.0"
+
+defaultContentType: application/json
+
+servers:
+  development:
+    host: "algashop-kafka-1:9092"
+    protocol: kafka
+
+channels:
+  orderEvents:
+    address: ordering.order.events
+    title: Order events
+    description: Order lifecycle events consumed by Billing.
+    messages:
+      orderPlaced:
+        $ref: "./messages.yml#/components/messages/OrderPlacedEvent"
+    bindings:
+      kafka:
+        topic: ordering.order.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  invoiceEvents:
+    address: billing.invoice.events
+    title: Invoice events
+    description: Invoice lifecycle events published and consumed by Billing.
+    messages:
+      invoiceIssued:
+        $ref: "./messages.yml#/components/messages/InvoiceIssuedEvent"
+      invoicePaid:
+        $ref: "./messages.yml#/components/messages/InvoicePaidEvent"
+      invoiceCanceled:
+        $ref: "./messages.yml#/components/messages/InvoiceCanceledEvent"
+    bindings:
+      kafka:
+        topic: billing.invoice.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  stockEvents:
+    address: product-catalog.stock.events
+    title: Stock reservation events
+    description: Stock reservation failures consumed to refund invoice payments.
+    messages:
+      stockReservationRejected:
+        $ref: "./messages.yml#/components/messages/StockReservationRejectedEvent"
+    bindings:
+      kafka:
+        topic: product-catalog.stock.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  orderEventsDeadLetter:
+    address: billing.dlt.ordering.order.events
+    title: Order events dead-letter topic
+    description: >-
+      Order events moved here after Billing exhausts its processing retries or
+      encounters a non-retryable failure.
+    messages:
+      orderPlaced:
+        $ref: "./messages.yml#/components/messages/OrderPlacedEvent"
+    bindings:
+      kafka:
+        topic: billing.dlt.ordering.order.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+          retention.ms: 2592000000
+        bindingVersion: "0.5.0"
+
+  invoiceEventsDeadLetter:
+    address: billing.dlt.billing.invoice.events
+    title: Invoice events dead-letter topic
+    description: >-
+      Invoice events moved here after Billing exhausts its processing retries
+      or encounters a non-retryable failure.
+    messages:
+      invoiceIssued:
+        $ref: "./messages.yml#/components/messages/InvoiceIssuedEvent"
+    bindings:
+      kafka:
+        topic: billing.dlt.billing.invoice.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+          retention.ms: 2592000000
+        bindingVersion: "0.5.0"
+
+  stockEventsDeadLetter:
+    address: billing.dlt.product-catalog.stock.events
+    title: Stock events dead-letter topic
+    description: >-
+      Stock events moved here after Billing exhausts its processing retries or
+      encounters a non-retryable failure.
+    messages:
+      stockReservationRejected:
+        $ref: "./messages.yml#/components/messages/StockReservationRejectedEvent"
+    bindings:
+      kafka:
+        topic: billing.dlt.product-catalog.stock.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+          retention.ms: 2592000000
+        bindingVersion: "0.5.0"
+
+operations:
+  consumeOrderPlacedEvents:
+    action: receive
+    channel:
+      $ref: "#/channels/orderEvents"
+    summary: Generates an invoice from each placed order.
+    tags:
+      - name: Orders
+    messages:
+      - $ref: "#/channels/orderEvents/messages/orderPlaced"
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          const: billing.order-events
+        bindingVersion: "0.5.0"
+
+  publishInvoiceEvents:
+    action: send
+    channel:
+      $ref: "#/channels/invoiceEvents"
+    summary: Publishes invoice issuance, payment, and cancellation events.
+    tags:
+      - name: Invoices
+    messages:
+      - $ref: "#/channels/invoiceEvents/messages/invoiceIssued"
+      - $ref: "#/channels/invoiceEvents/messages/invoicePaid"
+      - $ref: "#/channels/invoiceEvents/messages/invoiceCanceled"
+
+  consumeInvoiceIssuedEvents:
+    action: receive
+    channel:
+      $ref: "#/channels/invoiceEvents"
+    summary: Processes payment for issued invoices.
+    tags:
+      - name: Invoices
+    messages:
+      - $ref: "#/channels/invoiceEvents/messages/invoiceIssued"
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          const: billing.invoice-events
+        bindingVersion: "0.5.0"
+
+  consumeStockReservationRejectedEvents:
+    action: receive
+    channel:
+      $ref: "#/channels/stockEvents"
+    summary: Refunds the invoice associated with a rejected stock reservation.
+    tags:
+      - name: Stock
+    messages:
+      - $ref: "#/channels/stockEvents/messages/stockReservationRejected"
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          const: billing.stock-events
+        bindingVersion: "0.5.0"
+
+  publishFailedOrderEvents:
+    action: send
+    channel:
+      $ref: "#/channels/orderEventsDeadLetter"
+    summary: Moves failed order events to the Billing dead-letter topic.
+    tags:
+      - name: Dead letter
+    messages:
+      - $ref: "#/channels/orderEventsDeadLetter/messages/orderPlaced"
+
+  publishFailedInvoiceEvents:
+    action: send
+    channel:
+      $ref: "#/channels/invoiceEventsDeadLetter"
+    summary: Moves failed invoice events to the Billing dead-letter topic.
+    tags:
+      - name: Dead letter
+    messages:
+      - $ref: "#/channels/invoiceEventsDeadLetter/messages/invoiceIssued"
+
+  publishFailedStockEvents:
+    action: send
+    channel:
+      $ref: "#/channels/stockEventsDeadLetter"
+    summary: Moves failed stock events to the Billing dead-letter topic.
+    tags:
+      - name: Dead letter
+    messages:
+      - $ref: "#/channels/stockEventsDeadLetter/messages/stockReservationRejected"

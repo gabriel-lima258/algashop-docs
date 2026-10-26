@@ -4,16 +4,18 @@ info:
   title: AlgaShop - Product Catalog AsyncAPI
   version: "1.0"
 
+defaultContentType: application/json
+
 servers:
   development:
     host: "algashop-kafka-1:9092"
     protocol: kafka
-    description: Development
 
 channels:
   productEvents:
     address: product-catalog.product.events
-    title: Product Events
+    title: Product events
+    description: Product lifecycle and price changes published by Product Catalog.
     messages:
       productAdded:
         $ref: "./messages.yml#/components/messages/ProductAddedEvent"
@@ -25,6 +27,12 @@ channels:
         $ref: "./messages.yml#/components/messages/ProductPriceChangedEvent"
       productPriceChangedV2:
         $ref: "./messages.yml#/components/messages/ProductPriceChangedEventV2"
+      productPlacedOnSale:
+        $ref: "./messages.yml#/components/messages/ProductPlacedOnSaleEvent"
+      productRestocked:
+        $ref: "./messages.yml#/components/messages/ProductRestockedEvent"
+      productSoldOut:
+        $ref: "./messages.yml#/components/messages/ProductSoldOutEvent"
     bindings:
       kafka:
         topic: product-catalog.product.events
@@ -34,12 +42,66 @@ channels:
           min.insync.replicas: 2
         bindingVersion: "0.5.0"
 
+  orderEvents:
+    address: ordering.order.events
+    title: Order events
+    description: Order lifecycle events consumed by Product Catalog.
+    messages:
+      orderPaid:
+        $ref: "./messages.yml#/components/messages/OrderPaidEvent"
+    bindings:
+      kafka:
+        topic: ordering.order.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  stockEvents:
+    address: product-catalog.stock.events
+    title: Stock reservation events
+    description: Results of stock reservation attempts published by Product Catalog.
+    messages:
+      stockReservationConfirmed:
+        $ref: "./messages.yml#/components/messages/StockReservationConfirmedEvent"
+      stockReservationRejected:
+        $ref: "./messages.yml#/components/messages/StockReservationRejectedEvent"
+    bindings:
+      kafka:
+        topic: product-catalog.stock.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  orderEventsDeadLetter:
+    address: product-catalog.dlt.ordering.order.events
+    title: Order events dead-letter topic
+    description: >-
+      Order events moved here after Product Catalog exhausts its processing
+      retries or encounters a non-retryable failure. Records retain the source
+      partition and receive the standard Spring Kafka dead-letter headers.
+    messages:
+      orderPaid:
+        $ref: "./messages.yml#/components/messages/OrderPaidEvent"
+    bindings:
+      kafka:
+        topic: product-catalog.dlt.ordering.order.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+          retention.ms: 2592000000
+        bindingVersion: "0.5.0"
+
 operations:
-  sendProductEvents:
-    action: send # Producer
+  publishProductEvents:
+    action: send
     channel:
       $ref: "#/channels/productEvents"
-    summary: Publishes product events
+    summary: Publishes product lifecycle and price-change events.
     tags:
       - name: Products
     messages:
@@ -48,3 +110,43 @@ operations:
       - $ref: "#/channels/productEvents/messages/productDelisted"
       - $ref: "#/channels/productEvents/messages/productPriceChanged"
       - $ref: "#/channels/productEvents/messages/productPriceChangedV2"
+      - $ref: "#/channels/productEvents/messages/productPlacedOnSale"
+      - $ref: "#/channels/productEvents/messages/productRestocked"
+      - $ref: "#/channels/productEvents/messages/productSoldOut"
+
+  consumeOrderPaidEvents:
+    action: receive
+    channel:
+      $ref: "#/channels/orderEvents"
+    summary: Consumes paid-order events and attempts to reserve stock.
+    tags:
+      - name: Orders
+    messages:
+      - $ref: "#/channels/orderEvents/messages/orderPaid"
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          const: product-catalog.order-events
+        bindingVersion: "0.5.0"
+
+  publishStockReservationEvents:
+    action: send
+    channel:
+      $ref: "#/channels/stockEvents"
+    summary: Publishes the outcome of stock reservation attempts.
+    tags:
+      - name: Stock
+    messages:
+      - $ref: "#/channels/stockEvents/messages/stockReservationConfirmed"
+      - $ref: "#/channels/stockEvents/messages/stockReservationRejected"
+
+  publishFailedOrderEvents:
+    action: send
+    channel:
+      $ref: "#/channels/orderEventsDeadLetter"
+    summary: Moves order events that could not be processed to the dead-letter topic.
+    tags:
+      - name: Dead letter
+    messages:
+      - $ref: "#/channels/orderEventsDeadLetter/messages/orderPaid"

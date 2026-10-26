@@ -3,22 +3,35 @@ asyncapi: 3.1.0
 info:
   title: AlgaShop - Ordering AsyncAPI
   version: "1.0"
+  description: >-
+    Asynchronous contract of the Ordering service. The service publishes order
+    lifecycle events and checkout-processing commands, and consumes product,
+    invoice, stock reservation, and checkout command messages.
+
+defaultContentType: application/json
 
 servers:
   development:
     host: "algashop-kafka-1:9092"
     protocol: kafka
-    description: Development
+    description: >-
+      Development Kafka cluster. The other bootstrap brokers are
+      algashop-kafka-2:9093 and algashop-kafka-3:9094.
 
 channels:
   productEvents:
     address: product-catalog.product.events
-    title: Product Events
+    title: Product events
+    description: Product changes consumed by Ordering to update carts and cached products.
     messages:
       productListed:
         $ref: "./messages.yml#/components/messages/ProductListedEvent"
       productDelisted:
         $ref: "./messages.yml#/components/messages/ProductDelistedEvent"
+      productRestocked:
+        $ref: "./messages.yml#/components/messages/ProductRestockedEvent"
+      productSoldOut:
+        $ref: "./messages.yml#/components/messages/ProductSoldOutEvent"
       productPriceChangedV2:
         $ref: "./messages.yml#/components/messages/ProductPriceChangedEventV2"
     bindings:
@@ -30,15 +43,273 @@ channels:
           min.insync.replicas: 2
         bindingVersion: "0.5.0"
 
+  orderEvents:
+    address: ordering.order.events
+    title: Order events
+    description: Order lifecycle events published by Ordering.
+    messages:
+      orderPlaced:
+        $ref: "./messages.yml#/components/messages/OrderPlacedEvent"
+      orderPaid:
+        $ref: "./messages.yml#/components/messages/OrderPaidEvent"
+      orderReady:
+        $ref: "./messages.yml#/components/messages/OrderReadyEvent"
+      orderCanceled:
+        $ref: "./messages.yml#/components/messages/OrderCanceledEvent"
+    bindings:
+      kafka:
+        topic: ordering.order.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  orderCommands:
+    address: ordering.order.commands
+    title: Order commands
+    description: Commands used to complete accepted checkouts asynchronously.
+    messages:
+      processAcceptedCheckout:
+        $ref: "./messages.yml#/components/messages/ProcessAcceptedCheckoutCommand"
+    bindings:
+      kafka:
+        topic: ordering.order.commands
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  invoiceEvents:
+    address: billing.invoice.events
+    title: Invoice events
+    description: Invoice results consumed to advance or cancel orders.
+    messages:
+      invoicePaid:
+        $ref: "./messages.yml#/components/messages/InvoicePaidEvent"
+      invoiceCanceled:
+        $ref: "./messages.yml#/components/messages/InvoiceCanceledEvent"
+    bindings:
+      kafka:
+        topic: billing.invoice.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  stockEvents:
+    address: product-catalog.stock.events
+    title: Stock reservation events
+    description: Stock reservation confirmations consumed to mark orders as ready.
+    messages:
+      stockReservationConfirmed:
+        $ref: "./messages.yml#/components/messages/StockReservationConfirmedEvent"
+    bindings:
+      kafka:
+        topic: product-catalog.stock.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  productEventsDeadLetter:
+    address: ordering.dlt.product-catalog.product.events
+    title: Product events dead-letter topic
+    messages:
+      productListed:
+        $ref: "./messages.yml#/components/messages/ProductListedEvent"
+      productDelisted:
+        $ref: "./messages.yml#/components/messages/ProductDelistedEvent"
+      productRestocked:
+        $ref: "./messages.yml#/components/messages/ProductRestockedEvent"
+      productSoldOut:
+        $ref: "./messages.yml#/components/messages/ProductSoldOutEvent"
+      productPriceChangedV2:
+        $ref: "./messages.yml#/components/messages/ProductPriceChangedEventV2"
+    bindings:
+      kafka:
+        topic: ordering.dlt.product-catalog.product.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+          retention.ms: 2592000000
+        bindingVersion: "0.5.0"
+
+  orderCommandsDeadLetter:
+    address: ordering.dlt.ordering.order.commands
+    title: Order commands dead-letter topic
+    messages:
+      processAcceptedCheckout:
+        $ref: "./messages.yml#/components/messages/ProcessAcceptedCheckoutCommand"
+    bindings:
+      kafka:
+        topic: ordering.dlt.ordering.order.commands
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+          retention.ms: 2592000000
+        bindingVersion: "0.5.0"
+
+  invoiceEventsDeadLetter:
+    address: ordering.dlt.billing.invoice.events
+    title: Invoice events dead-letter topic
+    messages:
+      invoicePaid:
+        $ref: "./messages.yml#/components/messages/InvoicePaidEvent"
+      invoiceCanceled:
+        $ref: "./messages.yml#/components/messages/InvoiceCanceledEvent"
+    bindings:
+      kafka:
+        topic: ordering.dlt.billing.invoice.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+          retention.ms: 2592000000
+        bindingVersion: "0.5.0"
+
+  stockEventsDeadLetter:
+    address: ordering.dlt.product-catalog.stock.events
+    title: Stock events dead-letter topic
+    messages:
+      stockReservationConfirmed:
+        $ref: "./messages.yml#/components/messages/StockReservationConfirmedEvent"
+    bindings:
+      kafka:
+        topic: ordering.dlt.product-catalog.stock.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+          retention.ms: 2592000000
+        bindingVersion: "0.5.0"
+
 operations:
   consumeProductEvents:
-    action: receive # Consumer
+    action: receive
     channel:
       $ref: "#/channels/productEvents"
-    summary: Consumes product events
+    summary: Updates shopping carts and product caches from product changes.
     tags:
       - name: Products
     messages:
       - $ref: "#/channels/productEvents/messages/productListed"
       - $ref: "#/channels/productEvents/messages/productDelisted"
+      - $ref: "#/channels/productEvents/messages/productRestocked"
+      - $ref: "#/channels/productEvents/messages/productSoldOut"
       - $ref: "#/channels/productEvents/messages/productPriceChangedV2"
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          const: ordering.product-events
+        bindingVersion: "0.5.0"
+
+  publishOrderEvents:
+    action: send
+    channel:
+      $ref: "#/channels/orderEvents"
+    summary: Publishes order lifecycle changes.
+    tags:
+      - name: Orders
+    messages:
+      - $ref: "#/channels/orderEvents/messages/orderPlaced"
+      - $ref: "#/channels/orderEvents/messages/orderPaid"
+      - $ref: "#/channels/orderEvents/messages/orderReady"
+      - $ref: "#/channels/orderEvents/messages/orderCanceled"
+
+  publishOrderCommands:
+    action: send
+    channel:
+      $ref: "#/channels/orderCommands"
+    summary: Enqueues accepted checkouts for asynchronous processing.
+    tags:
+      - name: Checkout
+    messages:
+      - $ref: "#/channels/orderCommands/messages/processAcceptedCheckout"
+
+  consumeOrderCommands:
+    action: receive
+    channel:
+      $ref: "#/channels/orderCommands"
+    summary: Persists accepted checkouts and emits their placed-order events.
+    tags:
+      - name: Checkout
+    messages:
+      - $ref: "#/channels/orderCommands/messages/processAcceptedCheckout"
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          const: ordering.order-commands
+        bindingVersion: "0.5.0"
+
+  consumeInvoiceEvents:
+    action: receive
+    channel:
+      $ref: "#/channels/invoiceEvents"
+    summary: Marks orders as paid or cancels them from invoice outcomes.
+    tags:
+      - name: Invoices
+    messages:
+      - $ref: "#/channels/invoiceEvents/messages/invoicePaid"
+      - $ref: "#/channels/invoiceEvents/messages/invoiceCanceled"
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          const: ordering.invoice-events
+        bindingVersion: "0.5.0"
+
+  consumeStockEvents:
+    action: receive
+    channel:
+      $ref: "#/channels/stockEvents"
+    summary: Marks orders as ready after stock reservation succeeds.
+    tags:
+      - name: Stock
+    messages:
+      - $ref: "#/channels/stockEvents/messages/stockReservationConfirmed"
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          const: ordering.stock-events
+        bindingVersion: "0.5.0"
+
+  publishFailedProductEvents:
+    action: send
+    channel:
+      $ref: "#/channels/productEventsDeadLetter"
+    summary: Moves product events that could not be processed to their dead-letter topic.
+    tags:
+      - name: Dead letter
+
+  publishFailedOrderCommands:
+    action: send
+    channel:
+      $ref: "#/channels/orderCommandsDeadLetter"
+    summary: Moves checkout commands that could not be processed to their dead-letter topic.
+    tags:
+      - name: Dead letter
+
+  publishFailedInvoiceEvents:
+    action: send
+    channel:
+      $ref: "#/channels/invoiceEventsDeadLetter"
+    summary: Moves invoice events that could not be processed to their dead-letter topic.
+    tags:
+      - name: Dead letter
+
+  publishFailedStockEvents:
+    action: send
+    channel:
+      $ref: "#/channels/stockEventsDeadLetter"
+    summary: Moves stock events that could not be processed to their dead-letter topic.
+    tags:
+      - name: Dead letter
