@@ -910,17 +910,19 @@ O maior módulo de mensageria: 33 aulas em três frentes, documentadas em três 
 
 ## Fase 42 — Workflow coreografado (out/2026) ← etapa atual
 
-Os eventos deixam de ser avisos isolados e viram um **processo de negócio**: pedido → fatura → pagamento → estoque → pedido pronto, sem nenhum serviço no comando. Cada um escuta o fato anterior e publica o seu (Event Collaboration). O primeiro elo está pronto: o billing consome o `OrderPlaced` do ordering e gera a fatura, reaproveitando o mesmo caso de uso que a API REST já chamava.
+Os eventos deixam de ser avisos isolados e viram um **processo de negócio** sem nenhum serviço no comando: cada um escuta o fato anterior e publica o seu (Event Collaboration). O módulo fechou quatro elos: o ordering publica `OrderPlaced`; o billing gera a fatura e publica `InvoiceIssued`; o próprio billing consome esse evento para cobrar e publica `InvoicePaid` (pela cobrança síncrona ou pelo webhook); o ordering marca o pedido como pago e publica `OrderPaid` pela outbox, com os itens para o catálogo reservar estoque, elo que ainda não tem consumidor.
 
 | Marco | O que se aprende |
 |---|---|
 | O mapa do workflow | Faixas de fato × reação, e compensação como **evento**, não rollback: a semente da saga |
-| Event Collaboration | O receptor decide o próximo passo; o fluxo não está escrito em lugar nenhum, e o `orderId` como key é o que o correlaciona |
-| Billing consome `OrderPlaced` | Handler tipado + handler default que ignora, type mapping lógico, ECST dispensando HTTP de volta |
-| Assembler anticorrupção | O evento fala a língua do ordering; o `GenerateInvoiceInput` fala a do billing (frete vira line item) |
-| Idempotência por constraint | `UNIQUE (order_id)` impede fatura dupla, mas a duplicata cai no DLT como não-retryable |
+| Event Collaboration | O receptor decide o próximo passo; correlação pelo `orderId` no payload, key pelo agregado de quem publica |
+| Billing consome `OrderPlaced` | Handler tipado + default que ignora, assembler anticorrupção, fatura única por constraint |
+| Domínio → integração no billing | Porta/adaptador do publisher, `Mapper` e `@TransactionalEventListener`: nenhum evento fantasma |
+| Listen to Yourself no workflow | Emitir (Postgres) e cobrar (gateway) separados por um tópico, cada um com retry e DLT próprios |
+| Webhook anônimo | `isAuthenticated()` é true para `AnonymousAuthenticationToken`; a auditoria precisa tratar anônimo, máquina e pessoa |
+| Ordering reage à fatura paga | Dois consumer groups no mesmo tópico; `OrderPaid` gravado na outbox na MESMA transação do `markAsPaid` |
 
-**A lição da fase (até aqui):** em coreografia, o desenho do fluxo é o único lugar onde ele existe inteiro. O código mostra só a vizinhança de cada serviço; o mapa e os contratos AsyncAPI são a documentação do processo.
+**A lição da fase:** o projeto agora tem duas estratégias de publicação convivendo, e o workflow mostra a diferença na prática. After-commit (catálogo e billing) nunca publica o que não foi commitado, mas pode perder o que foi: a exceção depois do commit é só logada e a coreografia trava em silêncio. A outbox (ordering) não perde. E a idempotência, nos dois lados, ainda significa "duplicata vai para o DLT", ou, no pagamento, "cobra de novo".
 
 > [`workflow-coreografado.md`](../06-mensageria/workflow-coreografado.md)
 
@@ -973,9 +975,13 @@ Os eventos deixam de ser avisos isolados e viram um **processo de negócio**: pe
 - Producer resiliente no catálogo: acks=all, idempotência e rollback transacional quando o broker não confirma
 - Consumer resiliente no ordering: backoff exponencial, DLT por tópico e idempotência de negócio em tabela
 - Checkout assíncrono com 202, Command Message, Listen to Yourself e outbox com polling publisher
-- Workflow coreografado começando: billing gera fatura ao consumir o `OrderPlaced` do ordering
+- Workflow coreografado pedido → fatura → pagamento → pedido pago entre ordering e billing, com `OrderPaid` publicado para o catálogo
 
 **Próximos passos naturais:**
+- **Outbox no billing** — hoje `InvoiceIssued` e `InvoicePaid` saem after-commit; falha no Kafka depois do commit é só logada e o workflow trava em silêncio
+- **Guardar o `capture()` contra reentrega** — `processPayment` não checa o status antes de cobrar; retry de timeout ou duplicata do `InvoiceIssued` cobra de novo
+- **Publicar `InvoiceCanceled`** — o listener segue vazio; pagamento recusado nunca cancela o pedido
+- **Duplicata como sucesso, não DLT** — `UNIQUE (order_id)` no billing e `OrderStatusCannotBeChanged` no ordering mandam reentregas legítimas ao DLT
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
 - **Ligar o PKCE também no client confidencial** — o admin já usa; o `algashop-ecommerce-web` segue com `require-proof-key: false`
 - **Enviar o e-mail depois do commit** — hoje o `@Async` dispara antes, e o link pode chegar antes do token existir
