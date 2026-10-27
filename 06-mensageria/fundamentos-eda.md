@@ -165,6 +165,8 @@ Um fluxo de negócio que atravessa serviços — pedido → fatura → cobrança
 
 A regra prática que este módulo vai testar: **fluxo curto, linear e estável → coreografia; fluxo longo, com ramificações e compensações → orquestração.** O fluxo pedido→fatura do AlgaShop, hoje, é curto — candidato natural a nascer coreografado. Quando existir "cancelar pedido já faturado com estorno no gateway", a conversa sobre orquestração (e sobre **sagas**, o padrão que formaliza compensação distribuída) volta com material concreto.
 
+> A prática começou: o fluxo pedido → fatura → pagamento → estoque, coreografado de verdade, está em [Workflow coreografado](./workflow-coreografado.md).
+
 ---
 
 ## Armadilhas

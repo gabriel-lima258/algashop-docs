@@ -888,7 +888,7 @@ O contrato da mensageria sai da memória e vira documento: `docs/asyncapi/` desc
 
 ---
 
-## Fase 41 — Resiliência em Kafka (set/2026) ← etapa atual
+## Fase 41 — Resiliência em Kafka (set/2026)
 
 O maior módulo de mensageria: 33 aulas em três frentes, documentadas em três partes. O **producer** aprende a não mentir (acks=all + min.insync=2, idempotência de transporte, e a transação estendida: `send().get()` dentro do `@Transactional` — falha no Kafka = rollback no Mongo = 503). O **consumer** aprende a não perder nem repetir (backoff exponencial, DLT com partição preservada, idempotência de negócio por INSERT-first em PK). E o checkout vira **assíncrono**: 202 Accepted, Command Message com snapshot congelado, Listen to Yourself — e a **outbox**, a pendência mais antiga do módulo, finalmente paga (recorder MANDATORY + polling publisher com ordem por aggregate e ShedLock).
 
@@ -905,6 +905,24 @@ O maior módulo de mensageria: 33 aulas em três frentes, documentadas em três 
 **A lição da fase:** resiliência não é uma feature que se liga — é a soma de decisões pequenas em todas as camadas (ack, timeout, retry, guarda, lock, WHERE), e a corrente vale o elo mais fraco: a outbox inteira estava a um WHERE de travar para sempre.
 
 > [`resiliencia-producer-kafka.md`](../06-mensageria/resiliencia-producer-kafka.md) · [`resiliencia-consumer-kafka.md`](../06-mensageria/resiliencia-consumer-kafka.md) · [`outbox-e-checkout-assincrono.md`](../06-mensageria/outbox-e-checkout-assincrono.md)
+
+---
+
+## Fase 42 — Workflow coreografado (out/2026) ← etapa atual
+
+Os eventos deixam de ser avisos isolados e viram um **processo de negócio**: pedido → fatura → pagamento → estoque → pedido pronto, sem nenhum serviço no comando. Cada um escuta o fato anterior e publica o seu (Event Collaboration). O primeiro elo está pronto: o billing consome o `OrderPlaced` do ordering e gera a fatura, reaproveitando o mesmo caso de uso que a API REST já chamava.
+
+| Marco | O que se aprende |
+|---|---|
+| O mapa do workflow | Faixas de fato × reação, e compensação como **evento**, não rollback: a semente da saga |
+| Event Collaboration | O receptor decide o próximo passo; o fluxo não está escrito em lugar nenhum, e o `orderId` como key é o que o correlaciona |
+| Billing consome `OrderPlaced` | Handler tipado + handler default que ignora, type mapping lógico, ECST dispensando HTTP de volta |
+| Assembler anticorrupção | O evento fala a língua do ordering; o `GenerateInvoiceInput` fala a do billing (frete vira line item) |
+| Idempotência por constraint | `UNIQUE (order_id)` impede fatura dupla, mas a duplicata cai no DLT como não-retryable |
+
+**A lição da fase (até aqui):** em coreografia, o desenho do fluxo é o único lugar onde ele existe inteiro. O código mostra só a vizinhança de cada serviço; o mapa e os contratos AsyncAPI são a documentação do processo.
+
+> [`workflow-coreografado.md`](../06-mensageria/workflow-coreografado.md)
 
 ---
 
@@ -955,6 +973,7 @@ O maior módulo de mensageria: 33 aulas em três frentes, documentadas em três 
 - Producer resiliente no catálogo: acks=all, idempotência e rollback transacional quando o broker não confirma
 - Consumer resiliente no ordering: backoff exponencial, DLT por tópico e idempotência de negócio em tabela
 - Checkout assíncrono com 202, Command Message, Listen to Yourself e outbox com polling publisher
+- Workflow coreografado começando: billing gera fatura ao consumir o `OrderPlaced` do ordering
 
 **Próximos passos naturais:**
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
@@ -981,7 +1000,7 @@ O maior módulo de mensageria: 33 aulas em três frentes, documentadas em três 
 - Cache nos perfis `docker` e `production`, que hoje rodam sem nenhum
 - ~~Mensageria real entre serviços~~ — parcialmente resolvida na Fase 38: os eventos de produto atravessam via Kafka (catálogo → ordering); a categoria, o estoque e tudo no `ordering` seguem internos ao processo
 - Retentativa, dead letter e reconciliação para a propagação da categoria e para os eventos de estoque
-- ~~**Outbox para o evento que precisar sair do serviço**~~ — paga na Fase 41: outbox completa no `ordering` (comando de checkout e OrderPlaced saem por ela); o catálogo escolheu transação estendida como desenho alternativo consciente. Pendências novas da própria outbox: replay do `failedAt`, notificação dos pedidos V2, consumidor para `ordering.order.events`
+- ~~**Outbox para o evento que precisar sair do serviço**~~ — paga na Fase 41: outbox completa no `ordering` (comando de checkout e OrderPlaced saem por ela); o catálogo escolheu transação estendida como desenho alternativo consciente. Pendências novas da própria outbox: replay do `failedAt`, notificação dos pedidos V2, ~~consumidor para `ordering.order.events`~~ (o billing passou a consumir na Fase 42)
 - Endpoint de histórico de movimentação (a coleção existe e ninguém a lê)
 - Contratos Spring Cloud Contract para `/restock` e `/withdraw`
 - Perfis `docker-env` e `production-env`, hoje referenciados e inexistentes
