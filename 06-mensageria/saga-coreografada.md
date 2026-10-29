@@ -199,14 +199,6 @@ public class Product extends AbstractAggregateRoot<Product> {
 
 `AbstractAggregateRoot` não sobrescreve `equals`, então `callSuper = true` faz o Lombok chamar o `Object.equals`, que compara **referência**. Dois `Product` com o mesmo id, carregados em momentos diferentes, deixam de ser iguais, e o `hashCode` muda junto. O comentário logo acima da anotação diz o contrário ("a identidade é o id e mais nada"). O aviso do Lombok que motivou a troca pede justamente `callSuper = false` aqui, que era o valor anterior. `StockMovement` e `StockReservation` usam `callSuper = false`, corretamente.
 
-### `StockServiceTest` não compila
-
-O teste ainda chama `stockService.restock(product, 10)` e `withdraw(product, 10)` com um `Product`, e verifica `domainEventPublisher.publish(...)`. O `StockService` agora recebe `UUID` e não tem mais `DomainEventPublisher`. Só os imports do teste foram atualizados. A asserção de "publica `ProductSoldOut` na transição para zero" agora pertence a um teste do `StockMovementRegisteredEvent.causedSoldOut()` e do `StockMovementEventListener`.
-
-### Duas `InsufficientStockException`
-
-Existe `domain/product/InsufficientStockException` (a antiga, lançada pelo `QuantityInStockAdjustmentMongoDBImpl`) e `domain/stock/InsufficientStockException` (a nova, com `productId`, `requested`, `available`, lançada pelo `withdrawAll`). Quem fizer `catch` ou mapear para HTTP 422 pela classe vai pegar só uma das duas.
-
 ### ~~Comentário que a própria refatoração desmentiu~~ (corrigido)
 
 O passo 3 do `withdrawAll` dizia: "Sem transação em volta, uma falha no meio deixa os anteriores já baixados". Com o `MANDATORY` no ajuste, não existe "sem transação em volta": o código nem roda. O comentário agora diz o que o código faz: quem chama abre a transação, e uma falha no meio desfaz também as baixas anteriores.
