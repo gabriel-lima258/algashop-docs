@@ -32,7 +32,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Documento | O que você aprende |
 |---|---|
 | [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 42 fases — o que foi construído em cada etapa e por que naquela ordem |
+| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 43 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -117,6 +117,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | [Resiliência no consumer](./06-mensageria/resiliencia-consumer-kafka.md) | Backoff exponencial, retryable × não-retryable, DLT com partição preservada — e a idempotência de negócio por INSERT-first numa PK, na mesma transação do efeito |
 | [Outbox e checkout assíncrono](./06-mensageria/outbox-e-checkout-assincrono.md) | 202 Accepted + Command Message + Listen to Yourself + a outbox finalmente: recorder MANDATORY, polling publisher com ordem por aggregate — e a starvation do findBatch sem WHERE como armadilha central |
 | [Workflow coreografado](./06-mensageria/workflow-coreografado.md) | O pedido que atravessa serviços sem maestro: pedido → fatura → pagamento → pedido pago, Event Collaboration, Listen to Yourself no billing, after-commit × outbox lado a lado — e o evento que se perde em silêncio depois do commit *(doc vivo, cresce com os módulos de saga)* |
+| [Saga coreografada](./06-mensageria/saga-coreografada.md) | Desfazer o que já foi feito em outro serviço: transações locais e compensações, o passo pivô, a falta de isolamento, o pedido cancelado pela fatura e o agregado `StockReservation` — e o listener que perdeu a anotação na refatoração *(doc vivo do módulo 8)* |
 | [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
 | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) | O contrato invisível entre o HTML e o filtro, o `_csrf` que o Thymeleaf injeta, consentimento próprio — e por que um teste de login pode passar com a tela quebrada |
 
@@ -265,6 +266,7 @@ Para revisar o conteúdo do zero, nesta ordem:
 | Deduplicar mensagens (idempotência de negócio) | [Resiliência no consumer](./06-mensageria/resiliencia-consumer-kafka.md) |
 | Implementar outbox e checkout assíncrono (202) | [Outbox e checkout assíncrono](./06-mensageria/outbox-e-checkout-assincrono.md) |
 | Encadear serviços num processo por eventos (coreografia) | [Workflow coreografado](./06-mensageria/workflow-coreografado.md) |
+| Desfazer passos de outros serviços quando algo falha (saga) | [Saga coreografada](./06-mensageria/saga-coreografada.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
 | Fazer uma tela de consentimento própria | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |

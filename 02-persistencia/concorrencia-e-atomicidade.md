@@ -157,6 +157,8 @@ O `newQuantity` é **calculado**, não relido: o `$inc` foi aplicado exatamente 
 
 ## Transição, não estado
 
+> **Atualização (Fase 43, saga):** o código citado nesta seção mudou de lugar. `isOutOfStock()`/`isRestocked()` saíram do `QuantityInStockAdjustment.Result` e viraram `causedSoldOut()`/`causedRestock()` no `StockMovementRegisteredEvent` (pacote `domain/stock`); o `StockService` passou a receber `UUID`, perdeu o `DomainEventPublisher` e o `adjust()` que embrulhava falha técnica em `DomainException`; o `QuantityInStockAdjustmentMongoDBImpl` ganhou `@Transactional(propagation = MANDATORY)`. A atualização condicional atômica, que é o assunto deste doc, não mudou. Ver [Saga coreografada](../06-mensageria/saga-coreografada.md#85--retirando-itens-reservados-do-estoque).
+
 O `Result` devolve os dois valores justamente porque o que interessa é a **mudança**:
 
 ```java

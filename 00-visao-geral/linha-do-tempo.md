@@ -908,7 +908,7 @@ O maior módulo de mensageria: 33 aulas em três frentes, documentadas em três 
 
 ---
 
-## Fase 42 — Workflow coreografado (out/2026) ← etapa atual
+## Fase 42 — Workflow coreografado (out/2026)
 
 Os eventos deixam de ser avisos isolados e viram um **processo de negócio** sem nenhum serviço no comando: cada um escuta o fato anterior e publica o seu (Event Collaboration). O módulo fechou quatro elos: o ordering publica `OrderPlaced`; o billing gera a fatura e publica `InvoiceIssued`; o próprio billing consome esse evento para cobrar e publica `InvoicePaid` (pela cobrança síncrona ou pelo webhook); o ordering marca o pedido como pago e publica `OrderPaid` pela outbox, com os itens para o catálogo reservar estoque, elo que ainda não tem consumidor.
 
@@ -925,6 +925,24 @@ Os eventos deixam de ser avisos isolados e viram um **processo de negócio** sem
 **A lição da fase:** o projeto agora tem duas estratégias de publicação convivendo, e o workflow mostra a diferença na prática. After-commit (catálogo e billing) nunca publica o que não foi commitado, mas pode perder o que foi: a exceção depois do commit é só logada e a coreografia trava em silêncio. A outbox (ordering) não perde. E a idempotência, nos dois lados, ainda significa "duplicata vai para o DLT", ou, no pagamento, "cobra de novo".
 
 > [`workflow-coreografado.md`](../06-mensageria/workflow-coreografado.md)
+
+---
+
+## Fase 43 — Saga coreografada (out/2026) ← etapa atual
+
+O workflow aprende a andar para trás. Sem transação que abrace três bancos, cada passo commitado ganha um passo contrário, também local e também disparado por evento: a **saga**. A primeira compensação está no ar (fatura cancelada → pedido cancelado, publicado pela outbox), e o catálogo se prepara para o passo que pode falhar depois do pagamento: um subdomínio `domain/stock` com o agregado `StockReservation` (que grava o resultado, inclusive a rejeição) e a baixa "tudo ou nada" dos itens de um pedido.
+
+| Marco | O que se aprende |
+|---|---|
+| Saga | Transações locais + compensações semânticas; passo pivô (a cobrança); sem isolamento, os estados intermediários ficam visíveis |
+| Pedido cancelado pela fatura | `InvoiceCanceled` → `markAsCanceled` → `OrderCanceled`; `CANCELED` aceita vir de quase todo status porque a compensação pode chegar em qualquer ponto |
+| `StockReservation` | A decisão (confirmada ou rejeitada) vira fato gravado, com índice único por `orderId` como idempotência |
+| `withdrawAll` | Agrupar por produto, pré-validar tudo, baixar pelo `decrease()` atômico; `MANDATORY` no ajuste faz a falha no meio desfazer tudo |
+| Refatoração do estoque | `StockMovement` vira agregado que anuncia o próprio movimento; sold-out/restock viram leitura do evento |
+
+**A lição da fase (até aqui):** refatorar para um desenho de eventos é fácil de fazer e fácil de quebrar sem perceber. O listener que perdeu a anotação, o `equals` que virou comparação de referência e o teste que deixou de compilar passaram todos pela mesma mudança, e nenhum avisou em tempo de execução.
+
+> [`saga-coreografada.md`](../06-mensageria/saga-coreografada.md)
 
 ---
 
@@ -976,11 +994,15 @@ Os eventos deixam de ser avisos isolados e viram um **processo de negócio** sem
 - Consumer resiliente no ordering: backoff exponencial, DLT por tópico e idempotência de negócio em tabela
 - Checkout assíncrono com 202, Command Message, Listen to Yourself e outbox com polling publisher
 - Workflow coreografado pedido → fatura → pagamento → pedido pago entre ordering e billing, com `OrderPaid` publicado para o catálogo
+- Saga coreografada começando: fatura cancelada cancela o pedido; reserva de estoque modelada no catálogo
 
 **Próximos passos naturais:**
 - **Outbox no billing** — hoje `InvoiceIssued` e `InvoicePaid` saem after-commit; falha no Kafka depois do commit é só logada e o workflow trava em silêncio
 - **Guardar o `capture()` contra reentrega** — `processPayment` não checa o status antes de cobrar; retry de timeout ou duplicata do `InvoiceIssued` cobra de novo
-- **Publicar `InvoiceCanceled`** — o listener segue vazio; pagamento recusado nunca cancela o pedido
+- ~~**Publicar `InvoiceCanceled`**~~ — feito na Fase 43; pagamento recusado agora cancela o pedido
+- **Cancelar fatura vencida pelo domínio** — o `billing-scheduler` faz `UPDATE` direto e não publica `InvoiceCanceled`; o pedido da fatura expirada nunca é cancelado
+- **Anotar o `StockMovementEventListener`** — sem `@EventListener`, `ProductSoldOut`/`ProductRestocked` deixaram de existir na refatoração
+- **Voltar o `equals` do `Product` para `callSuper = false`** e consertar o `StockServiceTest`, que não compila mais
 - **Duplicata como sucesso, não DLT** — `UNIQUE (order_id)` no billing e `OrderStatusCannotBeChanged` no ordering mandam reentregas legítimas ao DLT
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
 - **Ligar o PKCE também no client confidencial** — o admin já usa; o `algashop-ecommerce-web` segue com `require-proof-key: false`

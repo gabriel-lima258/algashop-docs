@@ -73,8 +73,8 @@ O segundo caso é o mais didático: **uma falha no catálogo cancela um pedido n
 | 4 | `OrderPaid` | ordering (outbox) | catálogo: Reserve stock | `ordering.order.events` | ⏳ publicado (7.10), **sem consumidor** ainda |
 | 5 | `StockReservationConfirmed` | catálogo | ordering: Mark order as ready | `product-catalog.stock.events` | ⬜ |
 | 6 | `OrderReady` | ordering | (fim do fluxo) | `ordering.order.events` | ⬜ |
-| F1 | `InvoiceCanceled` | billing | ordering: mark order as canceled | `billing.invoice.events` | ⬜ |
-| F2 | `StockReservationRejected` | catálogo | billing: Refund Payment | `product-catalog.stock.events` | ⬜ módulo 8 |
+| F1 | `InvoiceCanceled` | billing (after-commit) | ordering: mark order as canceled | `billing.invoice.events` | ✅ módulo 8, aula 8.3 ([saga](./saga-coreografada.md)) |
+| F2 | `StockReservationRejected` | catálogo | billing: Refund Payment | `product-catalog.stock.events` | ⬜ módulo 8, aula 8.11 |
 
 ---
 
@@ -331,15 +331,15 @@ Os eventos de fatura também não carregam o header `idempotency-key`: o `Integr
 - O `logReceived` do listener de fatura no ordering escreve `partiton`.
 - O `KafkaConfig` do billing ainda menciona "os tópicos próprios do ordering" e o prefixo `ordering.dlt.` (o código usa `billing.dlt.`).
 
-### O `InvoiceCanceled` ainda não sai
+### ~~O `InvoiceCanceled` ainda não sai~~ (resolvido na 8.3)
 
-O `InvoiceEventListener.listen(InvoiceCanceledEvent)` continua vazio e com `@EventListener`. Pagamento recusado cancela a fatura no billing, mas o ordering nunca fica sabendo, e o pedido fica `PLACED` para sempre. É o caminho de falha F1 do mapa, que pertence ao módulo de saga.
+Era o caminho de falha F1: pagamento recusado cancelava a fatura, mas o ordering nunca ficava sabendo. Desde a aula 8.3 o billing publica `InvoiceCanceled` e o ordering cancela o pedido. Detalhes em [Saga coreografada](./saga-coreografada.md#83--cancelando-o-pedido-pela-fatura-cancelada).
 
 ---
 
 ## O que vem depois
 
-- **Módulo 8 — Saga com coreografia**: o catálogo consumindo `OrderPaid` para reservar estoque, e os caminhos vermelhos e laranja do mapa (`InvoiceCanceled` → cancelar pedido; `StockReservationRejected` → estornar pagamento). As compensações vão entrar aqui ou num doc próprio de saga.
+- **Módulo 8 — Saga com coreografia**: em andamento em [Saga coreografada](./saga-coreografada.md). O catálogo vai consumir `OrderPaid` para reservar estoque, e os caminhos vermelho e laranja do mapa ganham código.
 - **Módulo 9 — Saga com orquestração**: o mesmo fluxo com um coordenador, para comparar com este.
 
 ---

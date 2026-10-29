@@ -206,6 +206,8 @@ if (result.isOutOfStock()) {
 }
 ```
 
+> **Atualização (Fase 43, saga):** este trecho descreve o desenho original. Na refatoração do módulo de saga, o estoque virou o pacote `domain/stock`: o `StockService` não publica mais nada, só devolve `StockMovement`s. Quem anuncia é o próprio `StockMovement`, agora um `AbstractAggregateRoot` que registra `StockMovementRegisteredEvent` no construtor; o `StockMovementEventListener` usa `causedSoldOut()`/`causedRestock()` do evento para publicar `ProductSoldOutEvent`/`ProductRestockedEvent`. A regra "transição, não estado" continua igual, só mudou de casa. Detalhes e a armadilha do listener sem anotação em [Saga coreografada](../06-mensageria/saga-coreografada.md#85--retirando-itens-reservados-do-estoque).
+
 `ProductSoldOutEvent` e `ProductRestockedEvent` são eventos de domínio como os outros cinco — o que muda é **quem os publica**, e a razão é técnica, não conceitual.
 
 ### Transição, não estado
