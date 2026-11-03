@@ -928,7 +928,7 @@ Os eventos deixam de ser avisos isolados e viram um **processo de negócio** sem
 
 ---
 
-## Fase 43 — Saga coreografada (out–nov/2026) ← etapa atual
+## Fase 43 — Saga coreografada (out–nov/2026)
 
 O workflow aprende a andar para trás. Sem transação que abrace três bancos, cada passo commitado ganha um passo contrário, também local e também disparado por evento: a **saga**. O módulo fechou o fluxo inteiro. O catálogo virou consumidor do `OrderPaid` e grava a decisão da reserva (confirmada ou rejeitada) como fato; a confirmação deixa o pedido pronto; a rejeição dispara o estorno no billing, que cancela a fatura, que cancela o pedido pela cadeia que já existia. De quebra, os eventos de esgotamento e reposição de produto chegaram ao Kafka e ao carrinho.
 
@@ -945,6 +945,21 @@ O workflow aprende a andar para trás. Sem transação que abrace três bancos, 
 **A lição da fase:** a coreografia entregou o que prometia (passo novo = assinante novo, compensação que se reaproveita) e cobrou o que avisava: o fluxo só existe no mapa, cada serviço carrega a mesma infraestrutura copiada, e a saga é tão confiável quanto o elo que publica pior. O elo mais importante, o estorno, ficou sem publicar o `InvoiceCanceled` porque faltou um `save`, e nada no sistema acusa: a saga não falha, ela só para.
 
 > [`saga-coreografada.md`](../06-mensageria/saga-coreografada.md)
+
+---
+
+## Fase 44 — Saga orquestrada (nov/2026) ← etapa atual
+
+O módulo começa apagando código. Sai o checkout assíncrono v2 da Fase 41 (202 Accepted, comando para o próprio serviço, Listen to Yourself, tópico `ordering.order.commands`), porque a saga orquestrada vai começar **na mesma transação que grava o pedido**, e esse ponto só existe no checkout síncrono v1. A corrente de eventos não muda: o v1 já publica `OrderPlaced` pela outbox.
+
+| Marco | O que se aprende |
+|---|---|
+| Remover o checkout assíncrono | Um padrão bom (202 + Listen to Yourself) vira obstáculo quando o próximo desenho precisa de um ponto de início atômico |
+| O que fica | `IntegrationCommand`, `CommandPublishingException` e `toSnapshot(Order)` sem uso, de propósito: voltam nos comandos da saga |
+| Remover com lista | O compilador só acusa quem usa a classe apagada, não lê YAML, e remover o `NewTopic` não apaga o tópico |
+| Contrato junto | Canais, operações e mensagens do comando saem do AsyncAPI na mesma etapa |
+
+> [`saga-orquestrada.md`](../06-mensageria/saga-orquestrada.md)
 
 ---
 
@@ -994,7 +1009,7 @@ O workflow aprende a andar para trás. Sem transação que abrace três bancos, 
 - Contratos AsyncAPI dos eventos Kafka: perspectivas send/receive, mensagens compartilhadas e topologia documentada
 - Producer resiliente no catálogo: acks=all, idempotência e rollback transacional quando o broker não confirma
 - Consumer resiliente no ordering: backoff exponencial, DLT por tópico e idempotência de negócio em tabela
-- Checkout assíncrono com 202, Command Message, Listen to Yourself e outbox com polling publisher
+- Outbox com polling publisher no ordering (o checkout assíncrono com 202 e Listen to Yourself da Fase 41 foi removido na Fase 44)
 - Workflow coreografado pedido → fatura → pagamento → pedido pago entre ordering e billing, com `OrderPaid` publicado para o catálogo
 - Saga coreografada completa entre ordering, billing e catálogo: reserva de estoque, pedido pronto, estorno como compensação e eventos de produto no carrinho
 

@@ -245,20 +245,6 @@ components:
       traits:
         - $ref: "#/components/messageTraits/KafkaInvoiceKey"
 
-    ProcessAcceptedCheckoutCommand:
-      name: ProcessAcceptedCheckoutCommand
-      title: Process Accepted Checkout Command
-      summary: Enqueues an accepted checkout for persistence and downstream processing.
-      contentType: application/json
-      tags:
-        - name: Checkout
-      headers:
-        $ref: "#/components/schemas/ProcessAcceptedCheckoutHeaders"
-      payload:
-        $ref: "#/components/schemas/ProcessAcceptedCheckoutPayload"
-      traits:
-        - $ref: "#/components/messageTraits/KafkaOrderKey"
-
   schemas:
     ProductAddedHeaders:
       allOf:
@@ -470,18 +456,6 @@ components:
           format: uuid
           description: Unique event identifier used for idempotent processing.
           example: "018ec6f7-6f47-7d5a-a337-9dbcc12e7176"
-
-    ProcessAcceptedCheckoutHeaders:
-      allOf:
-        - $ref: "#/components/schemas/IdempotentEventHeaders"
-        - type: object
-          required:
-            - __TypeId__
-          properties:
-            __TypeId__:
-              type: string
-              const: Ordering.ProcessAcceptedCheckoutIntegrationCommand
-              description: Logical type used by the Jackson deserializer.
 
     ProductAddedPayload:
       type: object
@@ -964,15 +938,6 @@ components:
           description: Date and time when the stock reservation was rejected.
           example: "2026-09-11T10:15:31-03:00"
 
-    ProcessAcceptedCheckoutPayload:
-      type: object
-      required:
-        - order
-      properties:
-        order:
-          $ref: "#/components/schemas/OrderSnapshot"
-
-
     OrderSnapshot:
       type: object
       required:
@@ -1025,12 +990,6 @@ components:
           uniqueItems: true
           items:
             $ref: "#/components/schemas/OrderItemSnapshot"
-        shoppingCartId:
-          type: string
-          format: uuid
-          description: Present when checkout originated from a shopping cart.
-
-
     ProductId:
       type: string
       format: uuid
