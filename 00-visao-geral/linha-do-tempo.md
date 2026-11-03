@@ -928,19 +928,21 @@ Os eventos deixam de ser avisos isolados e viram um **processo de negócio** sem
 
 ---
 
-## Fase 43 — Saga coreografada (out/2026) ← etapa atual
+## Fase 43 — Saga coreografada (out–nov/2026) ← etapa atual
 
-O workflow aprende a andar para trás. Sem transação que abrace três bancos, cada passo commitado ganha um passo contrário, também local e também disparado por evento: a **saga**. A primeira compensação está no ar (fatura cancelada → pedido cancelado, publicado pela outbox), e o catálogo se prepara para o passo que pode falhar depois do pagamento: um subdomínio `domain/stock` com o agregado `StockReservation` (que grava o resultado, inclusive a rejeição) e a baixa "tudo ou nada" dos itens de um pedido.
+O workflow aprende a andar para trás. Sem transação que abrace três bancos, cada passo commitado ganha um passo contrário, também local e também disparado por evento: a **saga**. O módulo fechou o fluxo inteiro. O catálogo virou consumidor do `OrderPaid` e grava a decisão da reserva (confirmada ou rejeitada) como fato; a confirmação deixa o pedido pronto; a rejeição dispara o estorno no billing, que cancela a fatura, que cancela o pedido pela cadeia que já existia. De quebra, os eventos de esgotamento e reposição de produto chegaram ao Kafka e ao carrinho.
 
 | Marco | O que se aprende |
 |---|---|
 | Saga | Transações locais + compensações semânticas; passo pivô (a cobrança); sem isolamento, os estados intermediários ficam visíveis |
 | Pedido cancelado pela fatura | `InvoiceCanceled` → `markAsCanceled` → `OrderCanceled`; `CANCELED` aceita vir de quase todo status porque a compensação pode chegar em qualquer ponto |
-| `StockReservation` | A decisão (confirmada ou rejeitada) vira fato gravado, com índice único por `orderId` como idempotência |
-| `withdrawAll` | Agrupar por produto, pré-validar tudo, baixar pelo `decrease()` atômico; `MANDATORY` no ajuste faz a falha no meio desfazer tudo |
-| Refatoração do estoque | `StockMovement` vira agregado que anuncia o próprio movimento; sold-out/restock viram leitura do evento |
+| `StockReservation` + `reserveForOrder` | Falta de estoque não é exceção: vira um documento `REJECT` e um evento, com índice único por `orderId` como idempotência |
+| Catálogo consumidor | O kit de consumo (type id, deserializer, DLT, não-retryable) replicado no terceiro serviço; dois grupos lendo o mesmo tópico do ordering |
+| Pedido pronto | `StockReservationConfirmed` → `OrderReady` pela outbox; o ordering ignora a rejeição de propósito, porque a compensação tem dono único |
+| Estorno | A compensação do pivô reaproveita a cadeia fatura cancelada → pedido cancelado |
+| Eventos de produto | `ProductSoldOut`/`Restocked` no Kafka, carrinho reagindo, cache invalidado por qualquer movimento de estoque |
 
-**A lição da fase (até aqui):** refatorar para um desenho de eventos é fácil de fazer e fácil de quebrar sem perceber. O listener que perdeu a anotação, o `equals` que virou comparação de referência e o teste que deixou de compilar passaram todos pela mesma mudança, e nenhum avisou em tempo de execução.
+**A lição da fase:** a coreografia entregou o que prometia (passo novo = assinante novo, compensação que se reaproveita) e cobrou o que avisava: o fluxo só existe no mapa, cada serviço carrega a mesma infraestrutura copiada, e a saga é tão confiável quanto o elo que publica pior. O elo mais importante, o estorno, ficou sem publicar o `InvoiceCanceled` porque faltou um `save`, e nada no sistema acusa: a saga não falha, ela só para.
 
 > [`saga-coreografada.md`](../06-mensageria/saga-coreografada.md)
 
@@ -994,15 +996,18 @@ O workflow aprende a andar para trás. Sem transação que abrace três bancos, 
 - Consumer resiliente no ordering: backoff exponencial, DLT por tópico e idempotência de negócio em tabela
 - Checkout assíncrono com 202, Command Message, Listen to Yourself e outbox com polling publisher
 - Workflow coreografado pedido → fatura → pagamento → pedido pago entre ordering e billing, com `OrderPaid` publicado para o catálogo
-- Saga coreografada começando: fatura cancelada cancela o pedido; reserva de estoque modelada no catálogo
+- Saga coreografada completa entre ordering, billing e catálogo: reserva de estoque, pedido pronto, estorno como compensação e eventos de produto no carrinho
 
 **Próximos passos naturais:**
 - **Outbox no billing** — hoje `InvoiceIssued` e `InvoicePaid` saem after-commit; falha no Kafka depois do commit é só logada e o workflow trava em silêncio
 - **Guardar o `capture()` contra reentrega** — `processPayment` não checa o status antes de cobrar; retry de timeout ou duplicata do `InvoiceIssued` cobra de novo
 - ~~**Publicar `InvoiceCanceled`**~~ — feito na Fase 43; pagamento recusado agora cancela o pedido
 - **Cancelar fatura vencida pelo domínio** — o `billing-scheduler` faz `UPDATE` direto e não publica `InvoiceCanceled`; o pedido da fatura expirada nunca é cancelado
-- **Anotar o `StockMovementEventListener`** — sem `@EventListener`, `ProductSoldOut`/`ProductRestocked` deixaram de existir na refatoração
-- **Voltar o `equals` do `Product` para `callSuper = false`** e consertar o `StockServiceTest`, que não compila mais
+- ~~**Anotar o `StockMovementEventListener`**~~ e ~~**voltar o `equals` do `Product` para `callSuper = false`**~~ — corrigidos durante o módulo, junto com o `StockServiceTest`
+- **Salvar a fatura no `refundByOrderId`** — sem `save`, o `InvoiceCanceledEvent` não é publicado e o pedido estornado fica `PAID` para sempre
+- **Tirar o estorno de dentro da transação e torná-lo idempotente** — hoje é HTTP dentro de `@Transactional`, e um `StockReservationRejected` duplicado estorna duas vezes
+- **Testar a corrida na reserva** — dois pedidos pela última unidade caem num `UnexpectedRollbackException` que hoje acerta por acidente
+- **Alinhar a key dos eventos de reserva** — o contrato diz `reservationId`, o código publica `orderId`
 - **Duplicata como sucesso, não DLT** — `UNIQUE (order_id)` no billing e `OrderStatusCannotBeChanged` no ordering mandam reentregas legítimas ao DLT
 - **Entregar a senha temporária** — hoje ela vai para o stdout por `System.out.println` e não chega a ninguém; o usuário criado pela API não consegue logar
 - **Ligar o PKCE também no client confidencial** — o admin já usa; o `algashop-ecommerce-web` segue com `require-proof-key: false`

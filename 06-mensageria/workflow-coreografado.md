@@ -70,11 +70,11 @@ O segundo caso é o mais didático: **uma falha no catálogo cancela um pedido n
 | 1 | `OrderPlaced` | ordering (outbox) | billing: Generate Invoice | `ordering.order.events` | ✅ aulas 7.4–7.6 |
 | 2 | `InvoiceIssued` | billing (after-commit) | billing: Process payment | `billing.invoice.events` | ✅ aulas 7.7–7.8 |
 | 3 | `InvoicePaid` | billing (after-commit) | ordering: Mark order as paid | `billing.invoice.events` | ✅ aulas 7.8–7.10 |
-| 4 | `OrderPaid` | ordering (outbox) | catálogo: Reserve stock | `ordering.order.events` | ⏳ publicado (7.10), **sem consumidor** ainda |
-| 5 | `StockReservationConfirmed` | catálogo | ordering: Mark order as ready | `product-catalog.stock.events` | ⬜ |
-| 6 | `OrderReady` | ordering | (fim do fluxo) | `ordering.order.events` | ⬜ |
+| 4 | `OrderPaid` | ordering (outbox) | catálogo: Reserve stock | `ordering.order.events` | ✅ publicado na 7.10, consumido no módulo 8 (aulas 8.6–8.8, [saga](./saga-coreografada.md)) |
+| 5 | `StockReservationConfirmed` | catálogo (after-commit) | ordering: Mark order as ready | `product-catalog.stock.events` | ✅ módulo 8, aulas 8.9–8.10 |
+| 6 | `OrderReady` | ordering (outbox) | (fim do fluxo) | `ordering.order.events` | ✅ módulo 8, aula 8.10 |
 | F1 | `InvoiceCanceled` | billing (after-commit) | ordering: mark order as canceled | `billing.invoice.events` | ✅ módulo 8, aula 8.3 ([saga](./saga-coreografada.md)) |
-| F2 | `StockReservationRejected` | catálogo | billing: Refund Payment | `product-catalog.stock.events` | ⬜ módulo 8, aula 8.11 |
+| F2 | `StockReservationRejected` | catálogo (after-commit) | billing: Refund Payment | `product-catalog.stock.events` | ✅ módulo 8, aula 8.11 |
 
 ---
 
@@ -339,7 +339,7 @@ Era o caminho de falha F1: pagamento recusado cancelava a fatura, mas o ordering
 
 ## O que vem depois
 
-- **Módulo 8 — Saga com coreografia**: em andamento em [Saga coreografada](./saga-coreografada.md). O catálogo vai consumir `OrderPaid` para reservar estoque, e os caminhos vermelho e laranja do mapa ganham código.
+- **Módulo 8 — Saga com coreografia**: concluído em [Saga coreografada](./saga-coreografada.md). O catálogo consome `OrderPaid` e reserva estoque, e os caminhos vermelho e laranja do mapa estão no código.
 - **Módulo 9 — Saga com orquestração**: o mesmo fluxo com um coordenador, para comparar com este.
 
 ---

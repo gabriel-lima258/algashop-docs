@@ -1,11 +1,11 @@
 # Saga coreografada: desfazer o que já foi feito em outro serviço
 
 > O [workflow coreografado](./workflow-coreografado.md) cuidou do caminho feliz. Este módulo cuida do outro: o pagamento é recusado, o estoque acaba depois de o cliente pagar. Num monólito isso seria um `rollback`. Aqui não existe transação que abrace ordering, billing e catálogo, então cada passo já commitado precisa de um **passo contrário**, que também é uma transação local disparada por evento. Esse conjunto de transações locais e suas compensações é uma **saga**.
-> Doc vivo do módulo 8 da trilha ("Transações distribuídas com Saga e coreografia"). A tabela de status diz até onde o código chegou.
+> Doc do módulo 8 da trilha ("Transações distribuídas com Saga e coreografia"), **completo**: a saga inteira está no código, do caminho feliz até o estorno. O módulo 9 vai refazer o mesmo fluxo com orquestração.
 > Código real:
-> - **billing**: `infrastructure/listener/InvoiceEventListener.java` (publica `InvoiceCanceled`), `application/invoice/event/InvoiceCanceledIntegrationEvent.java`.
-> - **ordering**: `infrastructure/adapters/in/messaging/kafka/invoice/KafkaInvoiceIntegrationEventListener.java`, `infrastructure/adapters/in/listerner/order/OrderEventListener.java`, `core/application/order/event/OrderCanceledIntegrationEvent.java`.
-> - **product-catalog**: o pacote novo `domain/stock/` (`StockReservation`, `StockReservationItem`, `StockService`, `StockMovement`, eventos), `infrastructure/listener/stock/StockMovementEventListener.java`, `infrastructure/persistence/product/QuantityInStockAdjustmentMongoDBImpl.java`.
+> - **billing**: `infrastructure/listener/InvoiceEventListener.java` (publica `InvoiceCanceled`), `infrastructure/kafka/KafkaStockIntegrationEventListener.java` (consome a rejeição), `application/invoice/management/InvoiceManagementApplicationService.refundByOrderId`, `domain/model/invoice/payment/PaymentGatewayService.refund`.
+> - **ordering**: `infrastructure/adapters/in/messaging/kafka/invoice/KafkaInvoiceIntegrationEventListener.java`, `infrastructure/adapters/in/messaging/kafka/stock/KafkaStockIntegrationEventListener.java`, `infrastructure/adapters/in/messaging/kafka/product/KafkaProductIntegrationEventListener.java`, `infrastructure/adapters/in/listerner/order/OrderEventListener.java`, `core/application/order/event/OrderCanceled|OrderReadyIntegrationEvent.java`.
+> - **product-catalog**: `domain/stock/` (`StockReservation`, `StockService`, `StockMovement`, eventos), `application/stock/management/StockManagementApplicationService.java`, `application/stock/event/`, `infrastructure/listener/order/KafkaOrderIntegrationEventListener.java`, `infrastructure/listener/stock/` (`StockReservationEventListener`, `StockMovementEventListener`), `infrastructure/kafka/` (`KafkaConfig`, `KafkaConsumerTypeIdIdentifier`).
 
 ---
 
@@ -23,11 +23,12 @@ No módulo 7 o olho ia para as faixas azul e verde. A saga mora nas duas de baix
 | # | Passo da saga | Serviço | Status |
 |---|---|---|---|
 | C1 | `InvoiceCanceled` → marcar pedido como cancelado → `OrderCanceled` | billing → ordering | ✅ aula 8.3 |
-| S1 | Modelo da reserva de estoque (`StockReservation`) | catálogo | ✅ aula 8.4 (só domínio) |
-| S2 | Baixa dos itens de um pedido (`StockService.withdrawAll`) | catálogo | ✅ aula 8.5 (só domínio) |
-| S3 | `OrderPaid` → reservar estoque → `StockReservationConfirmed` / `Rejected` | ordering → catálogo | ⏳ aulas 8.6–8.9 |
-| S4 | `StockReservationConfirmed` → pedido pronto (`OrderReady`) | catálogo → ordering | ⬜ aula 8.10 |
-| C2 | `StockReservationRejected` → estornar pagamento → `InvoiceCanceled` → C1 | catálogo → billing → ordering | ⬜ aula 8.11 |
+| S1 | Modelo da reserva de estoque (`StockReservation`) | catálogo | ✅ aula 8.4 |
+| S2 | Baixa dos itens de um pedido (`StockService.withdrawAll`) | catálogo | ✅ aula 8.5 |
+| S3 | `OrderPaid` → reservar estoque → `StockReservationConfirmed` / `Rejected` | ordering → catálogo | ✅ aulas 8.6–8.9 |
+| S4 | `StockReservationConfirmed` → pedido pronto (`OrderReady`) | catálogo → ordering | ✅ aula 8.10 |
+| C2 | `StockReservationRejected` → estornar pagamento → `InvoiceCanceled` → C1 | catálogo → billing → ordering | ✅ aula 8.11 (com um elo quebrado, ver [armadilhas](#o-estorno-não-publica-o-invoicecanceled)) |
+| P1 | `ProductSoldOut` / `Restocked` / `PlacedOnSale` no Kafka; carrinho reage | catálogo → ordering | ✅ aula 8.12 |
 
 ---
 
@@ -178,66 +179,267 @@ return quantityByProduct.entrySet().stream().map(e -> withdraw(e.getKey(), e.get
 public class QuantityInStockAdjustmentMongoDBImpl implements QuantityInStockAdjustment { ... }
 ```
 
-É o mesmo recurso do `OutboxRecorder` do ordering: não "abra uma transação se precisar", e sim **"recuse rodar sem uma"**. A consequência para o `withdrawAll` é importante. Se o terceiro produto falhar no `decrease()`, os dois primeiros já foram baixados, mas **dentro da mesma transação do chamador**, que dá rollback em tudo (o Mongo tem transação multi-documento no replica set, ver [Transações e replica set](../02-persistencia/transacoes-mongo.md)). O "tudo ou nada" passa a valer também para a falha que a pré-validação não pegou.
+É o mesmo recurso do `OutboxRecorder` do ordering: não "abra uma transação se precisar", e sim **"recuse rodar sem uma"**. A consequência para o `withdrawAll` é importante. Se o terceiro produto falhar no `decrease()`, os dois primeiros já foram baixados, mas **dentro da mesma transação do chamador**, que dá rollback em tudo (o Mongo tem transação multi-documento no replica set, ver [Transações e replica set](../02-persistencia/transacoes-mongo.md)). O "tudo ou nada" passa a valer também para a falha que a pré-validação não pegou. (Na 8.6 o chamador captura essa exceção, e a interação com o `MANDATORY` tem uma consequência sutil: ver [a corrida na reserva](#a-corrida-na-reserva-funciona-por-acidente).)
+
+---
+
+## 8.6 — Reservando estoque para o pedido
+
+O caso de uso que junta as duas peças anteriores (`withdrawAll` e `StockReservation`) mora em `StockManagementApplicationService.reserveForOrder`:
+
+```java
+@Transactional
+public void reserveForOrder(StockReservationInput input) {
+    String orderId = input.getOrderId();
+    assertReservationDoesNotExists(orderId);          // existsByOrderId → DuplicateStockReservationException
+
+    List<StockReservationItem> items = toItems(input);
+    List<StockMovement> movements;
+    StockReservation reservation;
+    try {
+        movements = stockService.withdrawAll(orderId, items);
+        reservation = StockReservation.confirmed(orderId, items);
+    } catch (InsufficientStockException | ProductNotFoundException e) {
+        movements = List.of();
+        reservation = StockReservation.rejected(orderId, items);
+    }
+
+    if (!movements.isEmpty()) stockMovementRepository.saveAll(movements);
+    stockReservationRepository.save(reservation);
+}
+```
+
+A linha que mais ensina é o `catch`. Falta de estoque **não é erro do sistema**, é um desfecho de negócio, e por isso não sobe como exceção para o listener Kafka (que faria retry e DLT). Ela vira um documento `REJECT` gravado com sucesso, e o evento de domínio desse documento é o gatilho da compensação. Compare os dois caminhos:
+
+| Desfecho | O que é gravado | Evento de domínio | O que o Kafka vê |
+|---|---|---|---|
+| Tem estoque | N `StockMovement` (saída, com `orderId`) + reserva `CONFIRMED` | `StockMovementRegisteredEvent` (por produto) + `StockReservationConfirmedEvent` | Mensagem processada, offset commitado |
+| Falta estoque ou produto | Só a reserva `REJECT` | `StockReservationRejectedEvent` | Mensagem processada, offset commitado |
+| Pedido já reservado | Nada | Nenhum | `DuplicateStockReservationException` → DLT |
+
+Tudo isso acontece numa transação Mongo: movimentos e reserva commitam juntos. Os eventos só saem depois, pelos `@TransactionalEventListener`.
+
+## 8.7 — O catálogo vira consumidor
+
+Até aqui o catálogo só publicava. Para escutar `ordering.order.events` ele recebeu o mesmo kit de consumidor que o ordering e o billing já tinham:
+
+| Peça | Arquivo | O que faz |
+|---|---|---|
+| Resolver de tipo | `KafkaConsumerTypeIdIdentifier` | Traduz `__TypeId__` lógico em classe local; tipo desconhecido vira `ObjectNode` e cai no handler default |
+| Deserializer seguro | `application-development-env.yml` | `ErrorHandlingDeserializer` em volta do `JacksonJsonDeserializer`: JSON inválido não trava a partição |
+| Retry e DLT | `KafkaConfig.defaultErrorHandler` | 2s/4s/8s, DLT `product-catalog.dlt.ordering.order.events` na mesma partição |
+| Não-retryable | `KafkaConfig` | `DomainException`, `ConstraintViolationException`, `DataIntegrityViolationException`, `DuplicateKeyException`, `IllegalArgumentException` |
+| Grupo | `application-development-env.yml` | `product-catalog.order-events` |
+| Type mapping | `application-development-env.yml` | Só `Ordering.OrderPaidIntegrationEvent` do lado do ordering |
+
+`ordering.order.events` agora tem **dois** consumer groups lendo tudo (`billing.order-events` e `product-catalog.order-events`), cada um reagindo a um tipo diferente e ignorando o resto. É o tópico de eventos funcionando como deveria: o ordering publica uma vez, sem saber quantos escutam.
+
+> **Para fixar:** o mesmo kit (resolver de tipo, deserializer, error handler, DLT, lista de não-retryable) existe agora em **três** serviços, copiado. Em coreografia, cada participante carrega a infraestrutura inteira de consumo. Isso volta no balanço da [8.13](#813--opinião-sobre-saga-com-coreografia).
+
+## 8.8 — Reservando o estoque do pedido pago
+
+```mermaid
+flowchart LR
+    A[("ordering.order.events<br/>OrderPaid (com itens)")] -->|"grupo product-catalog.order-events"| B["KafkaOrderIntegrationEventListener<br/>@Valid OrderPaidIntegrationEvent"]
+    B --> C["OrderPaidIntegrationEventAssembler<br/>itens → StockReservationInput"]
+    C --> D["StockManagementApplicationService<br/>reserveForOrder (@Transactional)"]
+    D --> E{"withdrawAll"}
+    E -->|"ok"| F["StockMovement × N<br/>StockReservation.confirmed"]
+    E -->|"InsufficientStock /<br/>ProductNotFound"| G["StockReservation.rejected"]
+```
+
+É aqui que o ECST da aula 7.10 paga a conta: o `OrderPaid` traz os itens (`productId`, `quantity`), e o catálogo não precisa chamar o ordering para saber o que reservar. O assembler faz a tradução anticorrupção de sempre: do `OrderItemSnapshot` (linguagem do pedido, com preço e nome) só sobram `productId` e `quantity`, que é tudo que importa ao estoque.
+
+## 8.9 — Publicando o resultado da reserva
+
+`StockReservationEventListener` escuta os dois eventos de domínio com `@TransactionalEventListener` e publica os eventos de integração em `product-catalog.stock.events`:
+
+| Domínio | Integração | Key |
+|---|---|---|
+| `StockReservationConfirmedEvent` | `StockReservationConfirmedIntegrationEvent` (`reservationId`, `orderId`, `confirmedAt`) | `orderId` |
+| `StockReservationRejectedEvent` | `StockReservationRejectedIntegrationEvent` (`reservationId`, `orderId`, `rejectedAt`) | `orderId` |
+
+No `KafkaConfig`, o corpo do publisher de produto virou um método privado `publish(event, destination, ...)`, e agora dois beans (`ProductIntegrationEventPublisher` e `StockIntegrationEventPublisher`) só mudam o tópico. A porta continua separada por assunto na camada de aplicação; o transporte é um só.
+
+O catálogo publica **after-commit**, como o billing ([workflow, 7.7](./workflow-coreografado.md#77--passo-3-a-fatura-emitida-sai-do-billing)). A reserva nunca é anunciada sem estar gravada; o preço disso está nas [armadilhas](#after-commit-também-no-catálogo).
+
+## 8.10 — Pedido pronto para envio
+
+No ordering, `KafkaStockIntegrationEventListener` (grupo `ordering.stock-events`) tem um único handler tipado: `StockReservationConfirmed` → `ForManagingOrders.markAsReady(orderId)`. O `Order.markAsReady()` registra o `OrderReadyEvent`, e o `OrderEventListener` publica `OrderReadyIntegrationEvent` pela outbox. É o último passo do caminho feliz: o passo **reexecutável** da tabela da 8.1, que não tem compensação, só retry.
+
+**O ordering não mapeia `StockReservationRejected`**, e isso é desenho, não esquecimento. A rejeição não é problema do pedido: é do pagamento, que já foi capturado. Quem reage é o billing (8.11), e o pedido só fica sabendo quando a fatura for cancelada, pelo mesmo `InvoiceCanceled` da 8.3. Se o ordering cancelasse o pedido direto ao ver a rejeição, haveria **duas** fontes de cancelamento para o mesmo pedido, e um pedido cancelado com o dinheiro do cliente ainda capturado.
+
+## 8.11 — Estornando o pagamento como compensação
+
+```mermaid
+flowchart TD
+    A[("product-catalog.stock.events<br/>StockReservationRejected")] -->|"grupo billing.stock-events"| B["billing: KafkaStockIntegrationEventListener"]
+    B --> C["refundByOrderId(orderId) @Transactional"]
+    C --> D["paymentGatewayService.refund(gatewayCode)<br/>HTTP no FastPay"]
+    D --> E["invoice.updatePaymentStatus(REFUNDED)<br/>→ cancel() → InvoiceCanceledEvent"]
+    E -.->|"after commit<br/>(só se houver save, ver armadilhas)"| F[("billing.invoice.events<br/>InvoiceCanceled")]
+    F -->|"aula 8.3"| G["ordering: markAsCanceled → OrderCanceled"]
+```
+
+É a compensação do **pivô**. O pagamento foi capturado, o passo seguinte (estoque) falhou, então a saga anda para trás desfazendo o passo de maior valor:
+
+- A porta `PaymentGatewayService` ganhou `refund(gatewayCode)`, com implementação no FastPay (pelo `ResilientFastpayPaymentAPIClient`, com circuit breaker) e no fake.
+- Depois do estorno, a fatura passa por `updatePaymentStatus(REFUNDED)`, o mesmo método que o webhook usa, que cancela a fatura com o motivo "Payment refunded".
+- **O cancelamento do pedido não é código novo.** É a cadeia da 8.3 sendo reaproveitada: fatura cancelada → pedido cancelado. A saga da AlgaShop tem duas compensações, mas só uma delas é escrita para o pedido.
+
+Juntando tudo, a falha de estoque atravessa os três serviços sem que nenhum conheça o fluxo inteiro:
+
+```mermaid
+sequenceDiagram
+    participant O as ordering
+    participant C as product-catalog
+    participant B as billing
+    O->>C: OrderPaid (itens)
+    Note over C: reserveForOrder → falta estoque → REJECT
+    C->>B: StockReservationRejected
+    Note over B: refund no gateway → REFUNDED → cancel()
+    B->>O: InvoiceCanceled
+    Note over O: markAsCanceled
+    O-->>O: OrderCanceled
+```
+
+## 8.12 — Eventos de produto, finalmente no Kafka
+
+Os três eventos de produto que só eram logados agora saem como integração, em `product-catalog.product.events`:
+
+| Evento de domínio | Integração | Quem consome |
+|---|---|---|
+| `ProductSoldOutEvent` | `ProductSoldOutIntegrationEvent` (`productId`, `soldOutAt`) | ordering: item indisponível no carrinho + evict do cache do produto |
+| `ProductRestockedEvent` | `ProductRestockedIntegrationEvent` (`productId`, `restockedAt`) | ordering: item volta a ficar disponível + evict |
+| `ProductPlacedOnSaleEvent` | `ProductPlacedOnSaleIntegrationEvent` (preço normal e promocional) | ninguém ainda (o ordering não mapeia) |
+
+A cadeia completa de um esgotamento mostra o desenho da 8.5 funcionando:
+
+```
+reserveForOrder (tx) → StockMovement salvo → StockMovementRegisteredEvent
+  → StockMovementEventListener (@EventListener, DENTRO da tx) → causedSoldOut()? → ProductSoldOutEvent
+  → commit
+  → ProductEventListener (@TransactionalEventListener + @Async) → Kafka
+  → ordering: changeProductAvailability(false) em todos os carrinhos com o item
+```
+
+O primeiro listener é síncrono de propósito: se ele fosse after-commit, o `ProductSoldOutEvent` nasceria fora de transação e o handler seguinte (também after-commit) o ignoraria.
+
+Duas mudanças de apoio:
+
+- **Cache invalidado por movimento.** `StockMovementEventListener.handleEvictProductCache` faz `@CacheEvict` do produto depois do commit de **qualquer** movimento. Antes, só os endpoints `/restock` e `/withdraw` invalidavam o cache. A baixa pela saga, que não passa por eles, deixaria o detalhe do produto mostrando estoque antigo.
+- **`getIdempotencyKey()` virou `default null`** no `IntegrationEvent` do catálogo: nem todo evento precisa de chave, e a interface deixou de obrigar quem não precisa.
+
+No ordering, a lógica de "achar todos os carrinhos com o item e ajustar" saiu do `ShoppingCartManagementApplicationService` para o `ShoppingCartProductAdjustmentService`, reaproveitado por preço e disponibilidade.
+
+## 8.13 — Opinião sobre saga com coreografia
+
+Com a saga inteira no código, dá para fazer o balanço com exemplos do próprio projeto, e não da teoria:
+
+**O que a coreografia entregou**
+- **Passo novo = assinante novo.** O catálogo entrou na saga sem que o ordering mudasse uma linha para publicar `OrderPaid`: o evento já existia. O billing ganhou o estorno sem que o catálogo soubesse que ele existe.
+- **Compensações que se reaproveitam.** O estorno cancela o pedido pela cadeia que já existia desde a 8.3. Nenhum serviço precisou de um "cancelar pedido por estoque".
+- **Sem ponto central.** Nenhum serviço precisa estar de pé para os outros andarem; o evento espera no tópico.
+
+**O que ela cobrou**
+- **O fluxo não está escrito em lugar nenhum.** Para entender por que um pedido foi cancelado é preciso seguir `OrderPaid` → `StockReservationRejected` → `InvoiceCanceled` → `OrderCanceled` em três serviços e três tópicos. O único lugar onde a saga aparece inteira é o [mapa](#o-mapa-agora-pelas-faixas-de-baixo) e este documento.
+- **Infraestrutura repetida.** Três serviços com o mesmo kit de consumidor e de produtor, cada um copiado do anterior (com os comentários errados copiados junto, no módulo 7).
+- **A garantia é a do elo mais fraco.** O ordering usa outbox; catálogo e billing publicam after-commit. A saga só é tão confiável quanto o serviço que publica pior, e uma compensação perdida não dá erro em lugar nenhum.
+- **Idempotência ainda significa DLT.** Duplicata de fatura, de pagamento, de reserva e de estorno vão para a dead letter, em vez de serem reconhecidas como "já fiz isso".
+- **Ninguém sabe se a saga terminou.** Não existe um registro de "o pedido 42 está no passo 4". Se um evento se perde, a saga não falha: ela só para.
+
+A regra prática de [Fundamentos de EDA](./fundamentos-eda.md#coreografia--orquestração-quem-rege-o-fluxo) se confirmou: coreografia é ótima enquanto o fluxo é curto e linear. A AlgaShop tem cinco passos e duas compensações, e já está no limite do que dá para entender sem um mapa na parede. O módulo 9 refaz o mesmo fluxo com um **orquestrador**: um lugar que conhece os passos, guarda em que ponto cada pedido está e decide a compensação. A comparação entre os dois vai ser o centro do próximo doc.
 
 ---
 
 ## Armadilhas
 
-### O listener de movimento não está escutando nada
+### Resolvidas durante o módulo
 
-`StockMovementEventListener.handle(StockMovementRegisteredEvent)` não tem `@EventListener` nem `@TransactionalEventListener`. Para o Spring é só um método público num `@Component`: nunca é chamado. Resultado: **`ProductSoldOut` e `ProductRestocked` deixaram de ser publicados** desde a refatoração. Hoje o estrago é pequeno, porque o `ProductEventListener` só os loga (o envio ao Kafka está comentado). Mas a aula 8.12 ("Publique eventos de Produto") vai ligar esse envio, e aí o evento simplesmente não existirá.
+- ~~**O listener de movimento não estava escutando nada**~~: `StockMovementEventListener.handle` ganhou `@EventListener` (síncrono, dentro da transação), e o `ProductSoldOut` voltou a existir, a tempo da 8.12.
+- ~~**`equals` do `Product` virou comparação de referência**~~: voltou a `callSuper = false`, com comentário explicando o porquê.
+- ~~**Comentário do `withdrawAll` desmentido pela refatoração**~~: corrigido.
+- ~~**`StockServiceTest` não compilava**~~ e ~~**duas `InsufficientStockException`**~~: corrigidos; o ajuste no Mongo usa a de `domain/stock`.
 
-Ao anotar, cuidado com a fase. O `DomainEventPublisher` publica outro evento de aplicação, e os handlers de `ProductSoldOutEvent`/`ProductRestockedEvent` no `ProductEventListener` são `@TransactionalEventListener`. Se o `StockMovementEventListener` também rodar **depois do commit**, o evento que ele publica nasce **fora** de transação, e um `@TransactionalEventListener` sem `fallbackExecution = true` simplesmente o ignora. Com `@EventListener` (síncrono, dentro da transação), a cadeia funciona: o `ProductSoldOut` é publicado ainda dentro da transação, e o handler dele roda no commit.
+### O estorno não publica o `InvoiceCanceled`
 
-### `equals` do `Product` virou comparação de referência
+Este é o elo mais importante da saga, e ele está quebrado:
 
 ```java
-@EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = true)
-public class Product extends AbstractAggregateRoot<Product> {
+@Transactional
+public void refundByOrderId(@NotBlank String orderId) {
+    Invoice invoice = invoiceRepository.findByOrderId(orderId).orElseThrow(...);
+    paymentGatewayService.refund(invoice.getPaymentSettings().getGatewayCode());
+    invoice.updatePaymentStatus(PaymentStatus.REFUNDED);
+    // sem invoiceRepository.save(invoice)
+}
 ```
 
-`AbstractAggregateRoot` não sobrescreve `equals`, então `callSuper = true` faz o Lombok chamar o `Object.equals`, que compara **referência**. Dois `Product` com o mesmo id, carregados em momentos diferentes, deixam de ser iguais, e o `hashCode` muda junto. O comentário logo acima da anotação diz o contrário ("a identidade é o id e mais nada"). O aviso do Lombok que motivou a troca pede justamente `callSuper = false` aqui, que era o valor anterior. `StockMovement` e `StockReservation` usam `callSuper = false`, corretamente.
+`Invoice` estende `AbstractAuditableAggregateRoot` → `AbstractAggregateRoot`. O Spring Data só publica os eventos registrados com `registerEvent` quando o agregado passa por `repository.save()`/`saveAll()`. Sem o `save`, o JPA grava a mudança pelo dirty checking no commit, a fatura fica `CANCELED` no banco, e o `InvoiceCanceledEvent` **nunca é publicado**. Resultado: o cliente é reembolsado, a fatura está cancelada e o pedido continua `PAID` para sempre. Os outros métodos do mesmo service (`generate`, `updatePaymentStatus`) chamam `saveAndFlush` exatamente por isso.
 
-### ~~Comentário que a própria refatoração desmentiu~~ (corrigido)
+### O estorno é uma chamada HTTP dentro da transação
 
-O passo 3 do `withdrawAll` dizia: "Sem transação em volta, uma falha no meio deixa os anteriores já baixados". Com o `MANDATORY` no ajuste, não existe "sem transação em volta": o código nem roda. O comentário agora diz o que o código faz: quem chama abre a transação, e uma falha no meio desfaz também as baixas anteriores.
+O comentário do `processPayment`, no mesmo arquivo, explica por que o billing **não** chama o gateway dentro de `@Transactional`: a conexão do banco fica presa durante toda a chamada HTTP, e um gateway lento esgota o pool. O `refundByOrderId` faz exatamente isso. E tem um segundo efeito: se o estorno der certo e o commit falhar depois, a mensagem é reprocessada e o estorno roda **de novo**. O desenho seguro é o mesmo do pagamento: carregar (tx) → estornar (sem tx) → gravar o status (tx).
 
-### O `billing-scheduler` cancela fatura por fora da saga
+### Estorno sem idempotência
 
-`CancelExpiredInvoicesApplicationServiceJDBCImpl` cancela faturas vencidas com `UPDATE` direto no Postgres. Não passa por `Invoice.cancel()`, não registra `InvoiceCanceledEvent`, não publica nada. Fatura expirada é exatamente o caso em que o pedido deveria ser cancelado, e ele fica `PLACED` para sempre. Toda escrita que muda o estado de uma etapa da saga precisa passar pelo agregado, ou publicar o evento por conta própria.
+Um `StockReservationRejected` duplicado chama `refund()` no gateway antes de qualquer verificação. Só depois o `cancel()` recusa a fatura já cancelada (`DomainException` → DLT). O DLT registra o erro, mas o gateway já recebeu dois pedidos de estorno. A guarda precisa vir **antes** da chamada externa: checar se a fatura está `PAID` e sair em silêncio se já estiver `CANCELED`.
 
-### `OrderCanceled` pelo ModelMapper: verifique o `customerId`
+### A corrida na reserva funciona por acidente
 
-O ModelMapper do ordering está em `MatchingStrategies.STRICT` com `NamingConventions.NONE`. O `orderId` sai certo porque `OrderId.toString()` devolve o TSID. Mas não há converter de `CustomerId` para `UUID`, e no modo estrito o mapeamento implícito `customerId.value → customerId` não é garantido. Se o campo sair nulo, a outbox grava assim mesmo (o `OutboxRecorder` não valida), e o erro só aparece no consumidor, como `ConstraintViolationException` → DLT. **Não confirmei rodando**: um teste unitário de `mapper.convert(new OrderCanceledEvent(...), OrderCanceledIntegrationEvent.class)` resolve a dúvida. Um assembler, como nos outros dois eventos, elimina a dúvida.
+A pré-validação do `withdrawAll` pega quase todos os casos de falta de estoque. O caso que ela não pega é a corrida: outro pedido leva o saldo entre a checagem e o `decrease()`. Aí o `InsufficientStockException` nasce **dentro** do `QuantityInStockAdjustmentMongoDBImpl`, que é um proxy `@Transactional(MANDATORY)`. Uma exceção que atravessa um proxy transacional participante **marca a transação inteira como rollback-only**, mesmo que alguém a capture depois. Então:
 
-### A compensação também pode se perder
+1. O `catch` do `reserveForOrder` grava a reserva `REJECT` normalmente.
+2. No commit, o Spring encontra a transação marcada e lança `UnexpectedRollbackException`. Nada é gravado, nem as baixas parciais nem a rejeição.
+3. Como essa exceção não está na lista de não-retryable, o Kafka reentrega o `OrderPaid`. Na nova tentativa, a pré-validação já vê o saldo real e rejeita do jeito certo.
 
-O billing continua publicando after-commit ([workflow, armadilhas](./workflow-coreografado.md#after-commit-não-é-outbox-o-evento-pode-se-perder)). Agora o problema pesa mais: um `InvoiceCanceled` perdido não é só um passo a menos, é uma **compensação que não acontece**. O pagamento foi recusado e o pedido segue `PLACED`. Uma saga só é confiável se os eventos de compensação forem pelo menos tão garantidos quanto os de sucesso.
+O resultado final está correto, mas por um caminho que ninguém desenhou. Validar a corrida com um teste (dois pedidos disputando a última unidade) é a forma de transformar o acidente em garantia.
+
+### Duplicata vira DLT, agora no terceiro serviço
+
+`DuplicateStockReservationException` é `DomainException`, portanto não-retryable: um `OrderPaid` reentregue vai para `product-catalog.dlt.ordering.order.events`. É o mesmo padrão da fatura (billing) e do pedido pago (ordering) no módulo 7. Os três serviços agora tratam "já processei" como falha.
+
+### After-commit também no catálogo
+
+A reserva é gravada e o evento sai depois do commit. Se o Kafka falhar nesse momento, a exceção é logada e engolida (ver [workflow](./workflow-coreografado.md#after-commit-não-é-outbox-o-evento-pode-se-perder)): o offset do `OrderPaid` é commitado, a reserva existe, e nem `StockReservationConfirmed` nem `Rejected` saem. O pedido fica `PAID` para sempre, sem estoque baixado aparente para o cliente e sem estorno. Com isso, **dois dos três serviços** da saga publicam sem garantia de entrega.
+
+### O contrato diz uma key, o código usa outra
+
+`messages.yml` declara o trait `KafkaStockReservationKey` (key = `reservationId`) para os eventos de reserva. O código publica com `getAggregateId()` = `orderId`. A escolha do código é defensável (ordem e correlação por pedido), mas o contrato descreve outra coisa. É a lição da Fase 40 de novo: [contrato sem teste que o trave](./asyncapi-contratos.md) mente em silêncio. Um dos dois lados precisa ser corrigido.
+
+### Pendências que seguem abertas
+
+- **`billing-scheduler` cancela fatura por fora da saga**: `CancelExpiredInvoicesApplicationServiceJDBCImpl` faz `UPDATE` direto no Postgres, sem `Invoice.cancel()` e sem `InvoiceCanceled`. O pedido da fatura vencida nunca é cancelado.
+- **ModelMapper com `CustomerId`**: o `OrderCanceled` e agora também o `OrderReady` saem por `Mapper.convert` a partir de records com `CustomerId`. Não há converter para `UUID` no modo `STRICT`; um teste unitário da conversão tira a dúvida.
+- **Billing after-commit**: um `InvoiceCanceled` perdido é uma compensação que não acontece.
+
+### Detalhes menores
+
+- O `KafkaStockIntegrationEventListener` do ordering importa classes que não usa (`ProcessAcceptedCheckoutIntegrationCommand`, `InvoicePaidIntegrationEvent`, `KafkaConfig`, `UUID`), sinal de cópia de outro listener.
+- Nos `Product*IntegrationEvent` do catálogo, `idempotencyKey` tem inicializador mas não tem `@Builder.Default`: quem criar o evento pelo builder recebe `null`. Hoje o caminho é o `Mapper` (construtor sem argumentos), então não morde, mas o Lombok avisa.
+- `ProductPlacedOnSaleIntegrationEvent` é publicado e ninguém consome.
 
 ---
 
-## Próximas aulas (a documentar)
+## O que vem depois
 
-- **8.6 — Reservando estoque para o pedido**: o caso de uso que junta `withdrawAll` e `StockReservation.confirmed/rejected` numa transação.
-- **8.7 — Catálogo consumindo eventos do ordering**: listener, grupo, DLT e type mapping de `ordering.order.events`.
-- **8.8 — Reservar o estoque do pedido pago**: `OrderPaid` (com itens, ECST) → reserva.
-- **8.9 — Publicar o resultado da reserva**: `StockReservationConfirmed` / `Rejected` em `product-catalog.stock.events`.
-- **8.10 — Pedido pronto para envio**: ordering consome a confirmação → `OrderReady`.
-- **8.11 — Estorno como compensação**: billing consome a rejeição → estorna no gateway → `REFUNDED` → `InvoiceCanceled` → pedido cancelado.
-- **8.12 — Eventos de produto**: publicar e escutar os eventos do produto no novo desenho.
-- **8.13 — Opinião sobre saga com coreografia**: o balanço antes da orquestração (módulo 9).
+**Módulo 9 — Saga com orquestração.** O mesmo fluxo, agora com um coordenador que conhece os passos, guarda o estado de cada saga e manda **comandos** em vez de reagir a eventos. Vale levar para lá as perguntas que este módulo deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?
 
 ---
 
 ## Checklist da saga
 
 - [x] Cada passo é uma transação local que commita sozinha
-- [x] Falhas são fatos publicados (`InvoiceCanceled`), não exceções que morrem no serviço
+- [x] Falhas são fatos publicados (`InvoiceCanceled`, `StockReservationRejected`), não exceções que morrem no serviço
 - [x] A máquina de estados do pedido aceita a compensação em qualquer ponto (`CANCELED` de quase todos)
 - [x] A decisão da reserva (inclusive a rejeição) é gravada como fato, com idempotência por `orderId`
 - [x] Baixa de estoque "tudo ou nada" (pré-validação + `MANDATORY` + transação)
-- [ ] Compensações publicadas com garantia (o billing ainda publica after-commit)
+- [x] Cada compensação tem um único dono (só o billing reage à rejeição; o pedido cancela pela fatura)
+- [x] Eventos de estoque (`ProductSoldOut`/`Restocked`) saem depois da refatoração e chegam ao carrinho
+- [ ] A compensação do pivô publica o próximo evento (`refundByOrderId` sem `save`)
+- [ ] Chamadas externas fora da transação (o estorno está dentro)
+- [ ] Compensações idempotentes (estorno duplicado chama o gateway de novo)
+- [ ] Compensações publicadas com garantia (billing e catálogo publicam after-commit)
 - [ ] Todo caminho que cancela uma etapa passa pelo agregado (o `billing-scheduler` não passa)
-- [ ] Compensações idempotentes (estorno duplicado, cancelamento duplicado)
-- [ ] Eventos de estoque (`ProductSoldOut`/`Restocked`) seguem saindo depois da refatoração
+- [ ] Contrato AsyncAPI igual ao código (key dos eventos de reserva)
+- [ ] Dá para saber em que passo está cada saga sem ler logs de três serviços
