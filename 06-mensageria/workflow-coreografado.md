@@ -1,5 +1,7 @@
 # Workflow coreografado: o pedido que atravessa serviços sem maestro
 
+> **Atualização (Fase 44, saga orquestrada):** a corrente de eventos descrita aqui **foi removida do código** junto com a saga coreografada. Hoje o pedido só publica `OrderPlaced` e para em `PLACED` até a saga orquestrada assumir. Este doc fica como registro; ver [Saga orquestrada](./saga-orquestrada.md#removendo-a-saga-coreografada).
+
 > Até aqui os eventos Kafka eram **avisos isolados**: o catálogo avisava preço, o ordering avisava a si mesmo. Este módulo encadeia avisos num **processo de negócio**: pedido → fatura → pagamento → estoque → pedido pronto. Ninguém comanda esse fluxo. Cada serviço escuta o evento anterior, faz a sua parte e publica o próximo. O fluxo existe, mas não está escrito em nenhum serviço: está no mapa abaixo, e nas assinaturas de tópico espalhadas pelo código.
 > Este é um **doc vivo**: ele cresce aula a aula com o módulo 7 da trilha ("Workflow com coreografia e eventos"). A tabela de status do mapa diz até onde o código já chegou.
 > Código real:

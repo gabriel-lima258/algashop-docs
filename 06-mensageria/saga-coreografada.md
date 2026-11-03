@@ -1,5 +1,7 @@
 # Saga coreografada: desfazer o que já foi feito em outro serviço
 
+> **Atualização (Fase 44, saga orquestrada):** a saga coreografada descrita aqui **foi removida do código** para dar lugar à orquestração. Os consumidores que faziam o fluxo andar saíram dos três serviços; ficaram as operações de trabalho (`generate`, `refundByOrderId`, `reserveForOrder`) e os eventos de pedido. Este doc fica como registro do desenho, das armadilhas e do balanço da 8.13. O porquê da remoção está em [Saga orquestrada](./saga-orquestrada.md#removendo-a-saga-coreografada).
+
 > O [workflow coreografado](./workflow-coreografado.md) cuidou do caminho feliz. Este módulo cuida do outro: o pagamento é recusado, o estoque acaba depois de o cliente pagar. Num monólito isso seria um `rollback`. Aqui não existe transação que abrace ordering, billing e catálogo, então cada passo já commitado precisa de um **passo contrário**, que também é uma transação local disparada por evento. Esse conjunto de transações locais e suas compensações é uma **saga**.
 > Doc do módulo 8 da trilha ("Transações distribuídas com Saga e coreografia"), **completo**: a saga inteira está no código, do caminho feliz até o estorno. O módulo 9 vai refazer o mesmo fluxo com orquestração.
 > Código real:
@@ -173,6 +175,8 @@ return quantityByProduct.entrySet().stream().map(e -> withdraw(e.getKey(), e.get
 - **A pré-validação não é garantia.** Entre ler o `Product` e baixar, outro pedido pode levar o estoque. Quem garante de verdade é o `decrease()` atômico do `QuantityInStockAdjustmentMongoDBImpl` (atualização condicional, ver [Concorrência e atomicidade](../02-persistencia/concorrencia-e-atomicidade.md)). A pré-checagem só evita **começar** algo que já se sabe que vai falhar.
 
 ### `MANDATORY`: o ajuste exige transação
+
+> **Atualização (Fase 44):** o `MANDATORY` foi removido do `QuantityInStockAdjustmentMongoDBImpl`. Os testes de fatia e de concorrência chamam o ajuste sem transação, e o `findAndModify` já é atômico por documento; quem precisa de "tudo ou nada" (`reserveForOrder`, `restock`, `withdraw`) continua abrindo a transação. Com isso, a [corrida na reserva](#a-corrida-na-reserva-funciona-por-acidente) também muda: sem o proxy `MANDATORY`, a exceção do `decrease()` não marca mais a transação como rollback-only. O `catch` do `reserveForOrder` grava a rejeição e o commit leva junto as baixas parciais que já aconteceram. Detalhes em [Saga orquestrada](./saga-orquestrada.md#os-testes-que-já-estavam-quebrados).
 
 ```java
 @Transactional(propagation = Propagation.MANDATORY)
@@ -433,7 +437,7 @@ A reserva é gravada e o evento sai depois do commit. Se o Kafka falhar nesse mo
 - [x] Falhas são fatos publicados (`InvoiceCanceled`, `StockReservationRejected`), não exceções que morrem no serviço
 - [x] A máquina de estados do pedido aceita a compensação em qualquer ponto (`CANCELED` de quase todos)
 - [x] A decisão da reserva (inclusive a rejeição) é gravada como fato, com idempotência por `orderId`
-- [x] Baixa de estoque "tudo ou nada" (pré-validação + `MANDATORY` + transação)
+- [x] Baixa de estoque "tudo ou nada" (pré-validação + transação do chamador; o `MANDATORY` saiu na Fase 44)
 - [x] Cada compensação tem um único dono (só o billing reage à rejeição; o pedido cancela pela fatura)
 - [x] Eventos de estoque (`ProductSoldOut`/`Restocked`) saem depois da refatoração e chegam ao carrinho
 - [ ] A compensação do pivô publica o próximo evento (`refundByOrderId` sem `save`)

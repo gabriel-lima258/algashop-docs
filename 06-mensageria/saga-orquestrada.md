@@ -1,8 +1,88 @@
 # Saga orquestrada: um lugar que sabe em que passo cada pedido está
 
 > A [saga coreografada](./saga-coreografada.md) terminou com um balanço honesto: funciona, mas o fluxo só existe no mapa, e quando um evento se perde a saga não falha, ela só para. A orquestração troca isso por um **coordenador** que conhece os passos, guarda em que ponto cada pedido está e manda **comandos** a cada serviço. Este doc acompanha o módulo 9 da trilha ("Saga e orquestração").
-> Doc vivo: começa pela preparação do terreno, antes de qualquer orquestrador existir.
+> Doc vivo: começa pela preparação do terreno, antes de qualquer orquestrador existir. Duas demolições primeiro: o checkout assíncrono e a saga coreografada.
 > Código real (desta etapa): `algashop-ordering/.../infrastructure/adapters/in/web/order/MyOrderController.java` (único caminho de criação de pedido), `core/application/checkout/CheckoutApplicationService.java` e `BuyNowApplicationService.java`, `core/application/order/snapshot/OrderSnapshot*.java`, `infrastructure/config/kafka/`; `api-gateway-ecommerce/src/main/resources/application-base.yml`.
+
+---
+
+## O mapa da orquestração
+
+![SEC & Ordering Workflow](../images/Workflow-orquestra-resumo.png)
+
+O resumo mostra a mudança de forma em uma imagem: em vez de uma corrente em que cada serviço puxa o próximo, há **um coordenador** (o ordering, como *SEC*, o coordenador de execução da saga) que manda três comandos (`Issue Invoice`, `Reserve Stock`, `Approve order`) e recebe uma **resposta** para cada um: sucesso (verde) ou falha (vermelho).
+
+![Commands & Reply - Ordering Workflow](../images/Workflow-orquestra-detalhado.png)
+
+O detalhado é a tabela que guia o módulo. Cada linha é um passo da saga, e as colunas separam quatro coisas que na coreografia viviam misturadas num evento só:
+
+| Coluna | O que é | Exemplo |
+|---|---|---|
+| **Step** / **Compensating** | O passo e o que o desfaz | `Invoicing` / `Cancel invoice` |
+| **Command** | O pedido do orquestrador a um participante | `Issue Invoice` |
+| **Reply** | A resposta endereçada ao orquestrador | `Invoice Paid` ou `Invoice Canceled` |
+| **Success / Failure Event** | O fato que o serviço anuncia para quem quiser ouvir | `Order Paid`, `Invoice Canceled` |
+
+Duas leituras para guardar desde já:
+
+- **Reply ≠ evento.** A resposta tem um destinatário (o orquestrador) e faz a saga andar. O evento continua sendo um anúncio sem destinatário. Na coreografia, o mesmo `InvoicePaid` fazia os dois papéis.
+- **O pivô mudou de lugar.** Na [saga coreografada](./saga-coreografada.md#os-três-tipos-de-passo) o pivô era a cobrança; neste mapa o pivô marcado é **Reserving Stock**. Os passos antes dele têm compensação (`Cancel order`, `Cancel invoice`); o passo depois (`Approving order`) não tem, só precisa dar certo.
+
+### O fluxo, passo a passo
+
+Lendo o mapa detalhado linha por linha, com o ordering no papel de orquestrador:
+
+| # | Passo (Step) | Comando enviado | Respostas possíveis | Evento anunciado | Compensação |
+|---|---|---|---|---|---|
+| 1 | **Placed Order** | — (a saga começa aqui, na transação do checkout) | — | `Order Placed` | `Cancel order` → `Order Canceled` |
+| 2 | **Invoicing** | `Issue Invoice` → billing | `Invoice Paid` ou `Invoice Canceled` | `Invoice Paid`, `Order Paid` / `Invoice Canceled` | `Cancel invoice` |
+| 3 | **Reserving Stock** (pivô) | `Reserve Stock` → catálogo | `Reservation Confirmed` ou `Reservation Rejected` | `Stock Reservation Confirmed` / `Stock Reservation Rejected` | — (é o ponto de não retorno) |
+| 4 | **Approving order** | `Approve order` → ordering | — | `Order Ready` | — (só precisa dar certo) |
+
+Repare que o passo 1 não tem comando: ele **é** o checkout v1. É por isso que o checkout assíncrono precisou sair (próxima seção): a saga nasce na mesma transação que grava o pedido.
+
+### Caminho feliz
+
+```mermaid
+sequenceDiagram
+    participant O as ordering (orquestrador)
+    participant B as billing
+    participant C as product-catalog
+    Note over O: 1. Placed Order<br/>(checkout v1, mesma tx: Order + início da saga)
+    O->>B: Issue Invoice (comando)
+    B-->>O: Invoice Paid (resposta)
+    Note over O: markAsPaid → Order Paid
+    O->>C: Reserve Stock (comando)
+    C-->>O: Reservation Confirmed (resposta)
+    Note over O: 4. Approve order → markAsReady → Order Ready
+```
+
+### Caminhos de falha
+
+```mermaid
+flowchart TD
+    A["Issue Invoice"] -->|"Invoice Canceled<br/>(pagamento recusado)"| X1["Cancel order<br/>→ Order Canceled"]
+    A -->|"Invoice Paid"| R["Reserve Stock (pivô)"]
+    R -->|"Reservation Rejected<br/>(sem estoque)"| X2["Cancel invoice<br/>(estorno)"]
+    X2 --> X3["Cancel order<br/>→ Order Canceled"]
+    R -->|"Reservation Confirmed"| OK["Approve order<br/>→ Order Ready"]
+```
+
+- **Pagamento recusado** (resposta `Invoice Canceled`): só o passo 1 precisa ser desfeito. O orquestrador cancela o pedido.
+- **Estoque rejeitado** (resposta `Reservation Rejected`): a saga anda para trás desfazendo os passos já commitados, **na ordem inversa**: primeiro `Cancel invoice` (o estorno, que usa o `refundByOrderId` preservado no billing), depois `Cancel order`.
+
+A diferença para a coreografia está em **quem encadeia as compensações**. Na [saga coreografada](./saga-coreografada.md#811--estornando-o-pagamento-como-compensação), a rejeição do estoque virava estorno no billing, o estorno virava `InvoiceCanceled`, e o ordering reagia cancelando o pedido: três serviços, cada um sabendo só o seu pedaço. Aqui o orquestrador **recebe** a rejeição e **decide** as duas compensações. A cadeia passa a estar escrita em um lugar só.
+
+### Coreografia × orquestração, no mesmo fluxo
+
+| Pergunta | Coreografia (módulo 8, removida) | Orquestração (módulo 9) |
+|---|---|---|
+| Quem decide o próximo passo? | Cada serviço, ao reagir ao evento anterior | O ordering, ao receber a resposta |
+| Como o billing sabe que deve emitir a fatura? | Assina `OrderPlaced` | Recebe o comando `Issue Invoice` |
+| Para quem vai o resultado? | Para quem quiser ouvir (evento) | Para o orquestrador (reply) **e**, se fizer sentido, um evento para o resto |
+| Onde fica "em que passo está o pedido 42"? | Em lugar nenhum; é preciso correlacionar três serviços | No estado da saga, no ordering |
+| Quem desfaz o quê na falha? | Emerge da cadeia de eventos | O orquestrador manda as compensações |
+| Qual é o pivô? | A cobrança | A reserva de estoque |
 
 ---
 
@@ -107,6 +187,137 @@ Comparando o working tree com a lista do desafio:
 2. Checkout v1 com carrinho e compra direta v1, autenticado como o cliente `6e148bd5-47f6-4022-b9da-07cfaa294f7a`, com o Visa final 1022 (`creditCardId` `0199deda-9486-7d27-b40c-761f561a24d8`, pago na captura). Na GUI do Kafka, cada pedido percorre os mesmos seis eventos do módulo 8 e termina em `Ordering.OrderReadyIntegrationEvent`, com `ready_at` preenchido.
 3. `POST /api/v2/customers/me/orders` autenticado, pelo gateway e direto no ordering, com `Content-Type: application/vnd.order-with-shopping-cart.v2+json`: as duas respostas são `404 Not Found`. O media type certo garante que o 404 prova que o caminho saiu, e não que o `Content-Type` estava errado.
 4. Nenhuma mensagem nova em `ordering.order.commands`; o consumer group `ordering.order-commands` sem membros ativos.
+
+---
+
+## Removendo a saga coreografada
+
+O segundo desafio apaga a [saga coreografada](./saga-coreografada.md) inteira: a corrente de seis eventos que levava o pedido de `PLACED` a `READY`, em que cada serviço reagia ao evento do anterior e decidia sozinho o próximo passo.
+
+### Por que remover antes de construir
+
+Na orquestração, **quem decide o próximo passo é o ordering**: ele manda um comando a um participante, espera a resposta e decide o que vem depois. Se os consumidores da coreografia continuassem de pé, o mesmo pedido seria conduzido por **dois caminhos ao mesmo tempo**: o billing geraria a fatura ao ver o `OrderPlaced` **e** quando recebesse o comando do orquestrador; o catálogo reservaria estoque ao ver o `OrderPaid` **e** pelo comando. Fatura dupla, reserva dupla, e dois "donos" do fluxo brigando pelo estado do pedido.
+
+Por isso a coreografia sai antes de a saga entrar, e o sistema passa por um momento proposital em que **nada conduz o pedido**:
+
+```mermaid
+flowchart LR
+    subgraph ANTES["Antes: coreografia (removida)"]
+        direction LR
+        P1["OrderPlaced"] --> B1["billing gera fatura"] --> I1["InvoiceIssued"] --> B2["billing cobra"] --> I2["InvoicePaid"] --> O1["ordering: PAID"] --> P2["OrderPaid"] --> C1["catálogo reserva"] --> S1["StockReservationConfirmed"] --> O2["ordering: READY"]
+    end
+    subgraph AGORA["Agora: ninguém conduz"]
+        direction LR
+        Q1["checkout v1"] --> Q2["Order PLACED<br/>+ OrderPlaced na outbox"] --> Q3["ordering.order.events"]
+        Q3 -.->|"nenhum consumidor"| Q4["o pedido fica em PLACED"]
+    end
+```
+
+> **Para fixar:** o pedido parado em `PLACED` não é bug, é o **estado esperado** entre a demolição e a construção. Ele prova que nenhum consumidor esquecido continua empurrando o fluxo, o que é exatamente o risco de deixar os dois mecanismos convivendo.
+
+### O que sai, serviço por serviço
+
+| Serviço | Consumidores | Eventos e apoio | Configuração |
+|---|---|---|---|
+| **ordering** | `KafkaInvoiceIntegrationEventListener`, `KafkaStockIntegrationEventListener` | `InvoicePaid`, `InvoiceCanceled`, `StockReservationConfirmedIntegrationEvent`; `OrderManagementApplicationService` e a porta `ForManagingOrders` (só os consumidores usavam); `OrderManagementApplicationServiceIT` | Tópicos e grupos de fatura e estoque, os dois DLTs, três aliases |
+| **billing** | `KafkaOrderIntegrationEventListener` (gerava a fatura), `KafkaStockIntegrationEventListener` (estornava) | `OrderPlacedIntegrationEvent`, os seis snapshots de `application.order.snapshot`, `GenerateInvoiceInputAssembler`, `StockReservationRejectedIntegrationEvent` | Tópicos e grupos de pedido e estoque, os dois DLTs, dois aliases |
+| **catálogo** | `KafkaOrderIntegrationEventListener` (reservava o estoque) | `OrderPaidIntegrationEvent`, `OrderItemSnapshot`, o `OrderPaidIntegrationEventAssembler` **do catálogo**; `StockReservationEventListener`, `StockIntegrationEventPublisher` (interface e bean), os eventos de integração **e de domínio** da reserva | Bean do tópico `product-catalog.stock.events`, DLT do tópico de pedidos, propriedades, três aliases |
+
+Depois disso, o ordering só consome eventos de **produto**, o billing só conhece o tópico de **fatura**, e o catálogo não consome nada.
+
+### O que fica, e por quê
+
+| Fica | Onde | Por quê |
+|---|---|---|
+| `OrderEventListener` e os eventos `OrderPlaced/Paid/Canceled/Ready` | ordering | O pedido continua anunciando o que acontece com ele. Hoje só o `OrderPlaced` sai, porque nada mais muda o estado; quando a saga voltar a chamar `markAsPaid`, `markAsReady` e `markAsCanceled`, os outros voltam a sair sozinhos |
+| `OrderPaidIntegrationEventAssembler` **do ordering** | ordering | O `OrderEventListener` o usa para publicar o pedido pago (o homônimo do catálogo saiu) |
+| `InvoiceManagementApplicationService.generate` e `refundByOrderId`, com `GenerateInvoiceInput` | billing | Viram os alvos dos **comandos** "emita a fatura" e "estorne" |
+| `StockManagementApplicationService.reserveForOrder`, inputs, `DuplicateStockReservationException`, `existsByOrderId` | catálogo | A reserva em si não muda: só sai quem a chamava. O comando "reserve o estoque" vai chamá-la |
+| `createDeadLetterTopic` no `KafkaConfig` do catálogo | catálogo | Fica sem uso, de propósito: os tópicos de comando das próximas aulas voltam a usá-lo |
+
+Note a regra que separa os dois lados: **sai quem reage e quem anuncia para outro serviço reagir; fica quem faz o trabalho**. Gerar fatura, estornar e reservar estoque continuam existindo. Só muda quem os aciona: um evento interpretado por cada serviço → um comando enviado pelo orquestrador.
+
+### A `StockReservation` deixa de anunciar
+
+```java
+// antes
+public class StockReservation extends AbstractAggregateRoot<StockReservation> {
+    public static StockReservation confirmed(...) {
+        StockReservation r = new StockReservation(orderId, Status.CONFIRMED, items);
+        r.registerEvent(StockReservationConfirmedEvent.builder()...build());
+        return r;
+    }
+// agora
+public class StockReservation {
+    public static StockReservation confirmed(...) {
+        return new StockReservation(orderId, Status.CONFIRMED, items);
+    }
+```
+
+Na coreografia, a reserva **anunciava** o resultado para quem quisesse ouvir (o ordering ouvia a confirmação, o billing ouvia a rejeição). Na orquestração, o resultado vira a **resposta ao comando**, endereçada ao orquestrador. O evento de domínio que existia só para virar evento de integração perde a razão de existir, e a reserva volta a ser um documento simples.
+
+### Um detalhe que ficou: o billing ainda cobra a própria fatura
+
+O `KafkaInvoiceIntegrationEventListener` do billing continua consumindo o próprio `InvoiceIssued` para chamar `processPayment` (o Listen to Yourself da [aula 7.8](./workflow-coreografado.md#78--passo-4-o-billing-cobra-a-própria-fatura-e-o-webhook-fecha-o-ciclo)). Ele não está na lista de remoção. Hoje fica **ocioso**, porque nada mais gera fatura; volta a trabalhar quando o comando de emissão da saga chamar o `generate`. Vale observar nas próximas aulas se ele continua ou se a cobrança também vira um comando do orquestrador.
+
+### Contratos
+
+Os contratos AsyncAPI seguiram o código na mesma etapa:
+
+- [`ordering.yml`](../asyncapi/ordering.yml): só consome `product-catalog.product.events` e publica `ordering.order.events`.
+- [`billing.yml`](../asyncapi/billing.yml): só `billing.invoice.events` (publica, consome o próprio `InvoiceIssued`, e o DLT).
+- [`product-catalog.yml`](../asyncapi/product-catalog.yml): só publica `product-catalog.product.events`.
+- [`messages.yml`](../asyncapi/messages.yml): saíram as mensagens, headers e payloads de `StockReservationConfirmed/Rejected`, o trait `KafkaStockReservationKey` e o schema `StockReservationId`. A divergência de key que a [saga coreografada](./saga-coreografada.md#o-contrato-diz-uma-key-o-código-usa-outra) apontava desaparece junto.
+
+### Conferência
+
+| Item | Situação |
+|---|---|
+| Ordering: consumidores, três eventos, serviço, porta, IT, propriedades, DLTs, aliases | ✅ removidos; último alias sem vírgula nos dois YAMLs |
+| Billing: consumidores, evento, seis snapshots, assembler, evento de estoque, propriedades, DLTs, aliases | ✅ removidos; imports órfãos no listener de fatura limpos |
+| Catálogo: consumidor, evento, snapshot, assembler, publicador, eventos de integração e de domínio, tópico, DLT, propriedades, aliases | ✅ removidos; `StockReservation` sem `AbstractAggregateRoot` (o import que sobrou foi tirado) |
+| Itens preservados | ✅ todos existem |
+| Sobras em `src/` dos três serviços | ✅ nenhuma referência às classes e propriedades removidas |
+| Testes unitários (`./gradlew test`) | ✅ ordering 304, billing 48, catálogo 117 — 0 falhas |
+| Testes de contrato | ✅ ordering 12, catálogo 17 — 0 falhas |
+| Testes de integração do ordering | ✅ 185, 0 falhas (já sem o `OrderManagementApplicationServiceIT`) |
+| Testes de integração do billing | ✅ 20, 0 falhas — depois de corrigir três problemas anteriores a este desafio (abaixo) |
+| Testes de integração do catálogo | ✅ 12, 0 falhas — idem |
+
+### Os testes que já estavam quebrados
+
+O primeiro `./gradlew check` depois da remoção falhou em 20 ITs do billing e 11 do catálogo. Nenhum por causa da remoção: os ITs desses dois serviços não rodavam com sucesso desde o módulo 7. Foram quatro causas:
+
+| Serviço | Sintoma | Causa | Correção |
+|---|---|---|---|
+| billing | Contexto não sobe (20 ITs) | O `application-test-env.yaml` nunca ganhou Kafka: faltavam `algashop.messaging.kafka.*` (`@NotBlank`) e o `spring.json.type.mapping` que o `KafkaConsumerTypeIdIdentifier` lê por `@Value` | Bloco `spring.kafka` **no padrão do ordering** (mapping, producer, consumer) + tópico e grupo de fatura. Diferença do ordering: `spring.kafka.listener.auto-startup: false`, para o listener do `InvoiceIssued` não entrar no grupo `billing.invoice-events` do cluster de desenvolvimento durante os testes |
+| billing | `shouldProcessInvoicePaymentAndCancelInvoice` | O teste verificava a chamada ao `InvoiceEventListener`, que virou `@TransactionalEventListener` (AFTER_COMMIT) na aula 8.3. O teste é `@Transactional` com rollback: o commit nunca acontece e o listener nunca roda | O teste passou a verificar o que de fato é responsabilidade do agregado: o `InvoiceCanceledEvent` publicado no save (`ApplicationEvents`, que a classe já registrava) |
+| billing | `PaymentGatewayServiceFastpayImplIT` passa sozinho, falha na suíte | Cada classe parava e subia o WireMock na porta 8788; o contexto Spring em cache guardava no pool uma conexão com o servidor anterior → `NoHttpResponseException` | Um WireMock só para a JVM: `startMock` não sobe de novo se já estiver rodando, `stopMock` não para. O reset de cenários do `@BeforeEach` continua isolando os testes |
+| catálogo | `StockTransactionIT` não sobe | O `KafkaConsumerTypeIdIdentifier` (aula 8.7) exige o mapping, ausente na configuração de teste | Bloco `spring.kafka` no `application-test-env.yml`, no padrão do ordering |
+| catálogo | 7 ITs de `QuantityInStockAdjustment` | `@Transactional(propagation = MANDATORY)` (aula 8.5) recusa a chamada direta dos testes de fatia e de concorrência | `MANDATORY` removido (ver abaixo) |
+
+**Por que tirar o `MANDATORY` em vez de abrir transação nos testes.** O ajuste é um `findAndModify` condicional: já é atômico por documento, sem transação. Quando o chamador abre uma (`restock`, `withdraw`, `reserveForOrder`, todos `@Transactional`), o `MongoOperations` participa dela e o ajuste commita junto com o movimento, com ou sem a anotação. O `MANDATORY` era só uma trava contra chamadas sem transação. Envolver cada chamada do teste de concorrência numa transação Mongo, ao contrário, mudaria o que ele testa: transações concorrentes no mesmo documento disputam com `WriteConflict` em vez de exercitar a atomicidade do `findAndModify`. Perdeu-se a trava; ficou a atomicidade, e os testes Java do catálogo não mudaram.
+
+### Roteiro de verificação
+
+1. Subir os três serviços e ver que iniciam sem erro (um alias apontando para classe apagada derruba a subida com `IllegalArgumentException`).
+2. Checkout v1 com carrinho, autenticado como o cliente `6e148bd5-47f6-4022-b9da-07cfaa294f7a`, Visa final 1022 (`creditCardId` `0199deda-9486-7d27-b40c-761f561a24d8`). O pedido deve **parar em `PLACED`**:
+   - em `ordering.order.events` chega só `Ordering.OrderPlacedIntegrationEvent`; nada novo em `billing.invoice.events` nem em `product-catalog.stock.events`;
+   - `select id, status, placed_at, paid_at, ready_at from public."order" where id = '<orderId>';` (banco `ordering`): `PLACED`, `paid_at` e `ready_at` vazios;
+   - `select id, status from public.invoice where order_id = '<orderId>';` (banco `billing`): nenhuma linha;
+   - `db.stock_reservations.find({ orderId: "<orderId>" })` (mongosh, catálogo): nenhum documento.
+3. Consumer groups na GUI do Kafka:
+
+| Consumer group | Esperado |
+|---|---|
+| `ordering.invoice-events` | sem membros ativos |
+| `ordering.stock-events` | sem membros ativos |
+| `billing.order-events` | sem membros ativos |
+| `billing.stock-events` | sem membros ativos |
+| `product-catalog.order-events` | sem membros ativos |
+| `ordering.product-events` | continua ativo |
+
+4. Limpeza opcional do broker (remover o bean não apaga o tópico): `product-catalog.stock.events`, `ordering.dlt.billing.invoice.events`, `ordering.dlt.product-catalog.stock.events`, `billing.dlt.ordering.order.events`, `billing.dlt.product-catalog.stock.events`, `product-catalog.dlt.ordering.order.events`.
 
 ---
 

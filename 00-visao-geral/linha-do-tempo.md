@@ -950,7 +950,7 @@ O workflow aprende a andar para trás. Sem transação que abrace três bancos, 
 
 ## Fase 44 — Saga orquestrada (nov/2026) ← etapa atual
 
-O módulo começa apagando código. Sai o checkout assíncrono v2 da Fase 41 (202 Accepted, comando para o próprio serviço, Listen to Yourself, tópico `ordering.order.commands`), porque a saga orquestrada vai começar **na mesma transação que grava o pedido**, e esse ponto só existe no checkout síncrono v1. A corrente de eventos não muda: o v1 já publica `OrderPlaced` pela outbox.
+O módulo começa apagando código, em duas demolições. Primeiro sai o checkout assíncrono v2 da Fase 41 (202 Accepted, comando para o próprio serviço, Listen to Yourself, tópico `ordering.order.commands`), porque a saga orquestrada vai começar **na mesma transação que grava o pedido**, e esse ponto só existe no checkout síncrono v1. A corrente de eventos não muda: o v1 já publica `OrderPlaced` pela outbox. Depois sai a **saga coreografada inteira**: os consumidores que faziam o pedido andar nos três serviços, porque na orquestração quem decide o próximo passo é o ordering, e dois mecanismos conduzindo o mesmo pedido gerariam fatura e reserva em dobro. Entre a demolição e a construção, o pedido para em `PLACED`, de propósito.
 
 | Marco | O que se aprende |
 |---|---|
@@ -958,6 +958,8 @@ O módulo começa apagando código. Sai o checkout assíncrono v2 da Fase 41 (20
 | O que fica | `IntegrationCommand`, `CommandPublishingException` e `toSnapshot(Order)` sem uso, de propósito: voltam nos comandos da saga |
 | Remover com lista | O compilador só acusa quem usa a classe apagada, não lê YAML, e remover o `NewTopic` não apaga o tópico |
 | Contrato junto | Canais, operações e mensagens do comando saem do AsyncAPI na mesma etapa |
+| Remover a coreografia | Sai quem reage e quem anuncia para outro serviço reagir; fica quem faz o trabalho (`generate`, `refundByOrderId`, `reserveForOrder`), que vira alvo de comando |
+| Pedido parado em `PLACED` | O estado intermediário esperado prova que nenhum consumidor esquecido continua empurrando o fluxo |
 
 > [`saga-orquestrada.md`](../06-mensageria/saga-orquestrada.md)
 
@@ -1011,7 +1013,7 @@ O módulo começa apagando código. Sai o checkout assíncrono v2 da Fase 41 (20
 - Consumer resiliente no ordering: backoff exponencial, DLT por tópico e idempotência de negócio em tabela
 - Outbox com polling publisher no ordering (o checkout assíncrono com 202 e Listen to Yourself da Fase 41 foi removido na Fase 44)
 - Workflow coreografado pedido → fatura → pagamento → pedido pago entre ordering e billing, com `OrderPaid` publicado para o catálogo
-- Saga coreografada completa entre ordering, billing e catálogo: reserva de estoque, pedido pronto, estorno como compensação e eventos de produto no carrinho
+- Saga coreografada completa entre ordering, billing e catálogo na Fase 43 — removida do código na Fase 44 para a orquestração; ficaram as operações de trabalho (fatura, estorno, reserva) e os eventos de produto no carrinho
 
 **Próximos passos naturais:**
 - **Outbox no billing** — hoje `InvoiceIssued` e `InvoicePaid` saem after-commit; falha no Kafka depois do commit é só logada e o workflow trava em silêncio

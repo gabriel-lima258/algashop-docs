@@ -133,34 +133,6 @@ components:
       traits:
         - $ref: "#/components/messageTraits/KafkaOrderKey"
 
-    StockReservationConfirmedEvent:
-      name: StockReservationConfirmedEvent
-      title: Stock Reservation Confirmed Event
-      summary: Published when stock is successfully reserved for every order item.
-      contentType: application/json
-      tags:
-        - name: Stock
-      headers:
-        $ref: "#/components/schemas/StockReservationConfirmedHeaders"
-      payload:
-        $ref: "#/components/schemas/StockReservationConfirmedPayload"
-      traits:
-        - $ref: "#/components/messageTraits/KafkaStockReservationKey"
-
-    StockReservationRejectedEvent:
-      name: StockReservationRejectedEvent
-      title: Stock Reservation Rejected Event
-      summary: Published when stock cannot be reserved for an order.
-      contentType: application/json
-      tags:
-        - name: Stock
-      headers:
-        $ref: "#/components/schemas/StockReservationRejectedHeaders"
-      payload:
-        $ref: "#/components/schemas/StockReservationRejectedPayload"
-      traits:
-        - $ref: "#/components/messageTraits/KafkaStockReservationKey"
-
     OrderPlacedEvent:
       name: OrderPlacedEvent
       title: Order Placed Event
@@ -355,26 +327,6 @@ components:
           type: string
           format: uuid
           description: Present when the event is published through the outbox.
-
-    StockReservationConfirmedHeaders:
-      type: object
-      required:
-        - __TypeId__
-      properties:
-        __TypeId__:
-          type: string
-          const: ProductCatalog.StockReservationConfirmedIntegrationEvent
-          description: Logical type used by the Jackson deserializer.
-
-    StockReservationRejectedHeaders:
-      type: object
-      required:
-        - __TypeId__
-      properties:
-        __TypeId__:
-          type: string
-          const: ProductCatalog.StockReservationRejectedIntegrationEvent
-          description: Logical type used by the Jackson deserializer.
 
     OrderPlacedHeaders:
       allOf:
@@ -904,40 +856,6 @@ components:
           format: date-time
           example: "2026-09-11T10:16:00-03:00"
 
-    StockReservationConfirmedPayload:
-      type: object
-      required:
-        - reservationId
-        - orderId
-        - confirmedAt
-      properties:
-        reservationId:
-          $ref: "#/components/schemas/StockReservationId"
-        orderId:
-          $ref: "#/components/schemas/OrderId"
-        confirmedAt:
-          type: string
-          format: date-time
-          description: Date and time when the stock reservation was confirmed.
-          example: "2026-09-11T10:15:31-03:00"
-
-    StockReservationRejectedPayload:
-      type: object
-      required:
-        - reservationId
-        - orderId
-        - rejectedAt
-      properties:
-        reservationId:
-          $ref: "#/components/schemas/StockReservationId"
-        orderId:
-          $ref: "#/components/schemas/OrderId"
-        rejectedAt:
-          type: string
-          format: date-time
-          description: Date and time when the stock reservation was rejected.
-          example: "2026-09-11T10:15:31-03:00"
-
     OrderSnapshot:
       type: object
       required:
@@ -1014,12 +932,6 @@ components:
       description: ID of the invoice.
       example: "69949fd9-e182-4c05-a299-4d479821d13d"
 
-    StockReservationId:
-      type: string
-      format: uuid
-      description: ID of the stock reservation.
-      example: "4427a30b-bbb4-4d31-a7aa-3d91931e53d2"
-
     Money:
       type: number
       format: double
@@ -1052,11 +964,4 @@ components:
         kafka:
           key:
             $ref: "#/components/schemas/InvoiceId"
-          bindingVersion: "0.5.0"
-
-    KafkaStockReservationKey:
-      bindings:
-        kafka:
-          key:
-            $ref: "#/components/schemas/StockReservationId"
           bindingVersion: "0.5.0"
