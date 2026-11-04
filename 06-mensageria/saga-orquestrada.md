@@ -681,6 +681,73 @@ O `OutboxOrderIntegrationEventPublisher` foi o primeiro a usar o draft: monta um
 
 ---
 
+## O primeiro comando: emitir a fatura
+
+Até aqui a saga nascia e parava em `PLACING_ORDER`. Agora ela dá o primeiro passo do [mapa](#o-fluxo-passo-a-passo): manda o comando `Issue Invoice` ao billing e passa a esperar a resposta em `INVOICING`.
+
+```mermaid
+sequenceDiagram
+    participant CK as checkout v1 (@Transactional)
+    participant SC as PlaceOrderSagaCoordinator.start
+    participant S as PlaceOrderSaga
+    participant P as OutboxPlaceOrderSagaIntegrationCommandPublisher
+    participant DB as Postgres (mesma transação)
+    CK->>SC: OrderPlacedEvent → start(orderId)
+    SC->>DB: orders.ofId → OrderSnapshot
+    Note over SC: IssueInvoiceIntegrationCommand.from(snapshot)
+    SC->>S: start(orderId) + moveToInvoicing()
+    SC->>DB: sagas.add → saga_instance (RUNNING, INVOICING)
+    SC->>P: send(sagaId, command)
+    P->>DB: OutboxDraft → outbox<br/>canal billing.invoice.commands, correlation_id = sagaId,<br/>reply_topic = ordering.saga.replies
+    Note over DB: commit: pedido + OrderPlaced + saga + comando
+    DB-->>DB: depois, o OutboxDispatcher envia o comando ao Kafka
+```
+
+### As peças, por camada
+
+| Camada | Peça | O que faz |
+|---|---|---|
+| aplicação | `IssueInvoiceIntegrationCommand` | O comando: pedido congelado (itens, frete, cobrança, `PaymentSnapshot` com método e cartão). Implementa `OutboundIntegrationCommand`, key = `orderId` |
+| aplicação | `PlaceOrderSaga.moveToInvoicing()` | Primeira transição: `require(isRunningAt(PLACING_ORDER))` e `changeStepTo(INVOICING)`. O status continua `RUNNING` |
+| aplicação | `PlaceOrderSagaCoordinator.start` | Carrega o pedido, monta o comando, inicia e avança a saga, grava, envia |
+| porta de saída | `ForPublishingPlaceOrderSagaIntegrationCommands.send(correlationId, command)` | O coordenador diz *qual* comando e de *qual* saga; o resto é do adaptador |
+| adaptador | `OutboxPlaceOrderSagaIntegrationCommandPublisher` | Monta o `OutboxDraft` com canal, agregado, `correlationId` e `replyTopic` e grava na outbox |
+| adaptador | `PlaceOrderSagaCommandTopics.of(command)` | Roteia cada comando para o tópico do participante, por pattern matching de tipo |
+| config | `AlgaShopMessagingKafkaProperties` + `KafkaConfig` (ordering) | `billing-invoice-commands-topic-name`, `saga-replies-topic-name`; cria `ordering.saga.replies` e seu DLT |
+| config | `AlgaShopMessagingKafkaProperties` + `KafkaConfig` (billing) | `invoice-commands-topic-name`, `invoice-commands-consumer-group`; cria `billing.invoice.commands` |
+
+### Três decisões para guardar
+
+**1. O comando reaproveita o snapshot.** O `toSnapshot(Order)` que [ficou sem chamador](#o-ordersnapshot-encolhe) quando o checkout assíncrono saiu volta aqui, como estava previsto. O comando carrega o pedido inteiro (ECST): o billing emite a fatura sem chamar o ordering de volta. Os itens são ordenados por id, para o mesmo pedido gerar sempre o mesmo JSON.
+
+**2. `correlationId = sagaId`.** A resposta do billing vai voltar com o mesmo `kafka_correlationId`, e o orquestrador vai usá-lo para achar a saga, checar com `isRunningAt(INVOICING)` se ainda espera aquela resposta, e avançar. O `orderId` também identificaria o pedido, mas o `sagaId` identifica a **execução**: se um dia houver mais de uma saga por pedido (outro tipo, ou uma nova tentativa), a correlação continua sem ambiguidade.
+
+**3. Quem cria cada tópico é quem o consome.** O billing executa os comandos de fatura, então ele declara `billing.invoice.commands`. O ordering consome as respostas, então ele declara `ordering.saga.replies` e o DLT dela. O ordering só conhece o *nome* do tópico de comandos, pela property, e não o cria. É a mesma regra dos tópicos de eventos (cada dono declara o seu), aplicada ao lado de quem recebe.
+
+### O roteamento de tópico
+
+```java
+return switch (command) {
+    case IssueInvoiceIntegrationCommand ignored -> properties.getBillingInvoiceCommandsTopicName();
+    default -> throw new IllegalArgumentException("Unsupported saga command " + ...);
+};
+```
+
+O publisher não precisa saber para onde vai cada comando: pergunta ao `PlaceOrderSagaCommandTopics`. Cada comando novo (`ReserveStock`, `CancelInvoice`) ganha uma linha no `switch`. Um comando sem rota **falha alto** no envio: melhor uma exceção (que desfaz a transação inteira) do que um comando gravado para um tópico que ninguém consome.
+
+### Revisão desta etapa
+
+- **Corrigido, o alerta da etapa anterior se confirmou**: o alias no YAML do ordering era `Billing.IssueInvoiceIntegrationCommand`, mas o contrato (`IssueInvoiceHeaders`) diz `Ordering.IssueInvoiceIntegrationCommand`, e a convenção do projeto é prefixo = serviço produtor. Com o prefixo errado, o `__TypeId__` gravado na outbox seria `Billing.…`, e o billing, mapeando pelo contrato, não reconheceria o comando: ele cairia no handler default e seria ignorado em silêncio. Virou `Ordering.IssueInvoiceIntegrationCommand`.
+- **Corrigido**: os `application-test-env.yaml` do ordering e do billing não tinham as properties novas (`@NotBlank`). O contexto dos testes de integração não subiria. Adicionadas, e o ordering ganhou também o alias do comando.
+- **Comentários**: cada classe nova ou alterada ganhou um comentário curto explicando seu papel.
+- **Testes**: ordering `check` verde (304 unitários, 12 de contrato, 185 de integração); billing `check` verde (48 unitários, 20 de integração). O `CheckoutApplicationServiceIT` agora executa o caminho inteiro: grava pedido, saga em `INVOICING` e o comando na outbox.
+- **Pendências**:
+  - o billing ainda não **consome** o comando, não tem listener nem DLT para `billing.invoice.commands`, e não responde. O comando fica no tópico até a próxima aula;
+  - a pendência da [persistência da saga](#revisão-desta-etapa-1) continua (atualizar uma saga já gravada perde `createdAt` e a `version`). Ainda não morde, porque a saga só é inserida, mas a primeira resposta vai exigir um `update`;
+  - o comando não passa por Bean Validation antes de ir para a outbox (o `OutboxRecorder` não valida). As anotações do `IssueInvoiceIntegrationCommand` só protegem o lado de quem consome.
+
+---
+
 ## Próximas aulas (a documentar)
 
 O modelo, a persistência, o início da saga e o contrato já existem (seções acima). Os métodos de transição, os comandos e as respostas em código entram aqui conforme o módulo avança. A comparação com a coreografia vai seguir as perguntas que o [balanço da 8.13](./saga-coreografada.md#813--opinião-sobre-saga-com-coreografia) deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?
