@@ -420,6 +420,96 @@ public static PlaceOrderSaga existing(UUID sagaId, OrderId orderId,
 
 ---
 
+## Persistindo a saga
+
+O modelo da seção anterior só existia em memória. Esta etapa dá a ele uma tabela, sem mudar uma linha do `PlaceOrderSaga`: tudo o que é banco fica na infraestrutura.
+
+```mermaid
+flowchart LR
+    A["PlaceOrderSaga<br/>(core/application)"] -->|"porta de saída"| B["ForStoringPlaceOrderSagas<br/>ofId · add"]
+    B -.->|"implementada por"| C["PlaceOrderSagasPersistenceProvider<br/>toEntity · toSaga"]
+    C --> D["PlaceOrderSagaPersistenceEntityRepository<br/>(Spring Data JPA)"]
+    D --> E[("saga_instance")]
+```
+
+É o mesmo desenho de [ports & adapters](../01-arquitetura-design/ports-hexagonal.md) do `Orders`: a aplicação conhece a porta `ForStoringPlaceOrderSagas` (`core/ports/out/order/saga`), e o adaptador traduz entre o objeto da aplicação e a entidade JPA.
+
+### A classe abstrata `SagaInstancePersistenceEntity`
+
+O centro da etapa é uma entidade **abstrata** que serve de base para todas as sagas do serviço, presentes e futuras:
+
+```mermaid
+classDiagram
+    class SagaInstancePersistenceEntity {
+        <<abstract>>
+        UUID sagaId
+        String aggregateId
+        SagaStatus status
+        OffsetDateTime createdAt
+        OffsetDateTime updatedAt
+        long version
+    }
+    class PlaceOrderSagaPersistenceEntity {
+        PlaceOrderSagaStep step
+    }
+    SagaInstancePersistenceEntity <|-- PlaceOrderSagaPersistenceEntity : saga_type = PLACE_ORDER
+```
+
+Como ela foi construída, peça por peça:
+
+| Peça | O que faz | Por quê |
+|---|---|---|
+| `abstract` + `@Entity` | É uma entidade JPA, mas não pode ser instanciada | Não existe "saga genérica" no banco: toda linha é de um tipo concreto |
+| `@Inheritance(SINGLE_TABLE)` | Base e subclasses gravam na **mesma** tabela | Uma consulta por status atende qualquer tipo de saga, sem join |
+| `@DiscriminatorColumn(name = "saga_type")` + `@DiscriminatorValue("PLACE_ORDER")` na subclasse | Cada linha diz de que tipo é | Ao ler a linha, o Hibernate sabe qual subclasse instanciar |
+| Campos na base: `sagaId`, `aggregateId`, `status` | O que **toda** saga tem | Identidade, o agregado que ela conduz e o ciclo de vida genérico (`SagaStatus`) |
+| Campo na subclasse: `step` | O que é **desta** saga | Cada saga tem seu próprio enum de passos |
+| `@CreatedDate`, `@LastModifiedDate` + `AuditingEntityListener` | Datas preenchidas pelo Spring Data | A mesma auditoria das outras entidades, com o `DateTimeProvider` de `OffsetDateTime` do projeto |
+| `@Version` | Lock otimista | Duas respostas do mesmo pedido gravando ao mesmo tempo: a segunda falha em vez de sobrescrever |
+| `aggregateId` como `String` | Serve a qualquer agregado | Hoje guarda o TSID do pedido; amanhã pode ser outro id |
+
+**Por que `SINGLE_TABLE` e não as outras estratégias.** `JOINED` separaria os campos comuns e os específicos em tabelas diferentes, com join a cada leitura. `TABLE_PER_CLASS` daria uma tabela por saga, e "quais sagas estão ativas?" viraria um `UNION`. Com single table, o preço é que colunas específicas de uma saga ficam vazias nas linhas das outras. Com poucos campos por saga, é um preço baixo.
+
+### A tabela `saga_instance` (V010)
+
+| Coluna | Origem | Observação |
+|---|---|---|
+| `saga_id` | base | PK |
+| `saga_type` | discriminador | `PLACE_ORDER` |
+| `aggregate_id` | base | id do pedido |
+| `status` | base | `RUNNING`, `COMPENSATING`, `SUCCEEDED`, `COMPENSATED` |
+| `step` | subclasse | `not null`: toda saga do serviço precisa ter passo |
+| `failure` | — | reservada, ainda sem campo na entidade |
+| `created_at`, `updated_at` | auditoria | |
+| `version` | `@Version` | |
+
+Duas decisões no SQL valem a leitura:
+
+- **`unique (saga_type, aggregate_id)`**: uma saga de realizar pedido por pedido. Se o início da saga for executado duas vezes para o mesmo pedido, o banco recusa a segunda.
+- **Índice parcial `idx_saga_instance_active`** em `(saga_type, status)` `where status in ('RUNNING', 'COMPENSATING')`: só as sagas ativas entram no índice. As terminadas (a grande maioria, com o tempo) não pesam. É exatamente o conjunto que um job de recuperação ou de timeout vai varrer.
+
+### O adaptador
+
+`PlaceOrderSagasPersistenceProvider` converte nos dois sentidos:
+
+- `toEntity(saga)`: cria a `PlaceOrderSagaPersistenceEntity` e copia `sagaId`, `orderId` (como texto), `status`, `step` e `version`.
+- `toSaga(entity)`: reidrata com `PlaceOrderSaga.existing(...)`, a fábrica que a seção anterior preparou para isso.
+
+A classe é `@Transactional(readOnly = true)` por padrão, e só o `add` abre escrita.
+
+### Revisão desta etapa
+
+- **Corrigido**: o campo se chamava `updateAt`, mas a coluna é `updated_at`. A estratégia de nomes do Spring Boot transformaria o campo em `update_at`, e como o projeto usa `ddl-auto: none`, nada acusaria na subida: o primeiro `insert` de uma saga falharia com "column update_at does not exist". Renomeado para `updatedAt`. Nenhum teste grava saga ainda, por isso a suíte não pegou.
+- **Corrigido**: import sem uso (`LastModifiedBy`).
+- **Para quando as transições chegarem**: o `add` monta uma entidade nova a cada chamada. Para inserir, funciona. Para **atualizar** uma saga já gravada, dois problemas vão aparecer:
+  1. a entidade nova chega com `createdAt` nulo, o `merge` copia o nulo por cima e viola o `not null`;
+  2. a `version` incrementada pelo banco não volta para o objeto `PlaceOrderSaga`, e a gravação seguinte, com a versão velha, daria `OptimisticLockException`.
+
+  O `OrderPersistenceProvider` já resolve os dois: `findById` decide entre `update` e `insert`, a atualização copia os campos para a entidade carregada, e o `updateVersion` devolve a versão ao agregado por reflexão. É o padrão a reaproveitar.
+- **Testes**: `./gradlew check` do ordering verde (304 unitários, 12 de contrato, 185 de integração, com a V010 aplicada no Postgres de teste). Um IT do `PlaceOrderSagasPersistenceProvider` (gravar, ler, gravar de novo) é o que pegaria os itens acima.
+
+---
+
 ## Próximas aulas (a documentar)
 
-O modelo da saga já existe (seção acima). Os métodos de transição, a persistência, os comandos e o orquestrador entram aqui conforme o módulo avança. A comparação com a coreografia vai seguir as perguntas que o [balanço da 8.13](./saga-coreografada.md#813--opinião-sobre-saga-com-coreografia) deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?
+O modelo e a persistência da saga já existem (seções acima). Os métodos de transição, os comandos e o orquestrador entram aqui conforme o módulo avança. A comparação com a coreografia vai seguir as perguntas que o [balanço da 8.13](./saga-coreografada.md#813--opinião-sobre-saga-com-coreografia) deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?

@@ -961,6 +961,7 @@ O módulo começa apagando código, em duas demolições. Primeiro sai o checkou
 | Remover a coreografia | Sai quem reage e quem anuncia para outro serviço reagir; fica quem faz o trabalho (`generate`, `refundByOrderId`, `reserveForOrder`), que vira alvo de comando |
 | Pedido parado em `PLACED` | O estado intermediário esperado prova que nenhum consumidor esquecido continua empurrando o fluxo |
 | Modelar a saga | `PlaceOrderSaga` com duas máquinas de estado (status genérico × passo do pedido), cada estado declarando de onde vem; `start`/`existing` e `version` prontos para persistir |
+| Persistir a saga | Entidade abstrata com herança `SINGLE_TABLE` e discriminador `saga_type`: uma tabela para todas as sagas, uma saga por pedido, índice parcial só nas ativas |
 
 > [`saga-orquestrada.md`](../06-mensageria/saga-orquestrada.md)
 
