@@ -3,6 +3,9 @@ asyncapi: 3.1.0
 info:
   title: AlgaShop - Product Catalog AsyncAPI
   version: "1.0"
+  description: >-
+    Asynchronous contract of the Product Catalog service. It publishes product
+    events, receives stock commands and replies to them.
 
 defaultContentType: application/json
 
@@ -42,6 +45,39 @@ channels:
           min.insync.replicas: 2
         bindingVersion: "0.5.0"
 
+  stockCommands:
+    address: product-catalog.stock.commands
+    title: Stock commands
+    description: Stock commands, keyed by the order id.
+    messages:
+      reserveStock:
+        $ref: "./messages.yml#/components/messages/ReserveStockCommand"
+    bindings:
+      kafka:
+        topic: product-catalog.stock.commands
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  stockCommandsDeadLetter:
+    address: product-catalog.dlt.product-catalog.stock.commands
+    title: Stock commands dead-letter topic
+    description: Commands that failed processing or are of unknown type.
+    messages:
+      reserveStock:
+        $ref: "./messages.yml#/components/messages/ReserveStockCommand"
+    bindings:
+      kafka:
+        topic: product-catalog.dlt.product-catalog.stock.commands
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+          retention.ms: 2592000000
+        bindingVersion: "0.5.0"
+
 operations:
   publishProductEvents:
     action: send
@@ -59,3 +95,37 @@ operations:
       - $ref: "#/channels/productEvents/messages/productPlacedOnSale"
       - $ref: "#/channels/productEvents/messages/productRestocked"
       - $ref: "#/channels/productEvents/messages/productSoldOut"
+
+  consumeStockCommands:
+    action: receive
+    channel:
+      $ref: "#/channels/stockCommands"
+    summary: Reserves the stock of an order.
+    description: A repeated command answers again with the outcome of the existing reservation.
+    tags:
+      - name: Commands
+    messages:
+      - $ref: "#/channels/stockCommands/messages/reserveStock"
+    reply:
+      address:
+        description: Reply topic chosen by the sender of the command.
+        location: "$message.header#/kafka_replyTopic"
+      messages:
+        - $ref: "./messages.yml#/components/messages/StockReservationConfirmedReply"
+        - $ref: "./messages.yml#/components/messages/StockReservationRejectedReply"
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          const: product-catalog.stock-commands
+        bindingVersion: "0.5.0"
+
+  publishFailedStockCommands:
+    action: send
+    channel:
+      $ref: "#/channels/stockCommandsDeadLetter"
+    summary: Moves stock commands that could not be processed to the dead-letter topic.
+    tags:
+      - name: Dead letter
+    messages:
+      - $ref: "#/channels/stockCommandsDeadLetter/messages/reserveStock"

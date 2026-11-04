@@ -217,6 +217,126 @@ components:
       traits:
         - $ref: "#/components/messageTraits/KafkaInvoiceKey"
 
+    IssueInvoiceCommand:
+      name: IssueInvoiceCommand
+      title: Issue Invoice Command
+      summary: Asks Billing to issue and charge the invoice of a placed order.
+      contentType: application/json
+      tags:
+        - name: Commands
+      headers:
+        $ref: "#/components/schemas/IssueInvoiceHeaders"
+      correlationId:
+        $ref: "#/components/correlationIds/CorrelationId"
+      payload:
+        $ref: "#/components/schemas/IssueInvoicePayload"
+      traits:
+        - $ref: "#/components/messageTraits/KafkaOrderKey"
+
+    CancelInvoiceCommand:
+      name: CancelInvoiceCommand
+      title: Refund Invoice Command
+      summary: Asks Billing to refund the invoice of an order (compensation).
+      contentType: application/json
+      tags:
+        - name: Commands
+      headers:
+        $ref: "#/components/schemas/CancelInvoiceHeaders"
+      correlationId:
+        $ref: "#/components/correlationIds/CorrelationId"
+      payload:
+        $ref: "#/components/schemas/CancelInvoicePayload"
+      traits:
+        - $ref: "#/components/messageTraits/KafkaOrderKey"
+
+    ReserveStockCommand:
+      name: ReserveStockCommand
+      title: Reserve Stock Command
+      summary: Asks Product Catalog to reserve the stock of every item of a paid order.
+      contentType: application/json
+      tags:
+        - name: Commands
+      headers:
+        $ref: "#/components/schemas/ReserveStockHeaders"
+      correlationId:
+        $ref: "#/components/correlationIds/CorrelationId"
+      payload:
+        $ref: "#/components/schemas/ReserveStockPayload"
+      traits:
+        - $ref: "#/components/messageTraits/KafkaOrderKey"
+
+    InvoicePaidReply:
+      name: InvoicePaidReply
+      title: Invoice Paid Reply
+      summary: Billing reports that the invoice of the order was paid.
+      description: Answers IssueInvoiceCommand.
+      contentType: application/json
+      tags:
+        - name: Replies
+      headers:
+        $ref: "#/components/schemas/InvoicePaidReplyHeaders"
+      correlationId:
+        $ref: "#/components/correlationIds/CorrelationId"
+      payload:
+        $ref: "#/components/schemas/InvoicePaidReplyPayload"
+      traits:
+        - $ref: "#/components/messageTraits/KafkaOrderKey"
+
+    InvoiceCanceledReply:
+      name: InvoiceCanceledReply
+      title: Invoice Canceled Reply
+      summary: Billing reports that the invoice of the order was canceled.
+      contentType: application/json
+      tags:
+        - name: Replies
+      headers:
+        $ref: "#/components/schemas/InvoiceCanceledReplyHeaders"
+      correlationId:
+        $ref: "#/components/correlationIds/CorrelationId"
+      payload:
+        $ref: "#/components/schemas/InvoiceCanceledReplyPayload"
+      traits:
+        - $ref: "#/components/messageTraits/KafkaOrderKey"
+
+    StockReservationConfirmedReply:
+      name: StockReservationConfirmedReply
+      title: Stock Reservation Confirmed Reply
+      summary: Product Catalog reports that stock was reserved for every order item.
+      description: Answers ReserveStockCommand.
+      contentType: application/json
+      tags:
+        - name: Replies
+      headers:
+        $ref: "#/components/schemas/StockReservationConfirmedReplyHeaders"
+      correlationId:
+        $ref: "#/components/correlationIds/CorrelationId"
+      payload:
+        $ref: "#/components/schemas/StockReservationConfirmedReplyPayload"
+      traits:
+        - $ref: "#/components/messageTraits/KafkaOrderKey"
+
+    StockReservationRejectedReply:
+      name: StockReservationRejectedReply
+      title: Stock Reservation Rejected Reply
+      summary: Product Catalog reports that stock could not be reserved for the order.
+      description: Answers ReserveStockCommand.
+      contentType: application/json
+      tags:
+        - name: Replies
+      headers:
+        $ref: "#/components/schemas/StockReservationRejectedReplyHeaders"
+      correlationId:
+        $ref: "#/components/correlationIds/CorrelationId"
+      payload:
+        $ref: "#/components/schemas/StockReservationRejectedReplyPayload"
+      traits:
+        - $ref: "#/components/messageTraits/KafkaOrderKey"
+
+  correlationIds:
+    CorrelationId:
+      description: ID of the request, sent in every command and echoed in its reply.
+      location: "$message.header#/kafka_correlationId"
+
   schemas:
     ProductAddedHeaders:
       allOf:
@@ -409,6 +529,116 @@ components:
           description: Unique event identifier used for idempotent processing.
           example: "018ec6f7-6f47-7d5a-a337-9dbcc12e7176"
 
+    CommandHeaders:
+      type: object
+      required:
+        - kafka_correlationId
+        - kafka_replyTopic
+      properties:
+        kafka_correlationId:
+          $ref: "#/components/schemas/CorrelationId"
+        kafka_replyTopic:
+          type: string
+          minLength: 1
+          description: Topic where the reply must be published.
+          example: "ordering.saga.replies"
+        idempotency-key:
+          type: string
+          format: uuid
+          description: Present when the command is published through the outbox.
+
+    ReplyHeaders:
+      type: object
+      required:
+        - kafka_correlationId
+      properties:
+        kafka_correlationId:
+          $ref: "#/components/schemas/CorrelationId"
+
+    IssueInvoiceHeaders:
+      allOf:
+        - $ref: "#/components/schemas/CommandHeaders"
+        - type: object
+          required:
+            - __TypeId__
+          properties:
+            __TypeId__:
+              type: string
+              const: Ordering.IssueInvoiceIntegrationCommand
+              description: Logical type used by the Jackson deserializer.
+
+    CancelInvoiceHeaders:
+      allOf:
+        - $ref: "#/components/schemas/CommandHeaders"
+        - type: object
+          required:
+            - __TypeId__
+          properties:
+            __TypeId__:
+              type: string
+              const: Ordering.CancelInvoiceIntegrationCommand
+              description: Logical type used by the Jackson deserializer.
+
+    ReserveStockHeaders:
+      allOf:
+        - $ref: "#/components/schemas/CommandHeaders"
+        - type: object
+          required:
+            - __TypeId__
+          properties:
+            __TypeId__:
+              type: string
+              const: Ordering.ReserveStockIntegrationCommand
+              description: Logical type used by the Jackson deserializer.
+
+    InvoicePaidReplyHeaders:
+      allOf:
+        - $ref: "#/components/schemas/ReplyHeaders"
+        - type: object
+          required:
+            - __TypeId__
+          properties:
+            __TypeId__:
+              type: string
+              const: Billing.InvoicePaidIntegrationReply
+              description: Logical type used by the Jackson deserializer.
+
+    InvoiceCanceledReplyHeaders:
+      allOf:
+        - $ref: "#/components/schemas/ReplyHeaders"
+        - type: object
+          required:
+            - __TypeId__
+          properties:
+            __TypeId__:
+              type: string
+              const: Billing.InvoiceCanceledIntegrationReply
+              description: Logical type used by the Jackson deserializer.
+
+    StockReservationConfirmedReplyHeaders:
+      allOf:
+        - $ref: "#/components/schemas/ReplyHeaders"
+        - type: object
+          required:
+            - __TypeId__
+          properties:
+            __TypeId__:
+              type: string
+              const: ProductCatalog.StockReservationConfirmedIntegrationReply
+              description: Logical type used by the Jackson deserializer.
+
+    StockReservationRejectedReplyHeaders:
+      allOf:
+        - $ref: "#/components/schemas/ReplyHeaders"
+        - type: object
+          required:
+            - __TypeId__
+          properties:
+            __TypeId__:
+              type: string
+              const: ProductCatalog.StockReservationRejectedIntegrationReply
+              description: Logical type used by the Jackson deserializer.
+
     ProductAddedPayload:
       type: object
       required:
@@ -569,6 +799,7 @@ components:
     OrderItemSnapshot:
       type: object
       required:
+        - id
         - orderItemId
         - productId
         - productName
@@ -576,10 +807,17 @@ components:
         - quantity
         - totalAmount
       properties:
-        orderItemId:
+        id:
           type: string
           minLength: 1
           description: ID of the order item.
+          example: "557184362231839"
+        orderItemId:
+          type: string
+          minLength: 1
+          description: >-
+            Required by the consumers' validation. The producer currently
+            fills it with the ID of the order the item belongs to.
           example: "557184362231839"
         productId:
           $ref: "#/components/schemas/ProductId"
@@ -588,13 +826,13 @@ components:
           minLength: 1
           example: Smartphone XYZ
         price:
-          $ref: "#/components/schemas/Money"
+          $ref: "#/components/schemas/PositiveMoney"
         quantity:
           type: integer
           minimum: 1
           example: 2
         totalAmount:
-          $ref: "#/components/schemas/Money"
+          $ref: "#/components/schemas/PositiveMoney"
 
     OrderPlacedPayload:
       type: object
@@ -856,19 +1094,17 @@ components:
           format: date-time
           example: "2026-09-11T10:16:00-03:00"
 
-    OrderSnapshot:
+    IssueInvoicePayload:
       type: object
       required:
         - orderId
         - customerId
         - placedAt
-        - status
-        - billing
-        - shipping
-        - paymentMethod
         - totalAmount
-        - totalItems
         - items
+        - payment
+        - shipping
+        - billing
       properties:
         orderId:
           $ref: "#/components/schemas/OrderId"
@@ -877,37 +1113,128 @@ components:
         placedAt:
           type: string
           format: date-time
+          description: Date and time when the order was placed.
           example: "2026-09-11T10:15:30-03:00"
-        status:
-          type: string
-          enum:
-            - DRAFT
-            - PLACED
-            - PAID
-            - READY
-            - CANCELED
-        billing:
-          $ref: "#/components/schemas/BillingSnapshot"
-        shipping:
-          $ref: "#/components/schemas/ShippingSnapshot"
-        paymentMethod:
-          $ref: "#/components/schemas/PaymentMethod"
-        creditCardId:
-          type: string
-          format: uuid
-          description: Required when paymentMethod is CREDIT_CARD.
         totalAmount:
           $ref: "#/components/schemas/PositiveMoney"
-        totalItems:
-          type: integer
-          minimum: 1
-          example: 2
         items:
           type: array
           minItems: 1
-          uniqueItems: true
           items:
             $ref: "#/components/schemas/OrderItemSnapshot"
+        payment:
+          $ref: "#/components/schemas/PaymentSnapshot"
+        shipping:
+          $ref: "#/components/schemas/ShippingSnapshot"
+        billing:
+          $ref: "#/components/schemas/BillingSnapshot"
+
+    CancelInvoicePayload:
+      type: object
+      required:
+        - orderId
+      properties:
+        orderId:
+          $ref: "#/components/schemas/OrderId"
+
+    ReserveStockPayload:
+      type: object
+      required:
+        - orderId
+        - items
+      properties:
+        orderId:
+          $ref: "#/components/schemas/OrderId"
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/StockItem"
+
+    StockItem:
+      type: object
+      required:
+        - productId
+        - quantity
+      properties:
+        productId:
+          $ref: "#/components/schemas/ProductId"
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+
+    InvoicePaidReplyPayload:
+      type: object
+      required:
+        - invoiceId
+        - orderId
+        - paidAt
+      properties:
+        invoiceId:
+          $ref: "#/components/schemas/InvoiceId"
+        orderId:
+          $ref: "#/components/schemas/OrderId"
+        paidAt:
+          type: string
+          format: date-time
+          example: "2026-09-11T10:16:00-03:00"
+
+    InvoiceCanceledReplyPayload:
+      type: object
+      required:
+        - invoiceId
+        - orderId
+        - canceledAt
+      properties:
+        invoiceId:
+          $ref: "#/components/schemas/InvoiceId"
+        orderId:
+          $ref: "#/components/schemas/OrderId"
+        canceledAt:
+          type: string
+          format: date-time
+          example: "2026-09-11T10:16:00-03:00"
+
+    StockReservationConfirmedReplyPayload:
+      type: object
+      required:
+        - reservationId
+        - orderId
+        - confirmedAt
+      properties:
+        reservationId:
+          $ref: "#/components/schemas/StockReservationId"
+        orderId:
+          $ref: "#/components/schemas/OrderId"
+        confirmedAt:
+          type: string
+          format: date-time
+          description: Date and time when the stock reservation was confirmed.
+          example: "2026-09-11T10:15:31-03:00"
+
+    StockReservationRejectedReplyPayload:
+      type: object
+      required:
+        - reservationId
+        - orderId
+        - rejectedAt
+      properties:
+        reservationId:
+          $ref: "#/components/schemas/StockReservationId"
+        orderId:
+          $ref: "#/components/schemas/OrderId"
+        rejectedAt:
+          type: string
+          format: date-time
+          description: Date and time when the stock reservation was rejected.
+          example: "2026-09-11T10:15:31-03:00"
+
+    CorrelationId:
+      type: string
+      minLength: 1
+      example: "018ec6f7-6f47-7d5a-a337-9dbcc12e7176"
+
     ProductId:
       type: string
       format: uuid
@@ -931,6 +1258,12 @@ components:
       format: uuid
       description: ID of the invoice.
       example: "69949fd9-e182-4c05-a299-4d479821d13d"
+
+    StockReservationId:
+      type: string
+      format: uuid
+      description: ID of the stock reservation.
+      example: "4427a30b-bbb4-4d31-a7aa-3d91931e53d2"
 
     Money:
       type: number

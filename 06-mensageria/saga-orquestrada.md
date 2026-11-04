@@ -510,6 +510,118 @@ A classe é `@Transactional(readOnly = true)` por padrão, e só o `add` abre es
 
 ---
 
+## Onde a saga começa
+
+A primeira seção deste doc explicou **por que** o checkout assíncrono saiu: a saga precisa nascer na mesma transação que grava o pedido. Esta etapa é o **como**.
+
+```mermaid
+sequenceDiagram
+    participant API as POST /api/v1/.../orders
+    participant CK as CheckoutApplicationService<br/>(@Transactional)
+    participant L as OrderEventListener
+    participant SC as PlaceOrderSagaCoordinator
+    participant DB as Postgres (uma transação)
+    API->>CK: checkout(input)
+    CK->>DB: orders.add(order)
+    Note over CK,L: o save publica OrderPlacedEvent
+    L->>DB: onOrderPlacedPublishIntegrationEvent<br/>→ linha na outbox (OrderPlaced)
+    L->>SC: onOrderPlacedStartSaga → start(orderId)
+    SC->>DB: PlaceOrderSaga.start → saga_instance (RUNNING, PLACING_ORDER)
+    CK-->>API: 201 Created
+    Note over DB: commit único: pedido + outbox + saga,<br/>ou nenhum dos três
+```
+
+As peças:
+
+| Peça | Onde | Papel |
+|---|---|---|
+| `ForCoordinatingPlaceOrderSaga.start(rawOrderId)` | `core/ports/in/order/saga` | Porta de **entrada** do orquestrador |
+| `PlaceOrderSagaCoordinator` | `core/application/order/saga` | Implementação: cria a saga com `PlaceOrderSaga.start` e grava pela porta de saída `ForStoringPlaceOrderSagas` |
+| `OrderEventListener.onOrderPlacedStartSaga` | `infrastructure/adapters/in/listerner/order` | Adaptador de entrada: traduz o evento de domínio em chamada à porta |
+
+Três detalhes que fazem a diferença:
+
+- **Dois ouvintes para o mesmo evento.** O antigo `listen(OrderPlacedEvent)` virou `onOrderPlacedPublishIntegrationEvent` e ganhou um irmão, `onOrderPlacedStartSaga`. Nomes que dizem *o que* cada um faz são mais legíveis que dois `listen` sobrecarregados, e cada responsabilidade pode evoluir sozinha.
+- **Os dois são `@EventListener` síncronos**, e não `@TransactionalEventListener`. Rodam *dentro* da transação do checkout, e o `@Transactional` do coordenador apenas participa dela. Se gravar a saga falhar, o checkout inteiro volta: não existe pedido sem saga. É o mesmo raciocínio da outbox: com escrita local, publicar dentro da transação é o objetivo.
+- **Uma saga por pedido** fica garantida pela constraint `unique (saga_type, aggregate_id)` da V010.
+
+O efeito colateral mais visível: todo checkout v1 agora grava uma linha em `saga_instance`. O `CheckoutApplicationServiceIT` passou a exercitar a persistência da saga, e foi ele que confirmou, no Postgres de teste, a correção do `updatedAt` da seção anterior. O teste também foi ajustado para verificar os dois ouvintes.
+
+> **Para fixar:** a saga começa e... para. O coordenador ainda não envia o comando `Issue Invoice`. Um pedido novo fica `PLACED`, com a saga `RUNNING` em `PLACING_ORDER`. Agora há um registro dizendo onde ele parou, o que a coreografia nunca teve.
+
+## Entrada × saída: as interfaces de integração
+
+O mesmo nome, `IntegrationEvent`, servia para duas coisas opostas: o evento que o serviço **publica** e o que ele **consome**. No consumidor, o `getAggregateId()` existia só por simetria, e nenhum código o chamava. Com comandos e respostas chegando, a ambiguidade ia piorar. A interface foi separada por **direção**:
+
+| Interface | Direção | O que exige | Quem implementa |
+|---|---|---|---|
+| `OutboundIntegrationEvent` | sai do serviço | `getAggregateId()` (vira a **key**) e `getIdempotencyKey()` (default `null`) | ordering: eventos de pedido; billing: de fatura; catálogo: de produto |
+| `InboundIntegrationEvent` | entra no serviço | nada (marcador) | ordering: os eventos de produto que consome |
+| `OutboundIntegrationCommand` | sai do serviço | `getAggregateId()` e `getIdempotencyKey()` (agora default `null`) | os comandos da saga, quando existirem |
+
+A regra por trás: **quem publica escolhe a key**. No consumo, a key já chega pronta no header `KafkaHeaders.RECEIVED_KEY`, e o evento de entrada não precisa saber calculá-la. Por isso os eventos de produto do ordering perderam o `getAggregateId()`.
+
+As portas e os adaptadores acompanharam nos três serviços (`ForPublishingOrderIntegrationEvents`, `InvoiceIntegrationEventPublisher`, `ProductIntegrationEventPublisher`, os publishers Kafka e de outbox, as `*PublishingException`). Billing e catálogo fizeram só o rename, porque hoje apenas publicam.
+
+## O contrato da orquestração
+
+Os contratos AsyncAPI foram reescritos **antes** do código dos comandos (contract-first): o desenho está escrito e validado, e as próximas aulas o implementam.
+
+| Serviço | Publica | Consome |
+|---|---|---|
+| ordering | `ordering.order.events`; comandos em `billing.invoice.commands` (`IssueInvoice`, `CancelInvoice`) e `product-catalog.stock.commands` (`ReserveStock`) | `product-catalog.product.events`; respostas em `ordering.saga.replies` (grupo `ordering.saga-replies`) |
+| billing | `billing.invoice.events`; respostas no tópico indicado pelo comando | `billing.invoice.commands` (grupo `billing.invoice-commands`); o próprio `InvoiceIssued` |
+| catálogo | `product-catalog.product.events`; respostas no tópico indicado pelo comando | `product-catalog.stock.commands` (grupo `product-catalog.stock-commands`) |
+
+Cada tópico consumido tem seu DLT (`ordering.dlt.ordering.saga.replies`, `billing.dlt.billing.invoice.commands`, `product-catalog.dlt.product-catalog.stock.commands`).
+
+### Request-reply sobre Kafka
+
+```mermaid
+sequenceDiagram
+    participant O as ordering (orquestrador)
+    participant B as billing
+    O->>B: IssueInvoice (billing.invoice.commands)<br/>headers: kafka_correlationId, kafka_replyTopic=ordering.saga.replies
+    Note over B: emite e cobra a fatura
+    B-->>O: InvoicePaidReply ou InvoiceCanceledReply<br/>(no tópico de kafka_replyTopic, mesmo kafka_correlationId)
+```
+
+Os headers carregam o mecanismo:
+
+| Header | Em | Para quê |
+|---|---|---|
+| `kafka_replyTopic` | comando | Diz **para onde** responder. O participante não precisa conhecer o orquestrador: responde onde o comando mandou. No contrato do billing e do catálogo, o `reply.address` aponta para `$message.header#/kafka_replyTopic` |
+| `kafka_correlationId` | comando **e** resposta | Liga a resposta ao comando que a originou |
+| `idempotency-key` | comando | Presente quando o comando sai pela outbox |
+
+São os nomes que o Spring Kafka usa em `KafkaHeaders.REPLY_TOPIC` e `KafkaHeaders.CORRELATION_ID`. Todas as mensagens novas usam `key = orderId` (trait `KafkaOrderKey`): comandos e respostas do mesmo pedido ficam na mesma partição, em ordem.
+
+### Eventos × respostas
+
+O billing passa a ter **duas** saídas para o mesmo fato:
+
+| | `InvoicePaidEvent` (evento) | `InvoicePaidReply` (resposta) |
+|---|---|---|
+| Destinatário | ninguém em particular | o orquestrador que mandou o comando |
+| Tópico | `billing.invoice.events` | o de `kafka_replyTopic` |
+| Faz a saga andar? | não | sim |
+
+É a separação que o [mapa detalhado](#o-mapa-da-orquestração) mostra nas colunas *Reply* e *Success/Failure Event*, agora escrita no contrato.
+
+### Revisão do contrato
+
+- **Corrigido**: o `CancelInvoiceCommand` tinha `__TypeId__ = Billing.CancelInvoiceIntegrationCommand`. Quem produz o comando é o ordering, e a convenção do projeto é prefixo = serviço produtor (os outros dois são `Ordering.IssueInvoiceIntegrationCommand` e `Ordering.ReserveStockIntegrationCommand`). Virou `Ordering.CancelInvoiceIntegrationCommand`.
+- **Não há comando para `Approve order`**: aprovar é um passo interno do ordering, que não sai do serviço.
+- **O contrato está à frente do código**: nenhum comando nem resposta existe em Java ainda. Quando existirem, os `__TypeId__` do contrato têm de bater com os aliases do `spring.json.type.mapping`, e é aí que um contrato sem validação costuma começar a mentir ([Fase 40](./asyncapi-contratos.md)).
+- `$ref` dos quatro arquivos: nenhum quebrado.
+
+### Revisão do código
+
+- Comentários corrigidos: as `OutboundIntegrationEvent` de billing e catálogo diziam "eventos de integração **do order**" (copiado do ordering); a do catálogo tinha perdido a explicação de key → partição → ordem por agregado; a do ordering ainda descrevia o lado consumidor. O `InboundIntegrationEvent` ganhou comentário próprio.
+- Testes: ordering `check` verde (304 unitários, 12 de contrato, 185 de integração); billing e catálogo compilam e os unitários passam.
+
+---
+
 ## Próximas aulas (a documentar)
 
-O modelo e a persistência da saga já existem (seções acima). Os métodos de transição, os comandos e o orquestrador entram aqui conforme o módulo avança. A comparação com a coreografia vai seguir as perguntas que o [balanço da 8.13](./saga-coreografada.md#813--opinião-sobre-saga-com-coreografia) deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?
+O modelo, a persistência, o início da saga e o contrato já existem (seções acima). Os métodos de transição, os comandos e as respostas em código entram aqui conforme o módulo avança. A comparação com a coreografia vai seguir as perguntas que o [balanço da 8.13](./saga-coreografada.md#813--opinião-sobre-saga-com-coreografia) deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?

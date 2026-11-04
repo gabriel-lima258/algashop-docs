@@ -962,6 +962,9 @@ O módulo começa apagando código, em duas demolições. Primeiro sai o checkou
 | Pedido parado em `PLACED` | O estado intermediário esperado prova que nenhum consumidor esquecido continua empurrando o fluxo |
 | Modelar a saga | `PlaceOrderSaga` com duas máquinas de estado (status genérico × passo do pedido), cada estado declarando de onde vem; `start`/`existing` e `version` prontos para persistir |
 | Persistir a saga | Entidade abstrata com herança `SINGLE_TABLE` e discriminador `saga_type`: uma tabela para todas as sagas, uma saga por pedido, índice parcial só nas ativas |
+| Iniciar a saga | Dois `@EventListener` síncronos no `OrderPlacedEvent`: pedido, outbox e saga commitam na mesma transação do checkout |
+| Entrada × saída | `Outbound`/`Inbound` IntegrationEvent e `OutboundIntegrationCommand`: quem publica escolhe a key, quem consome não precisa dela |
+| Contrato da orquestração | Comandos, respostas e request-reply com `kafka_replyTopic`/`kafka_correlationId` escritos no AsyncAPI antes do código |
 
 > [`saga-orquestrada.md`](../06-mensageria/saga-orquestrada.md)
 

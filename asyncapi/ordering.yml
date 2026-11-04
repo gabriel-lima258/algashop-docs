@@ -4,9 +4,10 @@ info:
   title: AlgaShop - Ordering AsyncAPI
   version: "1.0"
   description: >-
-    Asynchronous contract of the Ordering service. The service publishes order
-    lifecycle events and checkout-processing commands, and consumes product,
-    invoice, stock reservation, and checkout command messages.
+    Asynchronous contract of the Ordering service. It is the coordinator of the
+    Place Order Saga: it sends commands to Billing and Product Catalog and
+    receives their replies. It also publishes order events and consumes product
+    events.
 
 defaultContentType: application/json
 
@@ -46,7 +47,7 @@ channels:
   orderEvents:
     address: ordering.order.events
     title: Order events
-    description: Order lifecycle events published by Ordering.
+    description: Order lifecycle notifications. The Place Order Saga does not depend on them.
     messages:
       orderPlaced:
         $ref: "./messages.yml#/components/messages/OrderPlacedEvent"
@@ -59,6 +60,70 @@ channels:
     bindings:
       kafka:
         topic: ordering.order.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  invoiceCommands:
+    address: billing.invoice.commands
+    title: Invoice commands
+    description: >-
+      Place Order Saga commands to Billing, keyed by the order id. Each carries
+      the kafka_correlationId (saga id) and kafka_replyTopic headers.
+    messages:
+      issueInvoice:
+        $ref: "./messages.yml#/components/messages/IssueInvoiceCommand"
+      cancelInvoice:
+        $ref: "./messages.yml#/components/messages/CancelInvoiceCommand"
+    bindings:
+      kafka:
+        topic: billing.invoice.commands
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  stockCommands:
+    address: product-catalog.stock.commands
+    title: Stock commands
+    description: >-
+      Place Order Saga commands to Product Catalog, keyed by the order id. Each
+      carries the kafka_correlationId (saga id) and kafka_replyTopic headers.
+    messages:
+      reserveStock:
+        $ref: "./messages.yml#/components/messages/ReserveStockCommand"
+    bindings:
+      kafka:
+        topic: product-catalog.stock.commands
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  sagaReplies:
+    address: ordering.saga.replies
+    title: Place Order Saga replies
+    description: >-
+      Reply channel of the Place Order Saga, shared by all participants and
+      keyed by the order id. Each reply carries the kafka_correlationId header
+      (saga id) of its command; without it, or with an invalid one, it goes to
+      the dead-letter topic.
+    messages:
+      invoicePaid:
+        $ref: "./messages.yml#/components/messages/InvoicePaidReply"
+      invoiceCanceled:
+        $ref: "./messages.yml#/components/messages/InvoiceCanceledReply"
+      stockReservationConfirmed:
+        $ref: "./messages.yml#/components/messages/StockReservationConfirmedReply"
+      stockReservationRejected:
+        $ref: "./messages.yml#/components/messages/StockReservationRejectedReply"
+    bindings:
+      kafka:
+        topic: ordering.saga.replies
         partitions: 3
         replicas: 3
         topicConfiguration:
@@ -82,6 +147,29 @@ channels:
     bindings:
       kafka:
         topic: ordering.dlt.product-catalog.product.events
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+          retention.ms: 2592000000
+        bindingVersion: "0.5.0"
+
+  sagaRepliesDeadLetter:
+    address: ordering.dlt.ordering.saga.replies
+    title: Place Order Saga replies dead-letter topic
+    description: Saga replies that are unknown, invalid, or not accepted by the saga.
+    messages:
+      invoicePaid:
+        $ref: "./messages.yml#/components/messages/InvoicePaidReply"
+      invoiceCanceled:
+        $ref: "./messages.yml#/components/messages/InvoiceCanceledReply"
+      stockReservationConfirmed:
+        $ref: "./messages.yml#/components/messages/StockReservationConfirmedReply"
+      stockReservationRejected:
+        $ref: "./messages.yml#/components/messages/StockReservationRejectedReply"
+    bindings:
+      kafka:
+        topic: ordering.dlt.ordering.saga.replies
         partitions: 3
         replicas: 3
         topicConfiguration:
@@ -114,7 +202,7 @@ operations:
     action: send
     channel:
       $ref: "#/channels/orderEvents"
-    summary: Publishes order lifecycle changes.
+    summary: Publishes order lifecycle changes as notifications.
     tags:
       - name: Orders
     messages:
@@ -123,6 +211,62 @@ operations:
       - $ref: "#/channels/orderEvents/messages/orderReady"
       - $ref: "#/channels/orderEvents/messages/orderCanceled"
 
+  sendInvoiceCommands:
+    action: send
+    channel:
+      $ref: "#/channels/invoiceCommands"
+    summary: Asks Billing to issue the invoice of an order, or to refund it when compensating.
+    tags:
+      - name: Place Order Saga
+    messages:
+      - $ref: "#/channels/invoiceCommands/messages/issueInvoice"
+      - $ref: "#/channels/invoiceCommands/messages/cancelInvoice"
+    reply:
+      channel:
+        $ref: "#/channels/sagaReplies"
+      messages:
+        - $ref: "#/channels/sagaReplies/messages/invoicePaid"
+        - $ref: "#/channels/sagaReplies/messages/invoiceCanceled"
+
+  sendStockCommands:
+    action: send
+    channel:
+      $ref: "#/channels/stockCommands"
+    summary: Asks Product Catalog to reserve the stock of a paid order.
+    tags:
+      - name: Place Order Saga
+    messages:
+      - $ref: "#/channels/stockCommands/messages/reserveStock"
+    reply:
+      channel:
+        $ref: "#/channels/sagaReplies"
+      messages:
+        - $ref: "#/channels/sagaReplies/messages/stockReservationConfirmed"
+        - $ref: "#/channels/sagaReplies/messages/stockReservationRejected"
+
+  consumeSagaReplies:
+    action: receive
+    channel:
+      $ref: "#/channels/sagaReplies"
+    summary: Advances or compensates the Place Order Saga from the replies of its participants.
+    description: >-
+      Replies are correlated with their saga by the kafka_correlationId header.
+      A redelivered reply is ignored. A reply the saga does not accept, or of
+      unknown type or saga, goes to the DLT.
+    tags:
+      - name: Place Order Saga
+    messages:
+      - $ref: "#/channels/sagaReplies/messages/invoicePaid"
+      - $ref: "#/channels/sagaReplies/messages/invoiceCanceled"
+      - $ref: "#/channels/sagaReplies/messages/stockReservationConfirmed"
+      - $ref: "#/channels/sagaReplies/messages/stockReservationRejected"
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          const: ordering.saga-replies
+        bindingVersion: "0.5.0"
+
   publishFailedProductEvents:
     action: send
     channel:
@@ -130,3 +274,22 @@ operations:
     summary: Moves product events that could not be processed to their dead-letter topic.
     tags:
       - name: Dead letter
+    messages:
+      - $ref: "#/channels/productEventsDeadLetter/messages/productListed"
+      - $ref: "#/channels/productEventsDeadLetter/messages/productDelisted"
+      - $ref: "#/channels/productEventsDeadLetter/messages/productRestocked"
+      - $ref: "#/channels/productEventsDeadLetter/messages/productSoldOut"
+      - $ref: "#/channels/productEventsDeadLetter/messages/productPriceChangedV2"
+
+  publishFailedSagaReplies:
+    action: send
+    channel:
+      $ref: "#/channels/sagaRepliesDeadLetter"
+    summary: Moves saga replies that could not be processed to their dead-letter topic.
+    tags:
+      - name: Dead letter
+    messages:
+      - $ref: "#/channels/sagaRepliesDeadLetter/messages/invoicePaid"
+      - $ref: "#/channels/sagaRepliesDeadLetter/messages/invoiceCanceled"
+      - $ref: "#/channels/sagaRepliesDeadLetter/messages/stockReservationConfirmed"
+      - $ref: "#/channels/sagaRepliesDeadLetter/messages/stockReservationRejected"
