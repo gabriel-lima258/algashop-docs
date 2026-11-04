@@ -960,6 +960,7 @@ O módulo começa apagando código, em duas demolições. Primeiro sai o checkou
 | Contrato junto | Canais, operações e mensagens do comando saem do AsyncAPI na mesma etapa |
 | Remover a coreografia | Sai quem reage e quem anuncia para outro serviço reagir; fica quem faz o trabalho (`generate`, `refundByOrderId`, `reserveForOrder`), que vira alvo de comando |
 | Pedido parado em `PLACED` | O estado intermediário esperado prova que nenhum consumidor esquecido continua empurrando o fluxo |
+| Modelar a saga | `PlaceOrderSaga` com duas máquinas de estado (status genérico × passo do pedido), cada estado declarando de onde vem; `start`/`existing` e `version` prontos para persistir |
 
 > [`saga-orquestrada.md`](../06-mensageria/saga-orquestrada.md)
 

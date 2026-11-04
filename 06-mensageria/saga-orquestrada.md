@@ -321,6 +321,105 @@ O primeiro `./gradlew check` depois da remoção falhou em 20 ITs do billing e 1
 
 ---
 
+## Modelando a saga: `PlaceOrderSaga`
+
+Com o terreno limpo, a primeira peça da orquestração é **o estado da saga**: o registro que responde "em que passo está o pedido 42?", a pergunta que a coreografia não sabia responder. Por enquanto é só o modelo, sem persistência, sem comandos e sem métodos de transição.
+
+| Arquivo | Pacote | Papel |
+|---|---|---|
+| `SagaStatus` | `core/application/saga` | Ciclo de vida **genérico** de qualquer saga |
+| `SagaTransitionException` | `core/application/saga` | Erro de transição inválida, com fábricas por tipo de violação |
+| `PlaceOrderSagaStep` | `core/application/order/saga` | Os passos **desta** saga, a de realizar pedido |
+| `PlaceOrderSaga` | `core/application/order/saga` | O estado de uma execução: `sagaId`, `orderId`, `status`, `step`, `version` |
+
+### Por que em `application`, e não no domínio
+
+O `Order` é domínio: tem regras de negócio (o que pode ser pago, cancelado, aprovado). A saga **coordena** serviços: lembra qual comando foi enviado e qual resposta se espera. Isso é orquestração de caso de uso, o mesmo nível dos application services. Por isso `PlaceOrderSaga` mora em `core/application/order/saga`, ao lado do que vai usá-la, e o que é reaproveitável por qualquer saga futura (`SagaStatus`, `SagaTransitionException`) fica um nível acima, em `core/application/saga`.
+
+### Duas máquinas de estado: status × passo
+
+A saga guarda duas coisas diferentes, e cada uma é uma máquina de estados própria:
+
+- **Status**: *em que fase da vida* a saga está. Genérico, igual para qualquer saga.
+- **Passo**: *onde* no fluxo desta saga ela está. Específico do pedido.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> RUNNING
+    RUNNING --> SUCCEEDED: último passo deu certo
+    RUNNING --> COMPENSATING: um passo falhou
+    COMPENSATING --> COMPENSATED: compensações concluídas
+    SUCCEEDED --> [*]
+    COMPENSATED --> [*]
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> PLACING_ORDER
+    PLACING_ORDER --> INVOICING: Issue Invoice
+    INVOICING --> RESERVING_STOCK: Invoice Paid
+    RESERVING_STOCK --> APPROVING_ORDER: Reservation Confirmed
+    INVOICING --> CANCELLING_ORDER: Invoice Canceled
+    RESERVING_STOCK --> REFUNDING_INVOICE: Reservation Rejected
+    REFUNDING_INVOICE --> CANCELLING_ORDER: estorno feito
+```
+
+Cada passo corresponde a uma linha do [mapa detalhado](#o-mapa-da-orquestração):
+
+| Passo | Linha do mapa | Status em que aparece |
+|---|---|---|
+| `PLACING_ORDER` | Placed Order (início, na transação do checkout) | `RUNNING` |
+| `INVOICING` | Invoicing (comando `Issue Invoice`) | `RUNNING` |
+| `RESERVING_STOCK` | Reserving Stock, o **pivô** (comando `Reserve Stock`) | `RUNNING` |
+| `APPROVING_ORDER` | Approving order (comando `Approve order`) | `RUNNING` → `SUCCEEDED` |
+| `REFUNDING_INVOICE` | Compensação `Cancel invoice` (a fatura já está paga, então cancelar é estornar) | `COMPENSATING` |
+| `CANCELLING_ORDER` | Compensação `Cancel order` | `COMPENSATING` → `COMPENSATED` |
+
+Dois caminhos levam ao cancelamento do pedido, e o enum declara os dois: `CANCELLING_ORDER(INVOICING, REFUNDING_INVOICE)`. Se a fatura é recusada, não há o que estornar e a saga cancela direto. Se o estoque é rejeitado, ela estorna primeiro. É a ordem inversa das compensações, escrita em um lugar só.
+
+### O padrão `previousStatus`, de novo
+
+Os dois enums usam o mesmo truque do `OrderStatus` do domínio: **cada estado declara de onde pode vir**.
+
+```java
+public enum PlaceOrderSagaStep {
+    PLACING_ORDER,
+    INVOICING(PLACING_ORDER),
+    RESERVING_STOCK(INVOICING),
+    APPROVING_ORDER(RESERVING_STOCK),
+    REFUNDING_INVOICE(RESERVING_STOCK),
+    CANCELLING_ORDER(INVOICING, REFUNDING_INVOICE);
+    ...
+    public boolean canChangeTo(PlaceOrderSagaStep newStatus) {
+        return newStatus.previousStatus.contains(this);
+    }
+}
+```
+
+A regra de transição fica junto da definição do estado, e não espalhada em `if`s. Para saber de onde se chega em `CANCELLING_ORDER`, basta ler a linha dele.
+
+### `PlaceOrderSaga`: o estado de uma execução
+
+```java
+public static PlaceOrderSaga start(OrderId orderId)      // RUNNING em PLACING_ORDER, version 0
+public static PlaceOrderSaga existing(UUID sagaId, OrderId orderId,
+                                      SagaStatus status, PlaceOrderSagaStep step, long version)
+```
+
+- **`start` × `existing`**: a mesma separação do `Order` (`draft` para nascer, `existing` para reidratar do banco). Só `start` decide o estado inicial; `existing` aceita o que vier persistido.
+- **`version`**: preparada para lock otimista. Quando duas respostas do mesmo pedido chegarem ao mesmo tempo, a segunda gravação vai falhar em vez de sobrescrever a primeira.
+- **Consultas `isRunningAt(step)`, `isCompensatingAt(step)`, `isActive()`**: é com elas que o orquestrador vai decidir se uma resposta ainda é esperada. Um `Invoice Paid` só faz sentido se a saga está `RUNNING` em `INVOICING`; se chegar de novo (reentrega), a saga já estará em `RESERVING_STOCK` e a resposta pode ser ignorada com segurança. É a base da idempotência das replies, aquilo que a coreografia resolvia mandando duplicatas para o DLT.
+- **Guardas privadas `require`, `changeStatusTo`, `changeStepTo`**: validam pré-condição, status e passo, lançando `SagaTransitionException`. Ainda não têm chamador; os métodos de transição das próximas aulas vão usá-las.
+
+### Revisão desta etapa
+
+- **Corrigido**: `APPORVING_ORDER` → `APPROVING_ORDER`. O enum vai ser gravado como texto na tabela da saga, e renomear um valor depois de persistido exige migração de dados.
+- **Corrigido**: import sem uso de `OrderStatus` em `SagaStatus`.
+- **Para ficar de olho**: status e passo são validados **separadamente**. Os enums sozinhos não impedem combinações sem sentido, como `COMPENSATING` em `APPROVING_ORDER` ou `RUNNING` em `REFUNDING_INVOICE`. Quem vai garantir a coerência entre os dois são os métodos de transição (cada um mudando passo e status juntos, com `require` antes). Um teste unitário por transição é o lugar natural para travar isso.
+
+---
+
 ## Próximas aulas (a documentar)
 
-O orquestrador, o estado da saga e os comandos entram aqui conforme o módulo avança. A comparação com a coreografia vai seguir as perguntas que o [balanço da 8.13](./saga-coreografada.md#813--opinião-sobre-saga-com-coreografia) deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?
+O modelo da saga já existe (seção acima). Os métodos de transição, a persistência, os comandos e o orquestrador entram aqui conforme o módulo avança. A comparação com a coreografia vai seguir as perguntas que o [balanço da 8.13](./saga-coreografada.md#813--opinião-sobre-saga-com-coreografia) deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?
