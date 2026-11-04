@@ -965,6 +965,7 @@ O módulo começa apagando código, em duas demolições. Primeiro sai o checkou
 | Iniciar a saga | Dois `@EventListener` síncronos no `OrderPlacedEvent`: pedido, outbox e saga commitam na mesma transação do checkout |
 | Entrada × saída | `Outbound`/`Inbound` IntegrationEvent e `OutboundIntegrationCommand`: quem publica escolhe a key, quem consome não precisa dela |
 | Contrato da orquestração | Comandos, respostas e request-reply com `kafka_replyTopic`/`kafka_correlationId` escritos no AsyncAPI antes do código |
+| Outbox para comandos | O comando da saga sai pela outbox pelo mesmo motivo do evento (sem dual-write); `OutboxDraft` como parâmetro-objeto, `message_type`, `correlation_id` e `reply_topic` viram headers do request-reply |
 
 > [`saga-orquestrada.md`](../06-mensageria/saga-orquestrada.md)
 

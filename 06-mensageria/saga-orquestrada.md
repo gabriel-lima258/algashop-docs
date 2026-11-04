@@ -622,6 +622,65 @@ O billing passa a ter **duas** saídas para o mesmo fato:
 
 ---
 
+## A outbox aprende a transportar comandos
+
+O orquestrador vai mudar o estado da saga **e** enviar um comando a cada passo: "saga agora em `INVOICING`" + "billing, emita a fatura". São duas escritas, uma no Postgres e outra no Kafka: o mesmo **dual-write** que a [outbox da Fase 41](./outbox-e-checkout-assincrono.md) resolveu para eventos. A saída é a mesma: o comando também passa pela outbox, gravado na transação que muda a saga. Se a transição commitar, o comando sai em algum momento; se ela voltar, o comando nunca existiu.
+
+A outbox, porém, foi escrita para eventos. Esta etapa a prepara para levar as duas coisas.
+
+### Evento × comando na mesma tabela
+
+Um comando precisa de duas informações que um evento não tem: **a que conversa a resposta pertence** e **para onde respondê-la**. Viraram duas colunas novas, opcionais:
+
+| Coluna | Evento (`OrderPlaced`) | Comando (`IssueInvoice`, em breve) | Vira o header |
+|---|---|---|---|
+| `channel_name` | `ordering.order.events` | `billing.invoice.commands` | (tópico do record) |
+| `aggregate_id` | id do pedido | id do pedido | (key do record) |
+| `message_type` | `Ordering.OrderPlacedIntegrationEvent` | `Ordering.IssueInvoiceIntegrationCommand` | `__TypeId__` |
+| `id` | UUIDv7 da linha | UUIDv7 da linha | `idempotency-key` |
+| `correlation_id` | vazio | id que liga comando e resposta | `kafka_correlationId` |
+| `reply_topic` | vazio | `ordering.saga.replies` | `kafka_replyTopic` |
+
+Os dois headers novos são exatamente os do `CommandHeaders` do [contrato](#o-contrato-da-orquestração), com os nomes que o Spring Kafka usa (`KafkaHeaders.CORRELATION_ID` e `KafkaHeaders.REPLY_TOPIC`). O `OutboxKafkaSender` só os adiciona quando a coluna está preenchida, então um evento sai exatamente como antes.
+
+### `event_type` → `message_type`
+
+A V011 só renomeia uma coluna, e o motivo é de vocabulário: a coluna passa a guardar o tipo de **comandos** também, e `event_type` começaria a mentir. O mesmo rename vale para o campo `OutboxMessage.messageType` e para o método `readMessageType` do recorder. Linhas pendentes continuam válidas, porque só o nome mudou. Como toda migração de schema, ela deve rodar com o serviço parado.
+
+### `OutboxDraft`: o rascunho da mensagem
+
+```java
+@Builder
+public record OutboxDraft(String channelName, String aggregateId,
+                          String correlationId, String replyTopic,
+                          Object payload) { }
+```
+
+Antes, `OutboxRecorder.record(channelName, aggregateId, message)` tinha três parâmetros posicionais. Com comandos seriam cinco, dois deles opcionais: uma assinatura em que é fácil trocar dois `String` de lugar sem o compilador perceber. O `OutboxDraft` é um **parâmetro-objeto** com builder: cada campo vai pelo nome, e o que não se aplica simplesmente não é preenchido.
+
+A divisão de responsabilidades ficou explícita:
+
+- **O publisher diz o quê e para onde**: canal, agregado, payload e, se for comando, correlação e tópico de resposta.
+- **O recorder decide o resto**: gera o id da linha (UUIDv7, que também é a idempotency key), serializa o payload com o mesmo `JacksonJsonSerializer` do caminho Kafka, extrai o `__TypeId__` lógico dos headers da serialização e inicializa o estado de envio (tentativas, próximo envio). Continua `@Transactional(propagation = MANDATORY)`: gravar fora da transação de negócio é recusado.
+
+```mermaid
+flowchart LR
+    A["publisher<br/>(evento ou comando)"] -->|"OutboxDraft"| B["OutboxRecorder.record<br/>MANDATORY"]
+    B --> C[("outbox<br/>message_type · correlation_id · reply_topic")]
+    C -.->|"OutboxDispatcher (agendado)"| D["OutboxKafkaSender"]
+    D -->|"key = aggregate_id<br/>__TypeId__, idempotency-key<br/>+ kafka_correlationId, kafka_replyTopic se houver"| E[("tópico")]
+```
+
+O `OutboxOrderIntegrationEventPublisher` foi o primeiro a usar o draft: monta um `OutboxDraft` só com canal, agregado e payload, sem correlação nem resposta.
+
+### Revisão desta etapa
+
+- **Corrigido**: o comentário do `OutboxKafkaSender` ainda dizia `__TypeId__ = eventType` e não citava os headers novos. O `OutboxDraft` ganhou comentário explicando o papel do rascunho.
+- **Ainda não há publisher de comando**: a outbox está pronta para comandos, mas nenhum código grava um com `correlationId`/`replyTopic`. Isso vem com o envio do `IssueInvoice`.
+- **Testes**: `./gradlew check` do ordering verde (304 unitários, 12 de contrato, 185 de integração). O `CheckoutApplicationServiceIT` grava o `OrderPlaced` na outbox, o que exercita a gravação com as colunas da V011/V012. O envio com os headers novos não tem teste: um IT do `OutboxKafkaSender` com correlação e resposta preenchidas é o que travaria esse caminho.
+
+---
+
 ## Próximas aulas (a documentar)
 
 O modelo, a persistência, o início da saga e o contrato já existem (seções acima). Os métodos de transição, os comandos e as respostas em código entram aqui conforme o módulo avança. A comparação com a coreografia vai seguir as perguntas que o [balanço da 8.13](./saga-coreografada.md#813--opinião-sobre-saga-com-coreografia) deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?
