@@ -967,6 +967,7 @@ O módulo começa apagando código, em duas demolições. Primeiro sai o checkou
 | Contrato da orquestração | Comandos, respostas e request-reply com `kafka_replyTopic`/`kafka_correlationId` escritos no AsyncAPI antes do código |
 | Outbox para comandos | O comando da saga sai pela outbox pelo mesmo motivo do evento (sem dual-write); `OutboxDraft` como parâmetro-objeto, `message_type`, `correlation_id` e `reply_topic` viram headers do request-reply |
 | Primeiro comando | `IssueInvoice` sai pela outbox na transação do checkout, com `correlationId = sagaId`; a saga já nasce em `INVOICING`; quem consome o tópico é quem o cria |
+| Billing executa o comando | O mesmo `generate` de sempre, acionado por comando; comando desconhecido vai ao DLT (evento desconhecido é ignorado); prefixo do `__TypeId__` de comando = quem executa |
 
 > [`saga-orquestrada.md`](../06-mensageria/saga-orquestrada.md)
 

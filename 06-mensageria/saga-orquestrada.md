@@ -610,7 +610,7 @@ O billing passa a ter **duas** saídas para o mesmo fato:
 
 ### Revisão do contrato
 
-- **Corrigido**: o `CancelInvoiceCommand` tinha `__TypeId__ = Billing.CancelInvoiceIntegrationCommand`. Quem produz o comando é o ordering, e a convenção do projeto é prefixo = serviço produtor (os outros dois são `Ordering.IssueInvoiceIntegrationCommand` e `Ordering.ReserveStockIntegrationCommand`). Virou `Ordering.CancelInvoiceIntegrationCommand`.
+- ~~**Corrigido**: `CancelInvoiceCommand` passou a `Ordering.`~~ **Revertido na etapa "O billing executa o comando"**: a convenção do projeto para comandos é prefixo = serviço que **executa** (`Billing.CancelInvoiceIntegrationCommand`). O prefixo do produtor vale para eventos. Ver [a convenção dos `__TypeId__`](#a-convenção-dos-__typeid__).
 - **Não há comando para `Approve order`**: aprovar é um passo interno do ordering, que não sai do serviço.
 - **O contrato está à frente do código**: nenhum comando nem resposta existe em Java ainda. Quando existirem, os `__TypeId__` do contrato têm de bater com os aliases do `spring.json.type.mapping`, e é aí que um contrato sem validação costuma começar a mentir ([Fase 40](./asyncapi-contratos.md)).
 - `$ref` dos quatro arquivos: nenhum quebrado.
@@ -636,7 +636,7 @@ Um comando precisa de duas informações que um evento não tem: **a que convers
 |---|---|---|---|
 | `channel_name` | `ordering.order.events` | `billing.invoice.commands` | (tópico do record) |
 | `aggregate_id` | id do pedido | id do pedido | (key do record) |
-| `message_type` | `Ordering.OrderPlacedIntegrationEvent` | `Ordering.IssueInvoiceIntegrationCommand` | `__TypeId__` |
+| `message_type` | `Ordering.OrderPlacedIntegrationEvent` | `Billing.IssueInvoiceIntegrationCommand` | `__TypeId__` |
 | `id` | UUIDv7 da linha | UUIDv7 da linha | `idempotency-key` |
 | `correlation_id` | vazio | id que liga comando e resposta | `kafka_correlationId` |
 | `reply_topic` | vazio | `ordering.saga.replies` | `kafka_replyTopic` |
@@ -737,7 +737,7 @@ O publisher não precisa saber para onde vai cada comando: pergunta ao `PlaceOrd
 
 ### Revisão desta etapa
 
-- **Corrigido, o alerta da etapa anterior se confirmou**: o alias no YAML do ordering era `Billing.IssueInvoiceIntegrationCommand`, mas o contrato (`IssueInvoiceHeaders`) diz `Ordering.IssueInvoiceIntegrationCommand`, e a convenção do projeto é prefixo = serviço produtor. Com o prefixo errado, o `__TypeId__` gravado na outbox seria `Billing.…`, e o billing, mapeando pelo contrato, não reconheceria o comando: ele cairia no handler default e seria ignorado em silêncio. Virou `Ordering.IssueInvoiceIntegrationCommand`.
+- ~~**Corrigido**: o alias `Billing.IssueInvoiceIntegrationCommand` foi trocado por `Ordering.`~~ **Revertido**: `Billing.` estava certo. Os dois lados (ordering e billing) usam `Billing.IssueInvoiceIntegrationCommand`, e o contrato foi alinhado a eles. Ver [a convenção dos `__TypeId__`](#a-convenção-dos-__typeid__).
 - **Corrigido**: os `application-test-env.yaml` do ordering e do billing não tinham as properties novas (`@NotBlank`). O contexto dos testes de integração não subiria. Adicionadas, e o ordering ganhou também o alias do comando.
 - **Comentários**: cada classe nova ou alterada ganhou um comentário curto explicando seu papel.
 - **Testes**: ordering `check` verde (304 unitários, 12 de contrato, 185 de integração); billing `check` verde (48 unitários, 20 de integração). O `CheckoutApplicationServiceIT` agora executa o caminho inteiro: grava pedido, saga em `INVOICING` e o comando na outbox.
@@ -745,6 +745,78 @@ O publisher não precisa saber para onde vai cada comando: pergunta ao `PlaceOrd
   - o billing ainda não **consome** o comando, não tem listener nem DLT para `billing.invoice.commands`, e não responde. O comando fica no tópico até a próxima aula;
   - a pendência da [persistência da saga](#revisão-desta-etapa-1) continua (atualizar uma saga já gravada perde `createdAt` e a `version`). Ainda não morde, porque a saga só é inserida, mas a primeira resposta vai exigir um `update`;
   - o comando não passa por Bean Validation antes de ir para a outbox (o `OutboxRecorder` não valida). As anotações do `IssueInvoiceIntegrationCommand` só protegem o lado de quem consome.
+
+---
+
+## O billing executa o comando
+
+O comando `IssueInvoice` que o ordering grava na outbox agora tem quem o consuma. Do lado do billing, ele vira uma fatura pelo mesmo caso de uso que sempre existiu: o `generate`.
+
+```mermaid
+flowchart LR
+    A[("billing.invoice.commands<br/>key = orderId<br/>kafka_correlationId · kafka_replyTopic")] -->|"grupo billing.invoice-commands"| B["KafkaInvoiceIntegrationCommandListener"]
+    B -->|"headers presentes?"| C{"sim"}
+    B -->|"faltou header"| X["IllegalArgumentException<br/>→ DLT"]
+    C --> D["@Valid IssueInvoiceIntegrationCommand"]
+    D --> E["GenerateInvoiceInputAssembler"]
+    E --> F["InvoiceManagementApplicationService.generate<br/>@Transactional"]
+    F --> G[("invoice<br/>UNIQUE (order_id)")]
+    F -.->|"after commit"| H[("billing.invoice.events<br/>InvoiceIssued")]
+```
+
+### As peças
+
+| Peça | O que é |
+|---|---|
+| `InboundIntegrationCommand` | Marcador dos comandos que o billing **recebe**. Simétrico ao `OutboundIntegrationCommand` do ordering: quem recebe não precisa de key |
+| `invoice/command/IssueInvoiceIntegrationCommand` | Cópia local do contrato, com Bean Validation. É o mesmo pedido congelado que o ordering montou |
+| `application/order/snapshot/*` (seis records) | Voltaram: tinham saído junto com o `OrderPlacedIntegrationEvent` na remoção da coreografia, e agora chegam dentro do comando |
+| `GenerateInvoiceInputAssembler` | Voltou, agora a partir do comando. A tradução é a mesma de antes: itens viram linhas, frete maior que zero vira a linha "Shipping", o payer vem do `BillingSnapshot` |
+| `KafkaInvoiceIntegrationCommandListener` | Consome `billing.invoice.commands` no grupo `billing.invoice-commands`, valida e chama `generate` |
+| `KafkaConfig` | Ganhou o DLT `billing.dlt.billing.invoice.commands` |
+
+A peça que **não** mudou é a mais importante: o `InvoiceManagementApplicationService.generate`. Ele ficou preservado na remoção da coreografia exatamente para isto. Na coreografia, quem o chamava era um evento (`OrderPlaced`); agora é um comando. O caso de uso não sabe a diferença.
+
+### Comando desconhecido é erro; evento desconhecido, não
+
+O handler default do listener de comandos **lança** exceção:
+
+```java
+@KafkaHandler(isDefault = true)
+public void handle(@Payload Object command, ...) {
+    throw new IllegalArgumentException("Unsupported invoice command type " + ...);
+}
+```
+
+Os listeners de **evento** do projeto fazem o contrário: logam e ignoram. A diferença é de natureza:
+
+- Um **evento** novo é evolução normal do produtor. O consumidor que não se interessa por ele ignora, e nada está errado.
+- Um **comando** é uma ordem endereçada a este serviço. Se ele chegou e o billing não sabe executá-lo, o contrato quebrou. Ignorar em silêncio deixaria o orquestrador esperando uma resposta que nunca vem. Lançar manda a mensagem para o DLT, onde alguém vai vê-la.
+
+### Os headers são obrigatórios
+
+Antes de executar, o listener confere `kafka_correlationId` e `kafka_replyTopic`. Sem eles não há como responder ao orquestrador, então a falta é tratada como mensagem inválida (`IllegalArgumentException`, não-retryable, DLT). Hoje o listener só **valida** os headers; a resposta (`InvoicePaidReply`/`InvoiceCanceledReply` no tópico do `kafka_replyTopic`) vem na próxima etapa.
+
+### A convenção dos `__TypeId__`
+
+Esta etapa fixou a regra que estava ambígua no contrato:
+
+| Tipo de mensagem | Prefixo | Exemplos |
+|---|---|---|
+| **Evento** | serviço que **publica** o fato | `Ordering.OrderPlacedIntegrationEvent`, `Billing.InvoicePaidIntegrationEvent` |
+| **Comando** | serviço que **executa** a ordem | `Billing.IssueInvoiceIntegrationCommand`, `Billing.CancelInvoiceIntegrationCommand`, `ProductCatalog.ReserveStockIntegrationCommand` |
+| **Resposta** | serviço que **responde** | `Billing.InvoicePaidIntegrationReply`, `ProductCatalog.StockReservationConfirmedIntegrationReply` |
+
+O fato pertence a quem o produziu; o comando pertence ao vocabulário de quem o executa. `IssueInvoice` é uma operação do billing, e o ordering apenas a solicita. Ordering e billing já usavam `Billing.IssueInvoiceIntegrationCommand`; o contrato (`messages.yml`) foi alinhado a eles, e as duas "correções" para `Ordering.` feitas nas etapas anteriores deste doc foram revertidas. O YAML de teste do ordering, que tinha ficado com `Ordering.`, também foi corrigido, e o do billing ganhou o alias.
+
+### Revisão desta etapa
+
+- **Testes**: billing `check` verde (48 unitários, 20 de integração); ordering `check` verde (304, 12, 185). Nos testes do billing o listener não sobe (`auto-startup: false`), então o consumo do comando ainda não tem teste próprio. Um IT que envie o comando e verifique a fatura gerada fecharia esse buraco.
+- **Comentários**: o listener, o `InboundIntegrationCommand` e o assembler ganharam comentários curtos.
+- **Pendências**:
+  - **duplicata vira DLT de novo**: um `IssueInvoice` reentregue bate no `UNIQUE (order_id)`, lança `DataIntegrityViolationException` (não-retryable) e vai para o DLT. Na coreografia isso só poluía o DLT. Na orquestração é pior: se a primeira execução já gerou a fatura e a resposta se perdeu, a reentrega deveria **responder de novo**, e não falhar. Quando a resposta existir, o caso "fatura já existe para este pedido" precisa reenviar o reply;
+  - o `generate` publica `InvoiceIssued` depois do commit, e o próprio billing ainda consome esse evento para cobrar (o Listen to Yourself da aula 7.8). É a cobrança, por esse caminho, que vai produzir o `InvoicePaid`/`InvoiceCanceled` que a resposta precisa;
+  - a resposta ao orquestrador ainda não existe.
 
 ---
 

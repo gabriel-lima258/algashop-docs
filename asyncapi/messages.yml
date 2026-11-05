@@ -564,7 +564,7 @@ components:
           properties:
             __TypeId__:
               type: string
-              const: Ordering.IssueInvoiceIntegrationCommand
+              const: Billing.IssueInvoiceIntegrationCommand
               description: Logical type used by the Jackson deserializer.
 
     CancelInvoiceHeaders:
@@ -576,7 +576,7 @@ components:
           properties:
             __TypeId__:
               type: string
-              const: Ordering.CancelInvoiceIntegrationCommand
+              const: Billing.CancelInvoiceIntegrationCommand
               description: Logical type used by the Jackson deserializer.
 
     ReserveStockHeaders:
@@ -588,7 +588,7 @@ components:
           properties:
             __TypeId__:
               type: string
-              const: Ordering.ReserveStockIntegrationCommand
+              const: ProductCatalog.ReserveStockIntegrationCommand
               description: Logical type used by the Jackson deserializer.
 
     InvoicePaidReplyHeaders:
