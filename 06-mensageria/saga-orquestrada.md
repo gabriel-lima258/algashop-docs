@@ -820,6 +820,79 @@ O fato pertence a quem o produziu; o comando pertence ao vocabulário de quem o 
 
 ---
 
+## Resposta assíncrona: guardando o reply pendente
+
+Request-reply costuma ser desenhado assim: chega o comando, o serviço executa, responde. No billing, isso não funciona. Quando o `IssueInvoice` é processado, a fatura nasce `UNPAID`, e **ninguém sabe ainda** se ela vai ser paga ou cancelada. O resultado depende de um pagamento que acontece depois, por um de dois caminhos:
+
+- a cobrança disparada pelo próprio `InvoiceIssued` (o Listen to Yourself da [aula 7.8](./workflow-coreografado.md#78--passo-4-o-billing-cobra-a-própria-fatura-e-o-webhook-fecha-o-ciclo)), segundos depois;
+- o webhook do FastPay, minutos depois, quando o pagamento não é confirmado na hora.
+
+Ou seja: a resposta (`InvoicePaidReply` ou `InvoiceCanceledReply`) vai ser enviada por **outro** fluxo, em **outro** momento. Mas quem sabe *para onde* e *com qual correlação* responder é só o comando, nos headers `kafka_replyTopic` e `kafka_correlationId`. Se o billing não guardar essas duas informações, quando o pagamento se resolver não haverá a quem responder.
+
+### A solução: guardar o endereço de resposta junto com a fatura
+
+```mermaid
+sequenceDiagram
+    participant O as ordering
+    participant L as KafkaInvoiceIntegrationCommandListener
+    participant DB as Postgres do billing (uma transação)
+    participant P as cobrança (InvoiceIssued / webhook)
+    O->>L: IssueInvoice + kafka_correlationId + kafka_replyTopic
+    L->>DB: generate → invoice (UNPAID)
+    L->>DB: pendingReplies.register → pending_reply (invoice_id, correlation_id, reply_topic)
+    Note over DB: commit: fatura e pendente juntos
+    Note over P: depois: segundos ou minutos
+    P->>DB: fatura PAID ou CANCELED
+    P-->>O: (próxima etapa) acha o pendente pelo invoice_id,<br/>envia o reply no reply_topic com o correlation_id e apaga a linha
+```
+
+No listener, as duas escritas ficam dentro de um `TransactionTemplate`:
+
+```java
+transactionTemplate.executeWithoutResult(status -> {
+    UUID invoiceId = invoiceManagementApplicationService.generate(input);
+    pendingReplies.register(invoiceId, command.getOrderId(), sagaCorrelationId, sagaReplyTopic);
+});
+```
+
+O `@Transactional` do `generate` e o do `register` não abrem transações próprias: **participam** da que o template abriu. A fatura e o pendente commitam juntos, ou nenhum dos dois. O caso que isso evita é o pior possível para a saga: uma fatura gerada (e logo cobrada) sem registro de para onde responder. O orquestrador ficaria esperando em `INVOICING` para sempre.
+
+Por que um `TransactionTemplate` no listener, e não um `@Transactional` no método? Porque o método também valida headers e monta o input. O template delimita a transação exatamente no trecho que escreve no banco, e deixa explícito, no código, que as duas linhas são uma unidade.
+
+### A tabela `pending_reply` (V0004)
+
+| Coluna | Para quê |
+|---|---|
+| `invoice_id` | PK e FK para `invoice`. No máximo um pendente por fatura, e é pela fatura que ele vai ser achado quando ela for paga ou cancelada |
+| `order_id` | O pedido, para log e para montar a resposta |
+| `correlation_id` | O `kafka_correlationId` do comando (o `sagaId`), que volta na resposta |
+| `reply_topic` | O `kafka_replyTopic` do comando (`ordering.saga.replies`) |
+| `created_at` | Quando o pendente nasceu. Ainda sem uso; vai servir para achar respostas atrasadas demais |
+
+### Os padrões por trás
+
+São dois padrões clássicos de integração (Enterprise Integration Patterns), aqui **persistidos**:
+
+- **Correlation Identifier**: um id que liga a resposta ao pedido que a originou. Normalmente ele só atravessa a mensagem; aqui ele precisa sobreviver no banco até a resposta existir.
+- **Return Address**: o pedido diz para onde responder, e o executor não precisa conhecer quem pediu. O billing nunca tem o nome `ordering.saga.replies` na configuração dele: lê do comando e guarda.
+
+O comentário da migração chama a tabela de "como se fosse um outbox", e a comparação ajuda, com uma diferença: a outbox guarda uma mensagem **pronta** para sair, e o pendente guarda o **endereço** de uma mensagem que ainda não pode ser escrita.
+
+### Por que na infraestrutura
+
+`PendingReplies`, a entidade e o repositório moram em `infrastructure/persistence/reply`, e o listener os usa direto, sem uma porta. Correlação e tópico de resposta são **metadados de transporte**: o domínio da fatura não tem nada a dizer sobre eles. Se o billing respondesse por HTTP em vez de Kafka, mudariam esses dados, e não a fatura.
+
+### Revisão desta etapa
+
+- **Corrigido**: o comentário do listener dizia "inicia transactional paralelo". É o contrário, uma transação só, compartilhada pelas duas escritas. Os comentários das classes novas explicam o papel de cada uma.
+- **Testes**: billing `check` verde (48 unitários, 20 de integração, com a V0004 aplicada). O registro do pendente não tem teste próprio, porque o listener não sobe nos testes.
+- **Pendências**:
+  - ainda **não há quem leia** o pendente. A próxima etapa precisa, quando a fatura for paga ou cancelada, achar o pendente pelo `invoice_id`, enviar o reply e apagar a linha. Se o envio sair depois do commit (como os eventos do billing hoje), a resposta pode se perder e a saga para em `INVOICING`. O mais seguro é enviar pela mesma garantia transacional que gravou o pendente;
+  - um `IssueInvoice` duplicado continua falhando no `UNIQUE (order_id)` **antes** de registrar o pendente, e vai para o DLT. Se a primeira resposta tiver se perdido, a reentrega não a recupera;
+  - o `created_at` ainda não é usado. Pendentes antigos são, por definição, respostas que não saíram.
+
+---
+
 ## Próximas aulas (a documentar)
 
 O modelo, a persistência, o início da saga e o contrato já existem (seções acima). Os métodos de transição, os comandos e as respostas em código entram aqui conforme o módulo avança. A comparação com a coreografia vai seguir as perguntas que o [balanço da 8.13](./saga-coreografada.md#813--opinião-sobre-saga-com-coreografia) deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?
