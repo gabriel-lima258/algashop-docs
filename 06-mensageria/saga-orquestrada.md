@@ -893,6 +893,74 @@ O comentário da migração chama a tabela de "como se fosse um outbox", e a com
 
 ---
 
+## Enviando o reply ao coordenador
+
+A etapa anterior guardou o endereço da resposta. Esta etapa a envia: quando a fatura é paga ou cancelada, o billing procura o pendente, responde ao orquestrador e apaga o pendente.
+
+```mermaid
+sequenceDiagram
+    participant C as captura (InvoiceIssued)<br/>ou webhook FastPay
+    participant I as Invoice (agregado)
+    participant L as InvoiceEventListener<br/>(@TransactionalEventListener)
+    participant PR as PendingReplies<br/>(REQUIRES_NEW)
+    participant K as KafkaInvoiceIntegrationReplyPublisher
+    C->>I: markAsPaid() / cancel()
+    Note over I: commit → InvoicePaidEvent / InvoiceCanceledEvent
+    I->>L: depois do commit
+    L->>L: publica o evento de integração (billing.invoice.events)
+    L->>PR: find(invoiceId)
+    PR-->>L: pendente: correlation_id, reply_topic
+    L->>K: send(reply_topic, correlation_id, InvoicePaidReply / InvoiceCanceledReply)
+    K-->>K: ordering.saga.replies, key = orderId, header kafka_correlationId
+    L->>PR: delete(invoiceId)
+```
+
+### As peças
+
+| Peça | O que é |
+|---|---|
+| `OutboundIntegrationReply` | Contrato das respostas que o billing envia; `getAggregateId()` = key (o `orderId`, a mesma do comando) |
+| `InvoicePaidIntegrationReply`, `InvoiceCanceledIntegrationReply` | As duas respostas possíveis ao `IssueInvoice`: `invoiceId`, `orderId` e `paidAt`/`canceledAt`. `__TypeId__` `Billing.Invoice*IntegrationReply`, como no contrato |
+| `InvoiceIntegrationReplyPublisher` | Porta de saída. Recebe o tópico e a correlação **de fora**: quem decide para onde responder é o comando |
+| `KafkaInvoiceIntegrationReplyPublisher` | Valida a resposta, monta o `ProducerRecord` no tópico do pendente, põe o header `kafka_correlationId` e espera o ack (`send().get(40s)`) |
+| `ReplyPublishingException` | A falha de envio, com a causa encadeada |
+| `PendingReplies.find` / `delete` | Leem e apagam o pendente, cada um em transação própria |
+
+### Por que o reply é "manual"
+
+O Spring Kafka sabe responder sozinho: um listener anotado com `@SendTo` devolve um valor, e o framework publica esse valor no `kafka_replyTopic` do comando, copiando o `kafka_correlationId`. Isso só funciona quando a resposta sai **no retorno do listener do comando**.
+
+No billing, quando o listener do comando retorna, a fatura ainda está `UNPAID`: não há resposta para devolver. A resposta nasce depois, em outro fluxo (captura ou webhook), sem acesso aos headers do comando. Por isso o envio é manual: o billing monta o record e copia o correlation id **do pendente**. A tabela `pending_reply` existe exatamente para fazer a ponte entre o fluxo que recebeu o comando e o fluxo que conhece o resultado.
+
+### Por que `REQUIRES_NEW`
+
+O handler roda em `@TransactionalEventListener`, na fase `AFTER_COMMIT`: a transação que mudou a fatura **já commitou**. O Spring ainda considera aquela transação "ativa" durante a fase, mas ela não grava mais nada. Um `delete` que apenas participasse dela seria ignorado em silêncio. `find` e `delete` usam `Propagation.REQUIRES_NEW`: cada um abre e commita a própria transação.
+
+### Enviar, depois apagar
+
+A ordem é proposital:
+
+| Falha | Consequência |
+|---|---|
+| O envio do reply falha | O pendente **fica**. Um job que varra pendentes antigos (o `created_at` existe para isso) pode reenviar |
+| O envio funciona e o `delete` falha | O reply já saiu; o pendente fica e um reenvio geraria duplicata |
+
+É **at-least-once**: a resposta pode sair duas vezes, mas não deixa de sair. O orquestrador vai precisar ser idempotente ao recebê-la, e é para isso que existem as consultas `isRunningAt(INVOICING)` da `PlaceOrderSaga`: uma segunda `InvoicePaidReply` chega quando a saga já saiu de `INVOICING` e pode ser ignorada.
+
+### Os dois caminhos de pagamento, uma resposta só
+
+Captura e webhook terminam no mesmo lugar: `Invoice.markAsPaid()` ou `Invoice.cancel()`, que registram o mesmo evento de domínio, tratado pelo mesmo handler. O reply não precisa saber por onde o pagamento chegou. E uma fatura gerada pela API REST, sem comando de saga, não tem pendente: o `find` volta vazio e nada é respondido.
+
+### Revisão desta etapa
+
+- **Corrigido**: o comentário de `OutboundIntegrationReply` falava em "eventos de uma mesma fatura", mas a key da resposta é o `orderId` e o tipo é resposta, não evento. As classes novas ganharam comentários sobre o envio manual e o `REQUIRES_NEW`. O YAML de teste do billing ganhou os aliases das respostas.
+- **Testes**: billing `check` verde (48 unitários, 20 de integração). O envio do reply não tem teste: os ITs rodam em transação com rollback, e o `AFTER_COMMIT` nunca dispara neles.
+- **Ponto frágil: a resposta depende do evento.** No mesmo handler, o evento de integração é publicado **antes** do reply. Se o Kafka falhar no evento, a exceção é engolida (é `AFTER_COMMIT`) e o reply nem é tentado. O pendente fica, mas a saga para em `INVOICING` até alguém reenviar. Separar o reply num `@TransactionalEventListener` próprio, ou enviá-lo antes do evento, tira essa dependência: para a saga, a resposta importa mais que o anúncio.
+- **Limpeza sugerida**: o `KafkaInvoiceIntegrationReplyPublisher` tem um bloco comentado com o código antigo do publisher de eventos.
+- **Próximo passo**: o ordering ainda não consome `ordering.saga.replies`. As respostas chegam ao tópico e ficam lá até o listener de replies existir.
+
+---
+
 ## Próximas aulas (a documentar)
 
 O modelo, a persistência, o início da saga e o contrato já existem (seções acima). Os métodos de transição, os comandos e as respostas em código entram aqui conforme o módulo avança. A comparação com a coreografia vai seguir as perguntas que o [balanço da 8.13](./saga-coreografada.md#813--opinião-sobre-saga-com-coreografia) deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?

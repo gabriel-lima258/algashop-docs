@@ -969,6 +969,7 @@ O módulo começa apagando código, em duas demolições. Primeiro sai o checkou
 | Primeiro comando | `IssueInvoice` sai pela outbox na transação do checkout, com `correlationId = sagaId`; a saga já nasce em `INVOICING`; quem consome o tópico é quem o cria |
 | Billing executa o comando | O mesmo `generate` de sempre, acionado por comando; comando desconhecido vai ao DLT (evento desconhecido é ignorado); prefixo do `__TypeId__` de comando = quem executa |
 | Reply pendente | O resultado da fatura só existe depois do pagamento: correlação e tópico de resposta são guardados em `pending_reply`, na mesma transação da fatura (Correlation Identifier + Return Address persistidos) |
+| Reply manual | Fatura paga/cancelada → acha o pendente → reply no `kafka_replyTopic` com o `kafka_correlationId` → apaga; `REQUIRES_NEW` no after-commit; enviar antes de apagar (at-least-once) |
 
 > [`saga-orquestrada.md`](../06-mensageria/saga-orquestrada.md)
 
