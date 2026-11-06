@@ -804,7 +804,7 @@ Esta etapa fixou a regra que estava ambígua no contrato:
 | Tipo de mensagem | Prefixo | Exemplos |
 |---|---|---|
 | **Evento** | serviço que **publica** o fato | `Ordering.OrderPlacedIntegrationEvent`, `Billing.InvoicePaidIntegrationEvent` |
-| **Comando** | serviço que **executa** a ordem | `Billing.IssueInvoiceIntegrationCommand`, `Billing.CancelInvoiceIntegrationCommand`, `ProductCatalog.ReserveStockIntegrationCommand` |
+| **Comando** | serviço (ou subdomínio) que **executa** a ordem | `Billing.IssueInvoiceIntegrationCommand`, `Billing.CancelInvoiceIntegrationCommand`, `Stock.ReserveStockIntegrationCommand` (o estoque, dentro do catálogo) |
 | **Resposta** | serviço que **responde** | `Billing.InvoicePaidIntegrationReply`, `ProductCatalog.StockReservationConfirmedIntegrationReply` |
 
 O fato pertence a quem o produziu; o comando pertence ao vocabulário de quem o executa. `IssueInvoice` é uma operação do billing, e o ordering apenas a solicita. Ordering e billing já usavam `Billing.IssueInvoiceIntegrationCommand`; o contrato (`messages.yml`) foi alinhado a eles, e as duas "correções" para `Ordering.` feitas nas etapas anteriores deste doc foram revertidas. O YAML de teste do ordering, que tinha ficado com `Ordering.`, também foi corrigido, e o do billing ganhou o alias.
@@ -958,6 +958,119 @@ Captura e webhook terminam no mesmo lugar: `Invoice.markAsPaid()` ou `Invoice.ca
 - **Ponto frágil: a resposta depende do evento.** No mesmo handler, o evento de integração é publicado **antes** do reply. Se o Kafka falhar no evento, a exceção é engolida (é `AFTER_COMMIT`) e o reply nem é tentado. O pendente fica, mas a saga para em `INVOICING` até alguém reenviar. Separar o reply num `@TransactionalEventListener` próprio, ou enviá-lo antes do evento, tira essa dependência: para a saga, a resposta importa mais que o anúncio.
 - **Limpeza sugerida**: o `KafkaInvoiceIntegrationReplyPublisher` tem um bloco comentado com o código antigo do publisher de eventos.
 - **Próximo passo**: o ordering ainda não consome `ordering.saga.replies`. As respostas chegam ao tópico e ficam lá até o listener de replies existir.
+
+---
+
+## O orquestrador recebe a resposta e avança
+
+Com o billing respondendo, falta o outro lado: o ordering ouvir `ordering.saga.replies` e **decidir o próximo passo**. É aqui que a orquestração aparece de verdade, porque a decisão "fatura paga → agora reserve o estoque" passa a estar escrita em um método só.
+
+```mermaid
+sequenceDiagram
+    participant K as ordering.saga.replies
+    participant L as KafkaPlaceOrderSagaReplyListener
+    participant C as PlaceOrderSagaCoordinator.onInvoicePaid
+    participant DB as Postgres do ordering (uma transação)
+    K->>L: InvoicePaidReply + kafka_correlationId (= sagaId)
+    L->>L: correlationId vira UUID; sem ele → DLT
+    L->>C: onInvoicePaid(sagaId)
+    C->>DB: sagas.ofId(sagaId), orders.ofId(orderId)
+    alt saga já em RESERVING_STOCK (resposta repetida)
+        C-->>L: ignora
+    else saga em INVOICING
+        C->>DB: order.markAsPaid() → pedido PAID + OrderPaid na outbox
+        C->>DB: saga.moveToReservingStock() → saga_instance (RESERVING_STOCK)
+        C->>DB: ReserveStock na outbox (product-catalog.stock.commands, correlation = sagaId)
+        Note over DB: commit único: pedido, evento, saga e comando
+    end
+```
+
+### As peças
+
+| Peça | Papel |
+|---|---|
+| `KafkaPlaceOrderSagaReplyListener` | Grupo `ordering.saga-replies`. Converte o `kafka_correlationId` em `sagaId` (UUID); sem o header, ou com valor inválido, `IllegalArgumentException` → DLT. Handler default **lança**: o tópico é só de respostas da saga |
+| `InboundIntegrationReply`, `InvoicePaidIntegrationReply` | Marcador e cópia local da resposta do billing |
+| `ForCoordinatingPlaceOrderSaga.onInvoicePaid(sagaId)` | Nova operação da porta de entrada do orquestrador |
+| `PlaceOrderSaga.moveToReservingStock()` | Segunda transição: só a partir de `RUNNING` em `INVOICING` |
+| `ReserveStockIntegrationCommand` | Segundo comando: `orderId` + itens (produto, quantidade). Alias `Stock.ReserveStockIntegrationCommand` |
+| `PlaceOrderSagaCommandTopics` | Nova rota: `ReserveStock` → `product-catalog.stock.commands` |
+| `PlaceOrderSagaNotFoundException` | Resposta para uma saga que não existe |
+| catálogo: `stock-commands-topic-name` + bean do tópico | O executor cria o tópico dos seus comandos |
+
+### Uma transação, quatro escritas
+
+O `onInvoicePaid` é `@Transactional`, e tudo o que ele faz é escrita local:
+
+1. o pedido vira `PAID` (e o `OrderEventListener` grava o `OrderPaid` na outbox, como sempre);
+2. a saga vai para `RESERVING_STOCK`;
+3. o `ReserveStock` é gravado na outbox.
+
+Ou acontecem as três coisas, ou nenhuma, e a mensagem do Kafka é reprocessada. Não existe "pedido pago sem comando de estoque" nem "saga avançada sem pedido pago". É o ganho da outbox para comandos da etapa anterior: o orquestrador muda o estado e manda a próxima ordem no mesmo commit.
+
+### A pendência da persistência, resolvida
+
+Esta é a primeira vez que uma saga já gravada é **atualizada**. A [pendência registrada](#revisão-desta-etapa-1) tinha dois itens:
+
+- **`createdAt` nulo no merge**: resolvido com `@Column(updatable = false)` na entidade. O adaptador continua montando uma entidade nova, mas o `UPDATE` não inclui mais a coluna.
+- **`version` desatualizada no objeto**: na prática não morde. Cada resposta recarrega a saga do banco com a versão atual, e o objeto não é reaproveitado depois do `add`. O lock otimista funciona: duas respostas concorrentes para a mesma saga, e a segunda falha no `UPDATE ... where version = ?`.
+
+### Idempotência: a resposta repetida
+
+O billing envia a resposta em **at-least-once**, então ela pode chegar duas vezes. A guarda atual:
+
+```java
+if (saga.isReservingStock()) { logIgnored(saga); return; }
+```
+
+Funciona para o caso mais comum: a reentrega chega logo depois da primeira, com a saga em `RESERVING_STOCK`. Mas é **estreita**: se a saga já tiver ido além (aprovando, compensando, terminada), a resposta repetida passa pela guarda, cai no `moveToReservingStock()`, e o `require(isRunningAt(INVOICING))` lança `SagaTransitionException`. Ela está na lista de não-retryable do `KafkaConfig`, então a mensagem vai para o DLT. Não corrompe nada, mas polui o DLT com algo que é só uma duplicata. A guarda robusta pergunta o contrário: *"a saga ainda espera esta resposta?"*, ou seja, `if (!saga.isRunningAt(INVOICING)) ignore`. De quebra, ela pode vir antes de carregar o pedido, que hoje é buscado mesmo quando a resposta vai ser ignorada.
+
+---
+
+## Como está o fluxo da saga
+
+O ponta a ponta, como o código está hoje:
+
+```mermaid
+sequenceDiagram
+    participant U as cliente
+    participant O as ordering (orquestrador)
+    participant B as billing
+    participant C as catálogo
+    U->>O: POST /api/v1/.../orders
+    Note over O: tx: Order PLACED + OrderPlaced + saga RUNNING/INVOICING + IssueInvoice (outbox)
+    O->>B: IssueInvoice (billing.invoice.commands)
+    Note over B: tx: fatura UNPAID + pending_reply
+    Note over B: captura (InvoiceIssued) ou webhook → fatura PAID
+    B->>O: InvoicePaidReply (ordering.saga.replies, correlation = sagaId)
+    Note over O: tx: Order PAID + OrderPaid + saga RESERVING_STOCK + ReserveStock (outbox)
+    O->>C: ReserveStock (product-catalog.stock.commands)
+    Note over C: ⏳ ainda sem consumidor
+```
+
+| Passo do mapa | Comando | Resposta | Situação |
+|---|---|---|---|
+| Placed Order | — | — | ✅ saga nasce na transação do checkout |
+| Invoicing | `IssueInvoice` ✅ | `InvoicePaidReply` ✅ (ordering trata) · `InvoiceCanceledReply` ⚠️ (billing envia, ordering ainda não trata → DLT) | ✅ caminho feliz |
+| Reserving Stock (pivô) | `ReserveStock` ✅ enviado | `StockReservationConfirmed/Rejected` ⬜ | ⏳ catálogo ainda não consome o comando |
+| Approving Order | — (interno) | — | ⬜ |
+| Compensação: Cancel invoice (estorno) | `CancelInvoice` ⬜ | ⬜ | ⬜ |
+| Compensação: Cancel order | — (interno) | — | ⬜ |
+
+O que o desenho já entrega, olhando para trás: cada passo é uma transação local que muda o estado **e** grava a próxima mensagem na outbox; a saga diz a qualquer momento onde cada pedido está (`saga_instance`); e as respostas são correlacionadas pelo `sagaId`, não pelo pedido.
+
+### Revisão desta etapa
+
+- **Corrigido**:
+  - os YAMLs de teste do ordering (sem `saga-replies-consumer-group`, `product-catalog-commands-topic-name` e os dois aliases) e do catálogo (sem `stock-commands-topic-name`, que o `StockTransactionIT` exige ao subir o contexto completo). Os testes de integração não subiriam;
+  - o contrato: `ReserveStock` passou a `Stock.ReserveStockIntegrationCommand`, como no código;
+  - o comentário "ignora o command" (é uma resposta, não um comando). As classes novas ganharam comentários curtos.
+- **Testes**: ordering `check` verde (304 unitários, 12 de contrato, 185 de integração); catálogo `check` verde (117, 17, 12). O `onInvoicePaid` não tem teste: um IT que grave uma saga em `INVOICING`, chame o método e confira pedido `PAID`, saga em `RESERVING_STOCK` e o comando na outbox travaria a transição. Outro, chamando duas vezes, travaria a idempotência.
+- **Pendências**:
+  - guarda de idempotência estreita (acima);
+  - `InvoiceCanceledReply` sem handler e sem alias: um pagamento recusado vai parar no DLT do ordering, e o pedido fica `PLACED`. É a compensação que vem a seguir;
+  - `PlaceOrderSagaNotFoundException` estende `RuntimeException`, então é **retryable**: três tentativas com backoff antes do DLT, para uma saga que não vai passar a existir;
+  - o catálogo ainda não consome `ReserveStock`.
 
 ---
 

@@ -588,7 +588,7 @@ components:
           properties:
             __TypeId__:
               type: string
-              const: ProductCatalog.ReserveStockIntegrationCommand
+              const: Stock.ReserveStockIntegrationCommand
               description: Logical type used by the Jackson deserializer.
 
     InvoicePaidReplyHeaders:
