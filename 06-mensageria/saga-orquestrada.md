@@ -1047,15 +1047,15 @@ sequenceDiagram
     O->>C: ReserveStock (product-catalog.stock.commands)
     Note over C: tx Mongo: reserva CONFIRMED ou REJECT (+ baixa de estoque)
     C->>O: StockReservationConfirmed/RejectedReply (@SendTo)
-    Note over O: ⏳ ordering ainda não trata → DLT
+    Note over O: tx: Order READY + OrderReady + saga APPROVING_ORDER → SUCCEEDED
 ```
 
 | Passo do mapa | Comando | Resposta | Situação |
 |---|---|---|---|
 | Placed Order | — | — | ✅ saga nasce na transação do checkout |
 | Invoicing | `IssueInvoice` ✅ | `InvoicePaidReply` ✅ (ordering trata) · `InvoiceCanceledReply` ⚠️ (billing envia, ordering ainda não trata → DLT) | ✅ caminho feliz |
-| Reserving Stock (pivô) | `ReserveStock` ✅ enviado e executado pelo catálogo | `StockReservationConfirmed/Rejected` ✅ enviados (`@SendTo`) | ⏳ o ordering ainda não trata as respostas de estoque ([detalhes](#o-catálogo-reserva-e-responde-sendto)) |
-| Approving Order | — (interno) | — | ⬜ |
+| Reserving Stock (pivô) | `ReserveStock` ✅ enviado e executado pelo catálogo | `StockReservationConfirmedReply` ✅ (ordering trata) · `StockReservationRejectedReply` ⚠️ (catálogo envia, ordering ainda não trata → DLT) | ✅ caminho feliz |
+| Approving Order | — (interno) | — | ✅ pedido `READY`, saga `SUCCEEDED` ([detalhes](#caminho-feliz-completo)) |
 | Compensação: Cancel invoice (estorno) | `CancelInvoice` ⬜ | ⬜ | ⬜ |
 | Compensação: Cancel order | — (interno) | — | ⬜ |
 
@@ -1136,6 +1136,61 @@ Como no módulo 8, falta de estoque não é exceção: vira uma reserva `REJECT`
   - `beanValidationUtil.validate(reservationOutput)` valida o output, que não tem constraints. Quem tem constraints, e deveria ser validado antes de sair, é o reply;
   - **a key do reply**: com `@SendTo`, quem monta o record é o framework, e ninguém chama `getAggregateId()`. O comentário de `OutboundIntegrationReply` promete key = `orderId`; vale conferir na GUI do Kafka qual key a resposta realmente leva;
   - o ordering ainda não trata `StockReservationConfirmed/RejectedReply`: as respostas caem no handler default do listener de replies e vão para o DLT do ordering.
+
+---
+
+## Caminho feliz completo
+
+Com o `StockReservationConfirmedReply` tratado, a saga chega ao fim pela primeira vez. É o último passo do [mapa](#o-fluxo-passo-a-passo): depois do pivô (a reserva), não há mais o que compensar, só aprovar.
+
+```mermaid
+sequenceDiagram
+    participant C as catálogo
+    participant L as KafkaPlaceOrderSagaReplyListener
+    participant SC as PlaceOrderSagaCoordinator.onStockReservationConfirmed
+    participant DB as Postgres do ordering (uma transação)
+    C->>L: StockReservationConfirmedReply (@SendTo) + kafka_correlationId
+    L->>SC: onStockReservationConfirmed(sagaId)
+    alt saga já SUCCEEDED (resposta repetida)
+        SC-->>L: ignora
+    else saga RUNNING em RESERVING_STOCK
+        SC->>DB: order.markAsReady() → pedido READY + OrderReady na outbox
+        SC->>DB: moveToApprovingOrder() + endSucceeded() → saga SUCCEEDED
+        Note over DB: commit: pedido pronto e saga encerrada juntos
+    end
+```
+
+### `APPROVING_ORDER`, o passo sem comando
+
+Os outros passos mandam um comando e esperam uma resposta. Aprovar o pedido é trabalho do **próprio** ordering, então o passo entra e sai no mesmo método:
+
+```java
+saga.moveToApprovingOrder();   // RESERVING_STOCK → APPROVING_ORDER  (passo)
+saga.endSucceeded();           // RUNNING → SUCCEEDED                 (status)
+```
+
+As duas máquinas de estado da [modelagem](#duas-máquinas-de-estado-status--passo) aparecem aqui chegando ao fim juntas: o **passo** avança para `APPROVING_ORDER` e fica lá, como registro de onde a saga terminou; o **status** sai de `RUNNING` para `SUCCEEDED`. O `endSucceeded()` só aceita `RUNNING` em `APPROVING_ORDER` (`require(canEndSucceeded())`), então não é possível encerrar com sucesso uma saga que pulou passos.
+
+### A saga de ponta a ponta, em uma tabela
+
+Para um pedido pago e com estoque, as linhas de `saga_instance` e do pedido passam por:
+
+| Momento | Pedido | Saga (status / passo) | O que vai para a outbox |
+|---|---|---|---|
+| checkout v1 | `PLACED` | `RUNNING` / `INVOICING` | `OrderPlaced` + `IssueInvoice` |
+| `InvoicePaidReply` | `PAID` | `RUNNING` / `RESERVING_STOCK` | `OrderPaid` + `ReserveStock` |
+| `StockReservationConfirmedReply` | `READY` | `SUCCEEDED` / `APPROVING_ORDER` | `OrderReady` |
+
+Três transações locais no ordering, cada uma mudando o pedido **e** a saga **e** gravando a próxima mensagem. Entre elas, o trabalho acontece no billing (fatura e pagamento) e no catálogo (reserva). A qualquer momento, `select status, step from saga_instance where aggregate_id = '<pedido>'` responde onde o pedido está, a pergunta que a coreografia não sabia responder.
+
+### Revisão desta etapa
+
+- **Corrigido: faltava `@Transactional` no `onStockReservationConfirmed`** (o `onInvoicePaid` tinha). Funcionava, porque `orders.add` e `sagas.add` abrem cada um a própria transação, mas o pedido `READY` e a saga `SUCCEEDED` eram gravados **separados**. Se a gravação da saga falhasse depois (um lock otimista, por exemplo), a reentrega encontraria a saga ainda em `RESERVING_STOCK` e chamaria `markAsReady()` num pedido já `READY`. Resultado: `OrderStatusCannotBeChanged` (não-retryable), DLT, pedido pronto e saga travada para sempre. Com a anotação, os dois commitam juntos.
+- **Corrigido**: o YAML de teste do ordering ganhou o alias da resposta nova. Os métodos novos ganharam comentários.
+- **Dados de teste**: o `afterMigrate.sql` passou a limpar `saga_instance` (ordering) e `pending_reply` (billing; redundante com o `TRUNCATE invoice CASCADE`, que já apaga os pendentes pela FK, mas inofensivo e explícito).
+- **Testes**: ordering `check` verde (304, 12, 185); billing `check` verde (48, 20). As transições do coordenador seguem sem teste próprio.
+- **Idempotência**: as guardas cresceram por lista (`isReservingStock() || hasSucceeded()` no `onInvoicePaid`, `hasSucceeded()` no `onStockReservationConfirmed`). Com as compensações, a lista vai crescer de novo (`COMPENSATING`, `COMPENSATED`). A forma que não precisa de manutenção pergunta pelo passo esperado: "se a saga não está `RUNNING` em `INVOICING`, esta `InvoicePaidReply` não é esperada; ignore".
+- **Falta a compensação**: `InvoiceCanceledReply` (pagamento recusado) e `StockReservationRejectedReply` (sem estoque) ainda caem no handler default do listener de respostas e vão para o DLT. São os caminhos `CANCELLING_ORDER` e `REFUNDING_INVOICE` do mapa.
 
 ---
 
