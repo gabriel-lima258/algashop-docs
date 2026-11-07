@@ -1053,11 +1053,11 @@ sequenceDiagram
 | Passo do mapa | Comando | Resposta | Situação |
 |---|---|---|---|
 | Placed Order | — | — | ✅ saga nasce na transação do checkout |
-| Invoicing | `IssueInvoice` ✅ | `InvoicePaidReply` ✅ (ordering trata) · `InvoiceCanceledReply` ⚠️ (billing envia, ordering ainda não trata → DLT) | ✅ caminho feliz |
+| Invoicing | `IssueInvoice` ✅ | `InvoicePaidReply` ✅ · `InvoiceCanceledReply` ✅ (dispara a compensação) | ✅ caminho feliz e pagamento recusado |
 | Reserving Stock (pivô) | `ReserveStock` ✅ enviado e executado pelo catálogo | `StockReservationConfirmedReply` ✅ (ordering trata) · `StockReservationRejectedReply` ⚠️ (catálogo envia, ordering ainda não trata → DLT) | ✅ caminho feliz |
 | Approving Order | — (interno) | — | ✅ pedido `READY`, saga `SUCCEEDED` ([detalhes](#caminho-feliz-completo)) |
 | Compensação: Cancel invoice (estorno) | `CancelInvoice` ⬜ | ⬜ | ⬜ |
-| Compensação: Cancel order | — (interno) | — | ⬜ |
+| Compensação: Cancel order | — (interno) | — | ✅ pagamento recusado ([detalhes](#compensação-pagamento-recusado)) · ⬜ depois do estorno |
 
 O que o desenho já entrega, olhando para trás: cada passo é uma transação local que muda o estado **e** grava a próxima mensagem na outbox; a saga diz a qualquer momento onde cada pedido está (`saga_instance`); e as respostas são correlacionadas pelo `sagaId`, não pelo pedido.
 
@@ -1191,6 +1191,99 @@ Três transações locais no ordering, cada uma mudando o pedido **e** a saga **
 - **Testes**: ordering `check` verde (304, 12, 185); billing `check` verde (48, 20). As transições do coordenador seguem sem teste próprio.
 - **Idempotência**: as guardas cresceram por lista (`isReservingStock() || hasSucceeded()` no `onInvoicePaid`, `hasSucceeded()` no `onStockReservationConfirmed`). Com as compensações, a lista vai crescer de novo (`COMPENSATING`, `COMPENSATED`). A forma que não precisa de manutenção pergunta pelo passo esperado: "se a saga não está `RUNNING` em `INVOICING`, esta `InvoicePaidReply` não é esperada; ignore".
 - **Falta a compensação**: `InvoiceCanceledReply` (pagamento recusado) e `StockReservationRejectedReply` (sem estoque) ainda caem no handler default do listener de respostas e vão para o DLT. São os caminhos `CANCELLING_ORDER` e `REFUNDING_INVOICE` do mapa.
+
+---
+
+## Compensação: pagamento recusado
+
+A primeira compensação da saga. Quando o pagamento é recusado, o billing cancela a fatura e responde `InvoiceCanceledReply`. Nada foi cobrado e nada foi reservado, então **só o pedido** precisa ser desfeito: é o caminho `INVOICING → CANCELLING_ORDER` do [mapa](#caminhos-de-falha).
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    state "RUNNING / INVOICING" as A
+    state "COMPENSATING / INVOICING<br/>failure = PAYMENT_REFUSED" as B
+    state "COMPENSATING / CANCELLING_ORDER" as C
+    state "COMPENSATED / CANCELLING_ORDER" as D
+    A --> B: failWithPaymentRefused()
+    B --> C: compensateOrder()
+    C --> D: endCompensated()
+```
+
+Tudo acontece no `onInvoiceCanceled`, numa transação só: a saga entra em compensação e guarda o motivo, o pedido vira `CANCELED` (e o `OrderCanceled` vai para a outbox), e a saga termina `COMPENSATED`.
+
+### As peças
+
+| Peça | Papel |
+|---|---|
+| `InvoiceCanceledIntegrationReply` + handler no listener de respostas | A resposta de pagamento recusado. Alias `Billing.InvoiceCanceledIntegrationReply` |
+| `PlaceOrderSagaFailure` (`PAYMENT_REFUSED`, `OUT_OF_STOCK`) | **Por que** a saga foi compensada. O status diz *que* falhou; a falha diz *por quê*. Gravada na coluna `failure` que a V010 tinha deixado reservada |
+| `failWithPaymentRefused()` | Só a partir de `RUNNING` em `INVOICING`. Muda o **status** para `COMPENSATING` e guarda a falha; o passo continua `INVOICING` |
+| `compensateOrder()` | Muda o **passo** para `CANCELLING_ORDER`, só durante `COMPENSATING` |
+| `endCompensated()` | Muda o **status** para `COMPENSATED`, só em `COMPENSATING` / `CANCELLING_ORDER` |
+| `isCompensated()`, `hasFailed()` | Guardas do coordenador: resposta repetida e compensação já iniciada |
+
+De novo as duas máquinas de estado trabalham separadas: **status** marca a fase (rodando → compensando → compensada), **passo** marca onde (fatura → cancelando o pedido). A falha é um terceiro dado, que só existe no caminho triste.
+
+### O bug: pedido cancelado, saga parada em `RUNNING` / `INVOICING`
+
+Na primeira versão, depois de processar a resposta, o pedido aparecia `CANCELED` no banco e a saga continuava `RUNNING` / `INVOICING`. Eram dois defeitos se somando.
+
+**1. A condição de `canCompensateOrder()` estava invertida.**
+
+```java
+// antes
+return status == COMPENSATING && step.canNotChangeTo(CANCELLING_ORDER);
+// depois
+return status == COMPENSATING && step.canChangeTo(CANCELLING_ORDER);
+```
+
+`CANCELLING_ORDER(INVOICING, REFUNDING_INVOICE)` declara que ele pode vir de `INVOICING`. Então, em `INVOICING`, `canNotChangeTo(CANCELLING_ORDER)` é **falso**, o `require` falhava e `compensateOrder()` lançava `SagaTransitionException`. A guarda só deixava compensar a partir de passos que **não** levam ao cancelamento: o contrário da regra.
+
+**2. O método não tinha `@Transactional`.** A ordem de execução era:
+
+| # | O que acontecia | Commitou? |
+|---|---|---|
+| 1 | `failWithPaymentRefused()` | não: só em memória |
+| 2 | `order.markAsCanceled()` + `orders.add(order)` | **sim**: o `add` do provider abre a própria transação |
+| 3 | `compensateOrder()` lança `SagaTransitionException` | — |
+| 4 | `sagas.add(saga)` | nunca rodou |
+
+O pedido ficou cancelado porque foi gravado **sozinho**, antes da falha. A saga não mudou porque a exceção veio antes da gravação dela. E a mensagem foi direto para o DLT (`SagaTransitionException` está na lista de não-retryable).
+
+A lição é a mesma do `onStockReservationConfirmed` da etapa anterior, agora com consequência visível: **cada método do coordenador é uma unidade, e precisa de uma transação que a abrace**. Sem ela, uma validação que falha no meio deixa metade do trabalho gravado.
+
+**As correções**:
+
+- a condição invertida;
+- `@Transactional` no `onInvoiceCanceled`: se qualquer passo falhar, o cancelamento do pedido também volta;
+- **compensação idempotente**: `if (!order.isCanceled()) order.markAsCanceled()`. Sem isso, reprocessar a mensagem esbarraria no pedido já cancelado (`OrderStatusCannotBeChanged`), e as sagas que ficaram presas não teriam como ser recuperadas pelo DLT. Uma compensação precisa poder rodar de novo;
+- o typo `canEndCompesated` → `canEndCompensated`;
+- o alias da resposta no YAML de teste;
+- **um teste unitário novo**, `PlaceOrderSagaTest`, cobrindo o caminho feliz, a compensação por pagamento recusado e a recusa de compensar uma saga ainda `RUNNING`. Com a condição antiga, `shouldCompensateWhenPaymentIsRefused` falha; com a correção, passa. Era a primeira transição da saga sem nenhum teste, e o defeito estava justamente nela.
+
+### Recuperando as sagas que ficaram presas
+
+Pedidos processados antes da correção estão `CANCELED`, com a saga `RUNNING` / `INVOICING` e a resposta no DLT `ordering.dlt.ordering.saga.replies`. Duas saídas:
+
+- **Reprocessar o DLT** (preferível): republicar a mensagem em `ordering.saga.replies`. Com a correção, a saga entra em compensação, o pedido já cancelado é preservado e a saga termina `COMPENSATED`.
+- **Corrigir no banco**, só em ambiente de desenvolvimento:
+
+```sql
+update public.saga_instance
+   set status = 'COMPENSATED', step = 'CANCELLING_ORDER', failure = 'PAYMENT_REFUSED',
+       version = version + 1, updated_at = now()
+ where status = 'RUNNING' and step = 'INVOICING'
+   and aggregate_id in (select id::text from public."order" where status = 'CANCELED');
+```
+
+### Revisão desta etapa
+
+- **Testes**: ordering `check` verde, agora com o `PlaceOrderSagaTest`.
+- **Verificação manual**: checkout com um cartão que o FastPay recusa → `select status, step, failure from saga_instance where aggregate_id = '<pedido>'` deve mostrar `COMPENSATED`, `CANCELLING_ORDER`, `PAYMENT_REFUSED`, com o pedido `CANCELED`.
+- **Pendências**:
+  - o outro caminho de falha: `StockReservationRejectedReply` → `failWith(OUT_OF_STOCK)` → `REFUNDING_INVOICE` (comando `CancelInvoice` ao billing, que estorna) → resposta → `CANCELLING_ORDER` → `COMPENSATED`. O enum `OUT_OF_STOCK` e a transição `CANCELLING_ORDER(REFUNDING_INVOICE)` já estão prontos;
+  - as guardas de resposta repetida seguem crescendo por lista (`isCompensated()` aqui); a forma por "passo esperado" continua sendo a mais robusta.
 
 ---
 

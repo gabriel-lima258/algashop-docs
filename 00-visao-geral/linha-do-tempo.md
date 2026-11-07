@@ -973,6 +973,7 @@ O módulo começa apagando código, em duas demolições. Primeiro sai o checkou
 | Orquestrador avança | `InvoicePaidReply` → pedido PAID + saga RESERVING_STOCK + `ReserveStock` na outbox, numa transação; correlação pelo `sagaId`; `createdAt updatable=false` resolve o update da saga |
 | Reply automático | O catálogo reserva e responde com `@SendTo`: quando o resultado existe no fim do listener, o framework responde no `kafka_replyTopic` com o mesmo `kafka_correlationId`, sem tabela de pendentes |
 | Caminho feliz completo | `StockReservationConfirmedReply` → pedido READY + saga APPROVING_ORDER → SUCCEEDED numa transação; três transações locais no ordering levam o pedido de PLACED a READY |
+| Compensação: pagamento recusado | `InvoiceCanceledReply` → saga COMPENSATING (motivo em `failure`) → pedido CANCELED → COMPENSATED; um guard invertido mais a falta de `@Transactional` deixavam o pedido cancelado e a saga parada |
 
 > [`saga-orquestrada.md`](../06-mensageria/saga-orquestrada.md)
 
