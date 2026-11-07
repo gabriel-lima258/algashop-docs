@@ -1054,10 +1054,10 @@ sequenceDiagram
 |---|---|---|---|
 | Placed Order | — | — | ✅ saga nasce na transação do checkout |
 | Invoicing | `IssueInvoice` ✅ | `InvoicePaidReply` ✅ · `InvoiceCanceledReply` ✅ (dispara a compensação) | ✅ caminho feliz e pagamento recusado |
-| Reserving Stock (pivô) | `ReserveStock` ✅ enviado e executado pelo catálogo | `StockReservationConfirmedReply` ✅ (ordering trata) · `StockReservationRejectedReply` ⚠️ (catálogo envia, ordering ainda não trata → DLT) | ✅ caminho feliz |
+| Reserving Stock (pivô) | `ReserveStock` ✅ enviado e executado pelo catálogo | `StockReservationConfirmedReply` ✅ · `StockReservationRejectedReply` ✅ (dispara a compensação) | ✅ |
 | Approving Order | — (interno) | — | ✅ pedido `READY`, saga `SUCCEEDED` ([detalhes](#caminho-feliz-completo)) |
-| Compensação: Cancel invoice (estorno) | `CancelInvoice` ⬜ | ⬜ | ⬜ |
-| Compensação: Cancel order | — (interno) | — | ✅ pagamento recusado ([detalhes](#compensação-pagamento-recusado)) · ⬜ depois do estorno |
+| Compensação: Cancel invoice (estorno) | `CancelInvoice` ✅ enviado pelo ordering | `InvoiceCanceledReply` ⏳ | ⏳ o billing ainda não executa o comando ([detalhes](#compensação-falta-de-estoque)) |
+| Compensação: Cancel order | — (interno) | — | ✅ pagamento recusado · ✅ depois do estorno (no ordering; depende do billing responder) |
 
 O que o desenho já entrega, olhando para trás: cada passo é uma transação local que muda o estado **e** grava a próxima mensagem na outbox; a saga diz a qualquer momento onde cada pedido está (`saga_instance`); e as respostas são correlacionadas pelo `sagaId`, não pelo pedido.
 
@@ -1284,6 +1284,93 @@ update public.saga_instance
 - **Pendências**:
   - o outro caminho de falha: `StockReservationRejectedReply` → `failWith(OUT_OF_STOCK)` → `REFUNDING_INVOICE` (comando `CancelInvoice` ao billing, que estorna) → resposta → `CANCELLING_ORDER` → `COMPENSATED`. O enum `OUT_OF_STOCK` e a transição `CANCELLING_ORDER(REFUNDING_INVOICE)` já estão prontos;
   - as guardas de resposta repetida seguem crescendo por lista (`isCompensated()` aqui); a forma por "passo esperado" continua sendo a mais robusta.
+
+---
+
+## Compensação: falta de estoque
+
+A segunda compensação, e a mais completa. Quando o catálogo rejeita a reserva, o pagamento **já foi capturado**: a reserva é o pivô, o passo depois do qual a saga só podia ir para frente. Agora ela anda para trás desfazendo dois passos, na ordem inversa: primeiro a fatura (estorno), depois o pedido.
+
+> **Renomeado:** o passo que as seções anteriores chamam de `REFUNDING_INVOICE` virou `CANCELLING_INVOICE`. É o nome do comando que ele envia (`CancelInvoice`) e o mesmo padrão do `CANCELLING_ORDER`. Nenhuma saga chegou a gravar o nome antigo, então não houve migração de dados.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    state "RUNNING / RESERVING_STOCK" as A
+    state "COMPENSATING / CANCELLING_INVOICE<br/>failure = OUT_OF_STOCK" as B
+    state "COMPENSATING / CANCELLING_ORDER" as C
+    state "COMPENSATED / CANCELLING_ORDER" as D
+    A --> B: StockReservationRejectedReply<br/>failWithOutOfStock() + compensateInvoice()<br/>→ CancelInvoice
+    B --> C: InvoiceCanceledReply<br/>pedido CANCELED
+    C --> D: endCompensated()
+```
+
+```mermaid
+sequenceDiagram
+    participant C as catálogo
+    participant O as ordering (orquestrador)
+    participant B as billing
+    C->>O: StockReservationRejectedReply
+    Note over O: tx: saga COMPENSATING / CANCELLING_INVOICE (OUT_OF_STOCK)<br/>+ CancelInvoice na outbox
+    O->>B: CancelInvoice (billing.invoice.commands)
+    Note over B: ⏳ estorna no gateway → fatura CANCELED
+    B-->>O: InvoiceCanceledReply
+    Note over O: tx: pedido PAID → CANCELED<br/>saga CANCELLING_ORDER → COMPENSATED
+```
+
+### As peças
+
+| Peça | Papel |
+|---|---|
+| `StockReservationRejectedIntegrationReply` + handler | A resposta "sem estoque". Alias `Stock.StockReservationRejectedIntegrationReply` |
+| `failWithOutOfStock()` | Só a partir de `RUNNING` em `RESERVING_STOCK`. Status → `COMPENSATING`, falha `OUT_OF_STOCK` |
+| `compensateInvoice()` | Passo → `CANCELLING_INVOICE`, só durante `COMPENSATING` |
+| `wasStockRejected()` | Guarda contra a resposta repetida |
+| `CancelInvoiceIntegrationCommand` | O comando de compensação: só o `orderId`. Vai para `billing.invoice.commands` (mesmo tópico do `IssueInvoice`), alias `Billing.CancelInvoiceIntegrationCommand`, como no contrato |
+| `onStockReservationRejected` | Falha + passo + grava + `CancelInvoice` na outbox, numa transação |
+
+### Uma resposta, dois caminhos
+
+O ordering não ganhou um handler novo para a volta do estorno. O `InvoiceCanceledReply` é o mesmo do pagamento recusado, e o `onInvoiceCanceled` da etapa anterior já estava preparado para os dois casos:
+
+```java
+if (!saga.hasFailed()) {
+    saga.failWithPaymentRefused();   // só no pagamento recusado
+}
+// pedido CANCELED, compensateOrder(), endCompensated()
+```
+
+- **Pagamento recusado**: a saga ainda está `RUNNING` em `INVOICING`, sem falha. O `onInvoiceCanceled` registra `PAYMENT_REFUSED`, e o `compensateOrder()` sai de `INVOICING`.
+- **Falta de estoque**: a saga já está `COMPENSATING` em `CANCELLING_INVOICE`, com `OUT_OF_STOCK`. O `hasFailed()` impede que o motivo seja sobrescrito, e o `compensateOrder()` sai de `CANCELLING_INVOICE`.
+
+O `CANCELLING_ORDER(INVOICING, CANCELLING_INVOICE)` do enum é exatamente isto: o cancelamento do pedido tem duas portas de entrada, e a máquina de estados declara as duas. A **falha** guardada na saga é o que permite saber depois por qual delas o pedido entrou.
+
+### As duas compensações lado a lado
+
+| | Pagamento recusado | Falta de estoque |
+|---|---|---|
+| Resposta que dispara | `InvoiceCanceledReply` | `StockReservationRejectedReply` |
+| Onde a saga estava | `RUNNING` / `INVOICING` | `RUNNING` / `RESERVING_STOCK` (o pivô) |
+| Passos já feitos a desfazer | só o pedido | a fatura (paga) **e** o pedido |
+| Compensações | `CANCELLING_ORDER` | `CANCELLING_INVOICE` → `CANCELLING_ORDER` |
+| Comandos de compensação | nenhum (cancelar o pedido é interno) | `CancelInvoice` ao billing |
+| Estado final | `COMPENSATED` / `CANCELLING_ORDER` / `PAYMENT_REFUSED` | `COMPENSATED` / `CANCELLING_ORDER` / `OUT_OF_STOCK` |
+| Estado do pedido | `PLACED` → `CANCELED` | `PAID` → `CANCELED` |
+
+### `@Transactional` na classe
+
+O coordenador passou a ter `@Transactional` na **classe**, em vez de método a método. É a lição das duas etapas anteriores consolidada: duas vezes um método novo nasceu sem a anotação, e nas duas o pedido e a saga podiam ficar gravados pela metade. Na classe, todo método novo já nasce dentro de uma transação.
+
+### Revisão desta etapa
+
+- **Testes**: ordering `check` verde. O `PlaceOrderSagaTest` ganhou `shouldCompensateWhenStockIsRejected` (o caminho inteiro até `COMPENSATED` com `OUT_OF_STOCK`) e `shouldNotCancelInvoiceWhenPaymentWasRefused` (sem pagamento não há fatura a estornar: a transição para `CANCELLING_INVOICE` é recusada). São 5 testes agora.
+- **Comentários**: nos métodos novos e no `@Transactional` da classe.
+- **O ciclo ainda não fecha: o billing não executa o `CancelInvoice`.** O `KafkaInvoiceIntegrationCommandListener` só tem handler para `IssueInvoice`, e o default lança. Hoje o comando vai para o DLT do billing, a saga fica `COMPENSATING` / `CANCELLING_INVOICE` e o pedido fica `PAID`, com o cliente cobrado. Para fechar, o billing precisa de:
+  1. handler para `CancelInvoiceIntegrationCommand` e o alias `Billing.CancelInvoiceIntegrationCommand`;
+  2. chamar o `refundByOrderId`, corrigindo o que o [módulo 8](./saga-coreografada.md#o-estorno-não-publica-o-invoicecanceled) já apontava: ele não chama `save`, então o `InvoiceCanceledEvent` nunca é publicado, e faz a chamada HTTP do estorno dentro da transação;
+  3. **registrar um novo `pending_reply`** com o `kafka_correlationId` e o `kafka_replyTopic` do `CancelInvoice`, na mesma transação do estorno. O pendente do `IssueInvoice` foi apagado quando o `InvoicePaidReply` saiu. Sem um novo registro, a fatura seria cancelada e o `InvoiceEventListener` não acharia para quem responder;
+  4. idempotência: um `CancelInvoice` repetido não pode estornar duas vezes (fatura já `CANCELED` → só responder de novo).
+- **Detalhe**: o `onStockReservationRejected` chama `findOrder(...)` e descarta o resultado. Só confirma que o pedido existe, ao custo de uma consulta.
 
 ---
 
