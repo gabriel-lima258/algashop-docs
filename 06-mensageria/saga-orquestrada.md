@@ -1045,14 +1045,16 @@ sequenceDiagram
     B->>O: InvoicePaidReply (ordering.saga.replies, correlation = sagaId)
     Note over O: tx: Order PAID + OrderPaid + saga RESERVING_STOCK + ReserveStock (outbox)
     O->>C: ReserveStock (product-catalog.stock.commands)
-    Note over C: ⏳ ainda sem consumidor
+    Note over C: tx Mongo: reserva CONFIRMED ou REJECT (+ baixa de estoque)
+    C->>O: StockReservationConfirmed/RejectedReply (@SendTo)
+    Note over O: ⏳ ordering ainda não trata → DLT
 ```
 
 | Passo do mapa | Comando | Resposta | Situação |
 |---|---|---|---|
 | Placed Order | — | — | ✅ saga nasce na transação do checkout |
 | Invoicing | `IssueInvoice` ✅ | `InvoicePaidReply` ✅ (ordering trata) · `InvoiceCanceledReply` ⚠️ (billing envia, ordering ainda não trata → DLT) | ✅ caminho feliz |
-| Reserving Stock (pivô) | `ReserveStock` ✅ enviado | `StockReservationConfirmed/Rejected` ⬜ | ⏳ catálogo ainda não consome o comando |
+| Reserving Stock (pivô) | `ReserveStock` ✅ enviado e executado pelo catálogo | `StockReservationConfirmed/Rejected` ✅ enviados (`@SendTo`) | ⏳ o ordering ainda não trata as respostas de estoque ([detalhes](#o-catálogo-reserva-e-responde-sendto)) |
 | Approving Order | — (interno) | — | ⬜ |
 | Compensação: Cancel invoice (estorno) | `CancelInvoice` ⬜ | ⬜ | ⬜ |
 | Compensação: Cancel order | — (interno) | — | ⬜ |
@@ -1071,6 +1073,69 @@ O que o desenho já entrega, olhando para trás: cada passo é uma transação l
   - `InvoiceCanceledReply` sem handler e sem alias: um pagamento recusado vai parar no DLT do ordering, e o pedido fica `PLACED`. É a compensação que vem a seguir;
   - `PlaceOrderSagaNotFoundException` estende `RuntimeException`, então é **retryable**: três tentativas com backoff antes do DLT, para uma saga que não vai passar a existir;
   - o catálogo ainda não consome `ReserveStock`.
+
+---
+
+## O catálogo reserva e responde (`@SendTo`)
+
+O `ReserveStock` agora tem quem o execute. E, diferente do billing, o catálogo responde **sem tabela de pendentes**: usa o reply automático do Spring Kafka.
+
+```mermaid
+sequenceDiagram
+    participant O as ordering
+    participant L as KafkaStockIntegrationCommandListener
+    participant S as StockManagementApplicationService
+    participant Q as StockReservationQueryService
+    O->>L: ReserveStock (product-catalog.stock.commands)<br/>kafka_correlationId, kafka_replyTopic
+    L->>L: exige os dois headers (senão → DLT)
+    L->>S: reserveForOrder(input) → reservationId
+    Note over S: tx Mongo: withdrawAll + StockReservation CONFIRMED<br/>ou só StockReservation REJECT
+    L->>Q: findById(reservationId)
+    Q-->>L: StockReservationOutput (confirmed?)
+    L-->>O: return Confirmed/RejectedReply<br/>@SendTo → kafka_replyTopic, mesmo kafka_correlationId
+```
+
+### Reply automático × reply manual
+
+| | Catálogo (`@SendTo`) | Billing (manual) |
+|---|---|---|
+| Quando o resultado existe | No fim do listener: a reserva é síncrona | Depois: o pagamento vem da captura ou do webhook |
+| Quem publica o reply | O framework, com o **retorno** do método | O próprio billing, com `KafkaTemplate` |
+| Destino e correlação | Lidos dos headers do comando e copiados pelo Spring | Guardados em `pending_reply` e lidos depois |
+| Tabela extra | Nenhuma | `pending_reply` |
+
+O `@SendTo` sem argumento quer dizer "responda para onde o comando mandou": o Spring lê o `kafka_replyTopic` do record recebido, publica o retorno do método lá e copia o `kafka_correlationId`. O Boot já configura o `KafkaTemplate` como reply template da fábrica de listeners, então não há configuração extra. A regra prática: **se a resposta existe quando o listener termina, use `@SendTo`; se ela depende de algo que ainda vai acontecer, guarde o endereço e responda depois**.
+
+### As peças
+
+| Peça | Papel |
+|---|---|
+| `InboundIntegrationCommand`, `OutboundIntegrationReply` | Marcadores de entrada (comando) e saída (resposta) do catálogo, iguais aos do billing |
+| `stock/command/ReserveStockIntegrationCommand` | Cópia local do comando: `orderId` + itens |
+| `stock/reply/StockReservationConfirmed/RejectedIntegrationReply` | As duas respostas: `reservationId`, `orderId`, `confirmedAt`/`rejectedAt`. Alias `Stock.*` |
+| `StockManagementApplicationService.reserveForOrder` | O mesmo caso de uso do módulo 8 (preservado na remoção da coreografia), agora devolvendo o id da reserva |
+| `StockReservationQueryService` + `StockReservationOutput` + `StockReservationQueryServiceImpl` | Lado de leitura: busca a reserva pelo id |
+| `StockReservationNotFoundException` | `DomainEntityNotFoundException`, portanto não-retryable |
+| `KafkaStockIntegrationCommandListener` | Grupo `product-catalog.stock-commands`; executa, consulta, responde. Default handler lança |
+| `KafkaConfig.stockCommandsDlt` | DLT `product-catalog.dlt.product-catalog.stock.commands` |
+
+**Comando e consulta separados (CQS).** O `reserveForOrder` muda estado e devolve só o id; os dados da resposta vêm do query service. O listener poderia montar a resposta com o que o comando já tinha, mas lendo do lado de leitura a resposta reflete o que **foi gravado**, inclusive se a reserva foi confirmada ou rejeitada.
+
+Como no módulo 8, falta de estoque não é exceção: vira uma reserva `REJECT` e, agora, um `StockReservationRejectedReply`. É essa resposta que vai disparar a compensação (estorno) no orquestrador.
+
+### Revisão desta etapa
+
+- **Corrigido**:
+  - config de teste do catálogo sem `stock-commands-consumer-group` (`@NotBlank`) e sem os aliases: o `StockTransactionIT` não subiria;
+  - o contrato declarava `ProductCatalog.StockReservation*IntegrationReply`; alinhado ao código: `Stock.*`, o mesmo prefixo do `ReserveStock`;
+  - **DLT do tópico de comandos não declarado**: o recoverer publica na *mesma partição* do record original, então o DLT precisa existir com as mesmas 3 partições. Sem o `NewTopic`, ele nasceria por auto-criação do broker, sem garantia de partições, e o envio ao DLT poderia falhar. Declarado com o `createDeadLetterTopic`, deixado para isso na remoção da coreografia;
+  - comentários no listener (o `@SendTo`), no query service e no `OutboundIntegrationReply`.
+- **Testes**: catálogo `check` verde (117 unitários, 17 de contrato, 12 de integração). O listener não tem teste próprio.
+- **Pendências**:
+  - **o reply pode se perder (dual-write)**: a reserva commita no Mongo, e o reply só é publicado depois que o método retorna. Se o envio falhar, o Kafka reentrega o comando, o `reserveForOrder` esbarra no `DuplicateStockReservationException` (não-retryable) e a mensagem vai para o DLT, **sem** resposta. A saga fica em `RESERVING_STOCK`. A mesma correção resolve as reentregas comuns: se a reserva do pedido já existe, reler e responder de novo, em vez de falhar;
+  - `beanValidationUtil.validate(reservationOutput)` valida o output, que não tem constraints. Quem tem constraints, e deveria ser validado antes de sair, é o reply;
+  - **a key do reply**: com `@SendTo`, quem monta o record é o framework, e ninguém chama `getAggregateId()`. O comentário de `OutboundIntegrationReply` promete key = `orderId`; vale conferir na GUI do Kafka qual key a resposta realmente leva;
+  - o ordering ainda não trata `StockReservationConfirmed/RejectedReply`: as respostas caem no handler default do listener de replies e vão para o DLT do ordering.
 
 ---
 

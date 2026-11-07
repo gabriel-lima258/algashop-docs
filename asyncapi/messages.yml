@@ -624,7 +624,7 @@ components:
           properties:
             __TypeId__:
               type: string
-              const: ProductCatalog.StockReservationConfirmedIntegrationReply
+              const: Stock.StockReservationConfirmedIntegrationReply
               description: Logical type used by the Jackson deserializer.
 
     StockReservationRejectedReplyHeaders:
@@ -636,7 +636,7 @@ components:
           properties:
             __TypeId__:
               type: string
-              const: ProductCatalog.StockReservationRejectedIntegrationReply
+              const: Stock.StockReservationRejectedIntegrationReply
               description: Logical type used by the Jackson deserializer.
 
     ProductAddedPayload:
