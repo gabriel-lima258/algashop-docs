@@ -975,6 +975,7 @@ O módulo começa apagando código, em duas demolições. Primeiro sai o checkou
 | Caminho feliz completo | `StockReservationConfirmedReply` → pedido READY + saga APPROVING_ORDER → SUCCEEDED numa transação; três transações locais no ordering levam o pedido de PLACED a READY |
 | Compensação: pagamento recusado | `InvoiceCanceledReply` → saga COMPENSATING (motivo em `failure`) → pedido CANCELED → COMPENSATED; um guard invertido mais a falta de `@Transactional` deixavam o pedido cancelado e a saga parada |
 | Compensação: falta de estoque | `StockReservationRejectedReply` → saga COMPENSATING/CANCELLING_INVOICE (OUT_OF_STOCK) → `CancelInvoice` ao billing; a volta reaproveita o `onInvoiceCanceled`. Falta o billing executar o comando |
+| Billing estorna com `@SendTo` | `CancelInvoice` → estorno síncrono → `InvoiceCanceledReply` automático: o mesmo serviço usa reply manual (IssueInvoice) e `@SendTo` (CancelInvoice), conforme a resposta já existir ou não no fim do listener |
 
 > [`saga-orquestrada.md`](../06-mensageria/saga-orquestrada.md)
 

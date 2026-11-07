@@ -1056,8 +1056,8 @@ sequenceDiagram
 | Invoicing | `IssueInvoice` ✅ | `InvoicePaidReply` ✅ · `InvoiceCanceledReply` ✅ (dispara a compensação) | ✅ caminho feliz e pagamento recusado |
 | Reserving Stock (pivô) | `ReserveStock` ✅ enviado e executado pelo catálogo | `StockReservationConfirmedReply` ✅ · `StockReservationRejectedReply` ✅ (dispara a compensação) | ✅ |
 | Approving Order | — (interno) | — | ✅ pedido `READY`, saga `SUCCEEDED` ([detalhes](#caminho-feliz-completo)) |
-| Compensação: Cancel invoice (estorno) | `CancelInvoice` ✅ enviado pelo ordering | `InvoiceCanceledReply` ⏳ | ⏳ o billing ainda não executa o comando ([detalhes](#compensação-falta-de-estoque)) |
-| Compensação: Cancel order | — (interno) | — | ✅ pagamento recusado · ✅ depois do estorno (no ordering; depende do billing responder) |
+| Compensação: Cancel invoice (estorno) | `CancelInvoice` ✅ | `InvoiceCanceledReply` ✅ (`@SendTo` no billing) | ✅ ([detalhes](#o-billing-estorna-e-responde-sendto)) |
+| Compensação: Cancel order | — (interno) | — | ✅ pagamento recusado · ✅ depois do estorno |
 
 O que o desenho já entrega, olhando para trás: cada passo é uma transação local que muda o estado **e** grava a próxima mensagem na outbox; a saga diz a qualquer momento onde cada pedido está (`saga_instance`); e as respostas são correlacionadas pelo `sagaId`, não pelo pedido.
 
@@ -1313,7 +1313,7 @@ sequenceDiagram
     C->>O: StockReservationRejectedReply
     Note over O: tx: saga COMPENSATING / CANCELLING_INVOICE (OUT_OF_STOCK)<br/>+ CancelInvoice na outbox
     O->>B: CancelInvoice (billing.invoice.commands)
-    Note over B: ⏳ estorna no gateway → fatura CANCELED
+    Note over B: estorna no gateway → fatura CANCELED (@SendTo responde)
     B-->>O: InvoiceCanceledReply
     Note over O: tx: pedido PAID → CANCELED<br/>saga CANCELLING_ORDER → COMPENSATED
 ```
@@ -1371,6 +1371,76 @@ O coordenador passou a ter `@Transactional` na **classe**, em vez de método a m
   3. **registrar um novo `pending_reply`** com o `kafka_correlationId` e o `kafka_replyTopic` do `CancelInvoice`, na mesma transação do estorno. O pendente do `IssueInvoice` foi apagado quando o `InvoicePaidReply` saiu. Sem um novo registro, a fatura seria cancelada e o `InvoiceEventListener` não acharia para quem responder;
   4. idempotência: um `CancelInvoice` repetido não pode estornar duas vezes (fatura já `CANCELED` → só responder de novo).
 - **Detalhe**: o `onStockReservationRejected` chama `findOrder(...)` e descarta o resultado. Só confirma que o pedido existe, ao custo de uma consulta.
+
+---
+
+## O billing estorna e responde (`@SendTo`)
+
+O último elo da compensação por falta de estoque. O billing passou a executar o `CancelInvoice`, e escolheu responder com o reply **automático**, o mesmo `@SendTo` do catálogo, e não com o `pending_reply` que ele usa para o `IssueInvoice`.
+
+```java
+@KafkaHandler
+@SendTo
+public InvoiceCanceledIntegrationReply handle(@Payload @Valid CancelInvoiceIntegrationCommand command, ...) {
+    requireHeader(correlationId, KafkaHeaders.CORRELATION_ID);
+    requireHeader(replyTopic, KafkaHeaders.REPLY_TOPIC);
+
+    invoiceManagementApplicationService.refundByOrderId(command.getOrderId()); // estorno + CANCELED
+    InvoiceOutput invoice = invoiceQueryService.findByOrderId(command.getOrderId());
+
+    return InvoiceCanceledIntegrationReply.builder()
+            .invoiceId(invoice.getId())
+            .orderId(invoice.getOrderId())
+            .canceledAt(invoice.getCanceledAt())
+            .build();
+}
+```
+
+### Como o `@SendTo` funciona
+
+1. O listener recebe o record do comando, que traz nos headers o `kafka_replyTopic` (`ordering.saga.replies`) e o `kafka_correlationId` (o `sagaId`), gravados pela outbox do ordering.
+2. O método executa e **retorna** um objeto, em vez de `void`.
+3. Como o `@SendTo` não tem destino fixo, o Spring Kafka usa o `kafka_replyTopic` do record recebido como destino.
+4. Ele serializa o retorno com o `KafkaTemplate` (o Spring Boot já liga o template da aplicação como *reply template* da fábrica de listeners), com o `__TypeId__` do alias `Billing.InvoiceCanceledIntegrationReply`.
+5. Copia o `kafka_correlationId` do comando para a resposta. É ele que, no ordering, leva a resposta à saga certa.
+
+O billing não escreve o nome do tópico de respostas em lugar nenhum, nem guarda a correlação: os dois vêm do comando e voltam na resposta sozinhos.
+
+### `@SendTo` ou reply manual: a regra, com os três casos do projeto
+
+A pergunta é uma só: **quando o método do listener termina, a resposta já existe?**
+
+| Comando | Quem executa | Resultado ao fim do listener? | Reply |
+|---|---|---|---|
+| `IssueInvoice` | billing | **Não**: a fatura nasce `UNPAID`, e o pagamento se resolve depois (captura disparada pelo `InvoiceIssued` ou webhook) | **manual**: guarda correlação e tópico em `pending_reply` e responde quando a fatura for paga ou cancelada |
+| `ReserveStock` | catálogo | **Sim**: a reserva é confirmada ou rejeitada ali mesmo | **`@SendTo`** |
+| `CancelInvoice` | billing | **Sim**: o estorno no gateway é síncrono, e quando o `refundByOrderId` volta a fatura já está `CANCELED` | **`@SendTo`** |
+
+O mesmo serviço usa as duas formas, conforme o comando. Na etapa anterior este doc listava "registrar um novo `pending_reply` para o `CancelInvoice`" como necessário: com o `@SendTo`, não é. O pendente só existe para respostas que dependem de algo futuro.
+
+### O ciclo da falta de estoque, fechado
+
+```mermaid
+sequenceDiagram
+    participant C as catálogo
+    participant O as ordering
+    participant B as billing
+    C->>O: StockReservationRejectedReply
+    Note over O: saga COMPENSATING / CANCELLING_INVOICE (OUT_OF_STOCK)
+    O->>B: CancelInvoice + kafka_replyTopic + kafka_correlationId
+    Note over B: refundByOrderId: estorno no gateway, fatura CANCELED
+    B->>O: InvoiceCanceledReply (@SendTo, mesmo correlationId)
+    Note over O: pedido PAID → CANCELED, saga COMPENSATED / CANCELLING_ORDER
+```
+
+### Revisão desta etapa
+
+- **Corrigido**: o YAML de teste do billing ganhou o alias `Billing.CancelInvoiceIntegrationCommand`. O handler ganhou um comentário com o `@SendTo` e o contraste com o `IssueInvoice`.
+- **Testes**: billing `check` verde (48 unitários, 20 de integração). O handler não tem teste próprio.
+- **Pendências**:
+  - **reentrega estorna de novo**: é o dual-write de todo `@SendTo`. A fatura cancelada commita, e a resposta só sai depois que o método retorna. Se o envio falhar, ou se o `CancelInvoice` chegar duplicado, o handler chama `refund` no gateway **outra vez**, e só depois o `cancel()` lança "already canceled" (`DomainException`, não-retryable): DLT, sem resposta, e o cliente pode ter sido estornado duas vezes. A guarda é simples: se a fatura já está `CANCELED`, pular o estorno e só montar a resposta;
+  - o `refundByOrderId` continua **sem `save`**: a fatura é gravada pelo dirty checking, mas o `InvoiceCanceledEvent` não é publicado, e o `billing.invoice.events` não recebe o `InvoiceCanceled` do estorno. A saga não depende mais disso (a resposta vem pelo `@SendTo`), mas outros assinantes do evento ficariam sem ele;
+  - a chamada HTTP do estorno continua dentro da transação do `refundByOrderId`.
 
 ---
 
