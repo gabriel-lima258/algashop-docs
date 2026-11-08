@@ -1444,6 +1444,43 @@ sequenceDiagram
 
 ---
 
+## Validar antes de começar: quantidade na compra
+
+As compensações funcionam, mas custam caro. Rejeitar um pedido por falta de estoque **dentro** da saga significa: emitir a fatura, cobrar o cartão, tentar reservar, estornar, cancelar a fatura, cancelar o pedido. Seis passos e duas chamadas ao gateway de pagamento para descobrir algo que o ordering podia ter perguntado antes de começar.
+
+Esta etapa move essa pergunta para a frente: o ordering verifica a **quantidade** em estoque na hora da compra e recusa o pedido na própria requisição.
+
+| Onde a falta de estoque é descoberta | O que acontece | Custo |
+|---|---|---|
+| **Na requisição** (agora) | `InsufficientQuantityException` → 422 para o cliente; nenhum pedido, nenhuma saga | uma consulta ao catálogo (já feita para o preço) |
+| **Na saga** (continua possível) | fatura, cobrança, reserva rejeitada, estorno, fatura e pedido cancelados | seis passos, duas idas ao gateway, o cliente vê uma cobrança e um estorno |
+
+### O que mudou
+
+- O `Product` do ordering (a visão do produto que vem do catálogo) ganhou `quantityInStock`, e o `ProductResponse` passou a ler o campo, que o catálogo já expunha no `ProductDetailOutput`.
+- `Product.checkForQuantity(quantity)`: verifica a disponibilidade (`checkOutOfStock()`, como antes) e, se a quantidade do catálogo é conhecida, lança `InsufficientQuantityException` quando ela é menor que a pedida. É `DomainException`, então o handler da API responde 422.
+- `BuyNowService` e `ShoppingCart.addItem` trocaram `checkOutOfStock()` por `checkForQuantity(quantity)`.
+- O cache do produto no Redis caiu de 5 para 1 minuto: a validação vale tanto quanto a frescura do dado que ela lê.
+
+### Pré-validação não é garantia
+
+A saga **continua** precisando da compensação por falta de estoque. Entre a leitura do produto (que pode vir do cache, com até 1 minuto de idade) e a reserva no catálogo, outro pedido pode levar as últimas unidades. É o mesmo raciocínio da pré-checagem do `withdrawAll` no [módulo 8](./saga-coreografada.md#withdrawall-agrupar-validar-tudo-baixar): validar antes evita **começar** algo que já se sabe que vai falhar; quem garante de verdade é a operação atômica no dono do dado. A validação reduz a frequência das compensações, não a necessidade delas.
+
+### Correções desta etapa
+
+- **NPE no mapeamento**: o adaptador fazia `new Quantity(productResponse.getQuantityInStock())`, e `Quantity` não aceita nulo. Bastava o campo faltar na resposta para a compra quebrar com `NullPointerException`: nas respostas antigas guardadas no Redis antes desta mudança, e no stub WireMock dos testes. O domínio já tratava `quantityInStock == null` como "quantidade desconhecida, valide só a disponibilidade"; o adaptador passou a fazer o mesmo.
+- **Stub WireMock**: o `get-product-by-id-v1.json` ganhou `"quantityInStock": 100`, para os testes de integração exercitarem a validação nova com um valor real.
+- **Teste que não compilava**: o `ProductCatalogServiceIT` montava o `ProductResponse` com o construtor antigo (4 argumentos); passou a informar a quantidade.
+- **Testes**: ordering `check` verde (309 unitários, 12 de contrato, 185 de integração).
+
+### Pendências
+
+- **O carrinho valida só o que está sendo adicionado.** Se o item já tem 3 unidades no carrinho, o estoque é 4 e o cliente adiciona mais 3, a checagem compara 3 com 4 e passa, e o item fica com 6. A comparação deveria ser com o total do item depois da soma.
+- **O checkout do carrinho não valida quantidade.** O `CheckoutService` monta o produto a partir do item do carrinho com `quantityInStock = null`, então só a disponibilidade é conferida. Um carrinho montado ontem passa direto para a saga, e quem barra é a compensação.
+- `Product.isOutOfStock()` (privado) ficou sem uso.
+
+---
+
 ## Próximas aulas (a documentar)
 
 O modelo, a persistência, o início da saga e o contrato já existem (seções acima). Os métodos de transição, os comandos e as respostas em código entram aqui conforme o módulo avança. A comparação com a coreografia vai seguir as perguntas que o [balanço da 8.13](./saga-coreografada.md#813--opinião-sobre-saga-com-coreografia) deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?
