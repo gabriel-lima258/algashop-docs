@@ -21,106 +21,131 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | **`ecommerce-app`** | 9080 | Redis (sessão, db 4) | O BFF: Spring + Thymeleaf, OAuth2 client confidencial, token em sessão — o navegador nunca o vê |
 | **`admin-app`** | 4200 | — | SPA Angular 17 com PKCE, falando direto com o authorization server para login |
 
-> Como os serviços se conectam, quem chama quem e por quê: **[Arquitetura](./00-visao-geral/arquitetura.md)**
+> Como os serviços se conectam, quem chama quem e por quê: **[Arquitetura](./00-visao-geral/01-arquitetura.md)**
 
 ---
 
-## Índice
+## Trilha de leitura
+
+Cada pasta é uma etapa, e **dentro de cada pasta os arquivos são numerados na ordem em que devem ser lidos** (`01-…`, `02-…`). Siga as pastas de 00 a 06; dentro de cada uma, siga os números.
+
+> 💡 Quer rodar o projeto antes de estudar? Leia [Ambiente local](./04-infraestrutura/01-ambiente-local.md) logo depois da visão geral.
 
 ### 00 — Visão geral
 
-| Documento | O que você aprende |
-|---|---|
-| [Arquitetura](./00-visao-geral/arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| [Linha do tempo](./00-visao-geral/linha-do-tempo.md) | A jornada em 44 fases — o que foi construído em cada etapa e por que naquela ordem |
+Comece aqui: o mapa do sistema e a história de como ele foi construído.
+
+| # | Documento | O que você aprende |
+|---|---|---|
+| 01 | [Arquitetura](./00-visao-geral/01-arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
+| 02 | [Linha do tempo](./00-visao-geral/02-linha-do-tempo.md) | A jornada em 44 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
-| Documento | O que você aprende |
-|---|---|
-| [Ports & Adapters (Hexagonal)](./01-arquitetura-design/ports-hexagonal.md) | Por que separar `ports/in` de `ports/out`, quem implementa e quem consome cada porta |
-| [CQS e CQRS](./01-arquitetura-design/cqrs.md) | Separar comando de consulta, as abordagens de CQRS e o que **não** confundir |
-| [Specification Pattern](./01-arquitetura-design/specification.md) | Transformar regra de negócio em objeto combinável, em vez de `if` aninhado |
-| [Eventos e listeners](./01-arquitetura-design/eventos-e-listeners.md) | Evento de domínio × de aplicação, `AbstractAggregateRoot`, `@Async` e o que a consistência eventual custa |
-| [Cache](./01-arquitetura-design/cache.md) | Cache-aside × write-through, client-side × server-side, invalidação — e por que a idade de um dado é a **soma** das camadas |
-| [Resiliência](./01-arquitetura-design/resiliencia.md) | Timeout, retry, bulkhead, circuit breaker e fallback — a ordem em que se aninham, e quando um fallback mente |
+Como o código de cada serviço é organizado por dentro.
+
+| # | Documento | O que você aprende |
+|---|---|---|
+| 01 | [Ports & Adapters (Hexagonal)](./01-arquitetura-design/01-ports-hexagonal.md) | Por que separar `ports/in` de `ports/out`, quem implementa e quem consome cada porta |
+| 02 | [CQS e CQRS](./01-arquitetura-design/02-cqrs.md) | Separar comando de consulta, as abordagens de CQRS e o que **não** confundir |
+| 03 | [Specification Pattern](./01-arquitetura-design/03-specification.md) | Transformar regra de negócio em objeto combinável, em vez de `if` aninhado |
+| 04 | [Eventos e listeners](./01-arquitetura-design/04-eventos-e-listeners.md) | Evento de domínio × de aplicação, `AbstractAggregateRoot`, `@Async` e o que a consistência eventual custa |
+| 05 | [Cache](./01-arquitetura-design/05-cache.md) | Cache-aside × write-through, client-side × server-side, invalidação — e por que a idade de um dado é a **soma** das camadas |
+| 06 | [Resiliência](./01-arquitetura-design/06-resiliencia.md) | Timeout, retry, bulkhead, circuit breaker e fallback — a ordem em que se aninham, e quando um fallback mente |
 
 ### 02 — Persistência
 
-| Documento | O que você aprende |
-|---|---|
-| [NoSQL — conceitos](./02-persistencia/nosql-conceitos.md) | Resiliência, escalabilidade, teorema CAP e as famílias de banco NoSQL |
-| [MongoDB no product-catalog](./02-persistencia/product-catalog-mongo.md) | Modelagem documental, embutir vs. referenciar, UUID como `_id`, auditoria e lock otimista |
-| [Consultas dinâmicas com Criteria](./02-persistencia/consultas-mongo-criteria.md) | Filtro com N parâmetros opcionais, `$expr`, busca textual e paginação manual no Mongo |
-| [Índices no MongoDB](./02-persistencia/indices-mongo.md) | `explain`, regra ESR, índice composto, índice parcial, índice de texto e ordenação por relevância |
-| [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) | O outro jeito de consultar: `$lookup` contra o N+1, campos derivados no `$project` e por que a ordem dos estágios é o custo |
-| [Normalizado × desnormalizado](./02-persistencia/desnormalizacao-mongo.md) | Quando duplicar dado é decisão e não bagunça — a cópia embutida, o que ela cobra e a pegadinha do `category._id` |
-| [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) | Lost update, atualização condicional com `findAndModify`, `$inc` como delta e por que teste sequencial não prova nada |
-| [Armazenamento de arquivos](./02-persistencia/armazenamento-de-arquivos.md) | URL pré-assinada, upload que **não passa pelo backend**, LocalStack — e o que a assinatura não garante |
-| [Transações e replica set](./02-persistencia/transacoes-mongo.md) | Por que transação no Mongo exige um cluster, o que o `MongoTransactionManager` liga — e quando transação **não** acrescenta nada |
-| [Paginação](./02-persistencia/paginacao.md) | Paginação com Criteria API, projeção com `builder.construct()` e consulta de contagem |
-| [Flyway](./02-persistencia/flyway.md) | Versionar o schema como código; por que `ddl-auto` não serve para produção |
+Como os dados são guardados e consultados — do Postgres com Flyway ao MongoDB.
+
+| # | Documento | O que você aprende |
+|---|---|---|
+| 01 | [Flyway](./02-persistencia/01-flyway.md) | Versionar o schema como código; por que `ddl-auto` não serve para produção |
+| 02 | [Paginação](./02-persistencia/02-paginacao.md) | Paginação com Criteria API, projeção com `builder.construct()` e consulta de contagem |
+| 03 | [NoSQL — conceitos](./02-persistencia/03-nosql-conceitos.md) | Resiliência, escalabilidade, teorema CAP e as famílias de banco NoSQL |
+| 04 | [MongoDB no product-catalog](./02-persistencia/04-product-catalog-mongo.md) | Modelagem documental, embutir vs. referenciar, UUID como `_id`, auditoria e lock otimista |
+| 05 | [Consultas dinâmicas com Criteria](./02-persistencia/05-consultas-mongo-criteria.md) | Filtro com N parâmetros opcionais, `$expr`, busca textual e paginação manual no Mongo |
+| 06 | [Índices no MongoDB](./02-persistencia/06-indices-mongo.md) | `explain`, regra ESR, índice composto, índice parcial, índice de texto e ordenação por relevância |
+| 07 | [Aggregation Pipeline](./02-persistencia/07-agregacoes-mongo.md) | O outro jeito de consultar: `$lookup` contra o N+1, campos derivados no `$project` e por que a ordem dos estágios é o custo |
+| 08 | [Normalizado × desnormalizado](./02-persistencia/08-desnormalizacao-mongo.md) | Quando duplicar dado é decisão e não bagunça — a cópia embutida, o que ela cobra e a pegadinha do `category._id` |
+| 09 | [Concorrência e atomicidade](./02-persistencia/09-concorrencia-e-atomicidade.md) | Lost update, atualização condicional com `findAndModify`, `$inc` como delta e por que teste sequencial não prova nada |
+| 10 | [Transações e replica set](./02-persistencia/10-transacoes-mongo.md) | Por que transação no Mongo exige um cluster, o que o `MongoTransactionManager` liga — e quando transação **não** acrescenta nada |
+| 11 | [Armazenamento de arquivos](./02-persistencia/11-armazenamento-de-arquivos.md) | URL pré-assinada, upload que **não passa pelo backend**, LocalStack — e o que a assinatura não garante |
 
 ### 03 — Testes e integração
 
-| Documento | O que você aprende |
-|---|---|
-| [Stubs e contract tests](./03-testes-integracao/stubs-contract-tests.md) | Testar integração entre serviços sem subir todos: Spring Cloud Contract, WireMock, Stub Runner |
-| [Testes de integração de query services](./03-testes-integracao/testes-integracao-query-services.md) | Query service se testa contra banco real: Testcontainers, isolamento do seed do Flyway, builders e os cenários mínimos de paginação |
-| [Tratamento de erros na API](./03-testes-integracao/tratamento-erros-api.md) | `ProblemDetail` (RFC 9457), hierarquia de exceções e quando usar 404, 422 ou 500 |
-| [Testando segurança](./03-testes-integracao/testando-seguranca.md) | Identidade em teste com `@WithSecurityContext`, declarativo × imperativo, o que o `MockJwtDecoder` **não** cobre — e por que teste de asserção negativa dá falso conforto |
-| [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) | Cenários, executores e thresholds — e as três armadilhas que fazem um teste de carga medir menos do que promete |
+Como provar que funciona: contratos, erros, banco real, segurança e carga.
+
+| # | Documento | O que você aprende |
+|---|---|---|
+| 01 | [Stubs e contract tests](./03-testes-integracao/01-stubs-contract-tests.md) | Testar integração entre serviços sem subir todos: Spring Cloud Contract, WireMock, Stub Runner |
+| 02 | [Tratamento de erros na API](./03-testes-integracao/02-tratamento-erros-api.md) | `ProblemDetail` (RFC 9457), hierarquia de exceções e quando usar 404, 422 ou 500 |
+| 03 | [Testes de integração de query services](./03-testes-integracao/03-testes-integracao-query-services.md) | Query service se testa contra banco real: Testcontainers, isolamento do seed do Flyway, builders e os cenários mínimos de paginação |
+| 04 | [Testes de carga com k6](./03-testes-integracao/04-testes-de-carga-k6.md) | Cenários, executores e thresholds — e as três armadilhas que fazem um teste de carga medir menos do que promete |
+| 05 | [Testando segurança](./03-testes-integracao/05-testando-seguranca.md) | Identidade em teste com `@WithSecurityContext`, declarativo × imperativo, o que o `MockJwtDecoder` **não** cobre — e por que teste de asserção negativa dá falso conforto |
+| 06 | [Cartões de teste](./03-testes-integracao/06-cartoes-testes.md) | Consulta rápida: os cartões do FastPay cadastrados no billing e o resultado fixo de cada um no checkout |
 
 ### 04 — Infraestrutura
 
-| Documento | O que você aprende |
-|---|---|
-| [Ambiente local](./04-infraestrutura/ambiente-local.md) | Do clone aos serviços rodando: submódulos, Docker Compose, portas, bancos e problemas comuns |
-| [Carga de dados no MongoDB](./04-infraestrutura/carga-de-dados-mongo.md) | `ApplicationRunner`, Extended JSON e por que isso **não** substitui o Flyway |
-| [Redis na prática](./04-infraestrutura/redis.md) | Cache sem persistência, política de eviction, inspeção — e a interpolação do Compose que deixou tudo sem senha |
-| [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) | Os parâmetros por cliente, a biblioteca que quase ninguém documenta, e como testar retry por contagem de requests |
-| [Health check e degradação](./04-infraestrutura/health-checks.md) | Liveness × readiness, um status `DEGRADED` inventado — e um indicador que funciona ao lado de outro que mente |
-| [Docker](./04-infraestrutura/docker.md) | Build de imagem, multi-arquitetura com Buildx e publicação em registry |
-| [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) | Onde o sistema realmente satura — e por que ligar threads virtuais o deixou **9× pior** |
-| [Jobs agendados](./04-infraestrutura/scheduled-jobs.md) | `@Scheduled`, execução em ambiente distribuído e controle de concorrência |
-| [Service discovery](./04-infraestrutura/service-discovery.md) | O endereço que saiu da configuração: Eureka Server standalone, clients que se anunciam, os dois builders do load balancer — e o jeito novo de falhar que o discovery traz |
-| [API Gateway](./04-infraestrutura/api-gateway.md) | A porta de entrada virou uma só: rotas à mão por service ID (e por que a ordem delas é regra de negócio), CORS global, token na borda — e a rota que o `denyAll` matou antes do roteamento |
-| [Resiliência na borda](./04-infraestrutura/resiliencia-no-gateway.md) | Os cinco padrões chegam ao gateway com OUTRA biblioteca (Resilience4j reactor): retry que muda a unidade da janela do breaker, cache sobre cache, e rate limit por usuário que falha aberto — de propósito |
-| [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) | A borda dividida por público: cache por necessidade, JSON do tamanho do cliente, API composition com degradação por ramo — e por que BFF não é sinônimo de gateway |
+Como tudo roda: ambiente local, containers, cache, saúde, descoberta e gateways.
+
+| # | Documento | O que você aprende |
+|---|---|---|
+| 01 | [Ambiente local](./04-infraestrutura/01-ambiente-local.md) | Do clone aos serviços rodando: submódulos, Docker Compose, portas, bancos e problemas comuns |
+| 02 | [Docker](./04-infraestrutura/02-docker.md) | Build de imagem, multi-arquitetura com Buildx e publicação em registry |
+| 03 | [Carga de dados no MongoDB](./04-infraestrutura/03-carga-de-dados-mongo.md) | `ApplicationRunner`, Extended JSON e por que isso **não** substitui o Flyway |
+| 04 | [Jobs agendados](./04-infraestrutura/04-scheduled-jobs.md) | `@Scheduled`, execução em ambiente distribuído e controle de concorrência |
+| 05 | [Redis na prática](./04-infraestrutura/05-redis.md) | Cache sem persistência, política de eviction, inspeção — e a interpolação do Compose que deixou tudo sem senha |
+| 06 | [Resiliência na prática](./04-infraestrutura/06-resiliencia-config.md) | Os parâmetros por cliente, a biblioteca que quase ninguém documenta, e como testar retry por contagem de requests |
+| 07 | [Health check e degradação](./04-infraestrutura/07-health-checks.md) | Liveness × readiness, um status `DEGRADED` inventado — e um indicador que funciona ao lado de outro que mente |
+| 08 | [Threads e concorrência](./04-infraestrutura/08-threads-e-concorrencia.md) | Onde o sistema realmente satura — e por que ligar threads virtuais o deixou **9× pior** |
+| 09 | [Service discovery](./04-infraestrutura/09-service-discovery.md) | O endereço que saiu da configuração: Eureka Server standalone, clients que se anunciam, os dois builders do load balancer — e o jeito novo de falhar que o discovery traz |
+| 10 | [API Gateway](./04-infraestrutura/10-api-gateway.md) | A porta de entrada virou uma só: rotas à mão por service ID (e por que a ordem delas é regra de negócio), CORS global, token na borda — e a rota que o `denyAll` matou antes do roteamento |
+| 11 | [Resiliência na borda](./04-infraestrutura/11-resiliencia-no-gateway.md) | Os cinco padrões chegam ao gateway com OUTRA biblioteca (Resilience4j reactor): retry que muda a unidade da janela do breaker, cache sobre cache, e rate limit por usuário que falha aberto — de propósito |
+| 12 | [BFF e gateways por cliente](./04-infraestrutura/12-bff-e-gateways-por-cliente.md) | A borda dividida por público: cache por necessidade, JSON do tamanho do cliente, API composition com degradação por ramo — e por que BFF não é sinônimo de gateway |
 
 ### 05 — Segurança
 
-| Documento | O que você aprende |
-|---|---|
-| [Identidade e fundamentos do OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) | Senha × certificado × token, IdP e IAM, os quatro papéis, grants e por que escopo é **teto** e não papel |
-| [Authorization Server](./05-seguranca/authorization-server.md) | Os dois clientes do projeto, token **opaco × JWT**, e quem guarda as chaves |
-| [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) | Quem **exige** o token: escopo por rota, 401 × 403 e a matriz de 142 testes |
-| [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) | Quem **pede** o token: as três peças, o cache por principal, e a linha de config que acoplava a subida de um serviço à do outro |
-| [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) | O fluxo **com pessoa**: código, `state`, consentimento granular, refresh com rotação — e a propriedade no singular que desligava a rotação em silêncio |
-| [OpenID Connect: identidade, sessão e logout](./05-seguranca/openid-connect-e-sessao.md) | ID token × access token, usuário no banco, `/userinfo`, logout com revogação — e por que ele **não** alcança um JWT já emitido |
-| [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) | A API de usuários, `/me` como id que o cliente não escolhe, token de pessoa × de máquina — e a auditoria que trocou o `UUID` aleatório pelo `sub` do token |
-| [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) | Como um cliente **sem segredo** prova continuidade; silent refresh por `prompt=none`; cookie de domínio comum, CORS × `frame-ancestors` |
-| [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) | O fluxo guiado das quatro camadas: papel no token, client e escopo por papel, regras de negócio e dono do recurso — e a lacuna entre duas tabelas que quebrou a loja |
-| [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) | O id que sai do path e do body nos quatro serviços: `/me` com filtro de dono **na consulta**, os três públicos das anotações (CUSTOMER, interno, máquina) — e a SpEL quebrada que respondia 500 |
-| [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) | Parameter Store × Secrets Manager, o seed por CSV que aposentou os comandos manuais, `spring.config.import` como dependência de bootstrap — e a chave de assinatura que parou de mudar a cada subida (quase) |
+Quem pode chamar o quê: OAuth 2.1, OIDC, PKCE, papéis e segredos.
+
+| # | Documento | O que você aprende |
+|---|---|---|
+| 01 | [Identidade e fundamentos do OAuth 2](./05-seguranca/01-fundamentos-identidade-oauth2.md) | Senha × certificado × token, IdP e IAM, os quatro papéis, grants e por que escopo é **teto** e não papel |
+| 02 | [Authorization Server](./05-seguranca/02-authorization-server.md) | Os dois clientes do projeto, token **opaco × JWT**, e quem guarda as chaves |
+| 03 | [Resource servers e escopos](./05-seguranca/03-resource-server-e-escopos.md) | Quem **exige** o token: escopo por rota, 401 × 403 e a matriz de 142 testes |
+| 04 | [OAuth2 client e token](./05-seguranca/04-oauth2-client-e-token.md) | Quem **pede** o token: as três peças, o cache por principal, e a linha de config que acoplava a subida de um serviço à do outro |
+| 05 | [Authorization code e consentimento](./05-seguranca/05-authorization-code-e-consentimento.md) | O fluxo **com pessoa**: código, `state`, consentimento granular, refresh com rotação — e a propriedade no singular que desligava a rotação em silêncio |
+| 06 | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) | O contrato invisível entre o HTML e o filtro, o `_csrf` que o Thymeleaf injeta, consentimento próprio — e por que um teste de login pode passar com a tela quebrada |
+| 07 | [OpenID Connect: identidade, sessão e logout](./05-seguranca/07-openid-connect-e-sessao.md) | ID token × access token, usuário no banco, `/userinfo`, logout com revogação — e por que ele **não** alcança um JWT já emitido |
+| 08 | [Gestão de usuários e auditoria](./05-seguranca/08-gestao-de-usuarios-e-auditoria.md) | A API de usuários, `/me` como id que o cliente não escolhe, token de pessoa × de máquina — e a auditoria que trocou o `UUID` aleatório pelo `sub` do token |
+| 09 | [Verificação de e-mail e troca de senha](./05-seguranca/09-verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
+| 10 | [PKCE e clientes públicos](./05-seguranca/10-pkce-e-clientes-publicos.md) | Como um cliente **sem segredo** prova continuidade; silent refresh por `prompt=none`; cookie de domínio comum, CORS × `frame-ancestors` |
+| 11 | [RBAC e controle de acesso](./05-seguranca/11-rbac-e-controle-de-acesso.md) | O fluxo guiado das quatro camadas: papel no token, client e escopo por papel, regras de negócio e dono do recurso — e a lacuna entre duas tabelas que quebrou a loja |
+| 12 | [Recursos `/me` e IDOR](./05-seguranca/12-recursos-me-e-idor.md) | O id que sai do path e do body nos quatro serviços: `/me` com filtro de dono **na consulta**, os três públicos das anotações (CUSTOMER, interno, máquina) — e a SpEL quebrada que respondia 500 |
+| 13 | [Segredos centralizados e a chave RSA](./05-seguranca/13-segredos-centralizados-e-chave-rsa.md) | Parameter Store × Secrets Manager, o seed por CSV que aposentou os comandos manuais, `spring.config.import` como dependência de bootstrap — e a chave de assinatura que parou de mudar a cada subida (quase) |
 
 ### 06 — Mensageria
 
-| Documento | O que você aprende |
-|---|---|
-| [Fundamentos de EDA](./06-mensageria/fundamentos-eda.md) | O mapa antes do broker: os 4 pilares de um evento, notification × ECST × sourcing, fila × log (RabbitMQ × Kafka), coreografia × orquestração — e o que o projeto já pratica sem saber |
-| [Kafka a fundo](./06-mensageria/kafka-fundamentos.md) | Record × message, a partição como unidade de ordem E de paralelismo, consumer groups com dois padrões no mesmo tópico, pull × push, leader/follower e KRaft — e por que reter tudo é barato |
-| [Kafka na prática](./06-mensageria/kafka-na-pratica.md) | O primeiro evento de integração ponta a ponta: catálogo publica com key por agregado, ordering consome com `__TypeId__` lógico e handler default — cluster de 3 nós KRaft no compose, e o dual-write exposto à espera da outbox |
-| [ECST e validação de eventos](./06-mensageria/ecst-e-validacao-de-eventos.md) | O consumidor reage: notification × ECST lado a lado no mesmo listener, o V2 que nasceu sem V1, Bean Validation nos dois lados do fio — e o que o Kafka faz de verdade com o evento que falha (descarta em silêncio) |
-| [AsyncAPI: contratos](./06-mensageria/asyncapi-contratos.md) | O contrato da mensageria escrito: canais × operações (send/receive por perspectiva), mensagens compartilhadas via `$ref`, bindings Kafka, `__TypeId__` como const — e a lição do contrato que nasceu mentindo porque nada o valida contra o código |
-| [Resiliência no producer](./06-mensageria/resiliencia-producer-kafka.md) | O que o produtor pode AFIRMAR: acks/min.insync, idempotência de transporte, a cadeia de timeouts até o gateway — e a transação estendida: falha no Kafka vira rollback no Mongo e 503 |
-| [Resiliência no consumer](./06-mensageria/resiliencia-consumer-kafka.md) | Backoff exponencial, retryable × não-retryable, DLT com partição preservada — e a idempotência de negócio por INSERT-first numa PK, na mesma transação do efeito |
-| [Outbox e checkout assíncrono](./06-mensageria/outbox-e-checkout-assincrono.md) | 202 Accepted + Command Message + Listen to Yourself + a outbox finalmente: recorder MANDATORY, polling publisher com ordem por aggregate — e a starvation do findBatch sem WHERE como armadilha central | *(o checkout assíncrono foi removido na Fase 44; a outbox segue)*
-| [Workflow coreografado](./06-mensageria/workflow-coreografado.md) | O pedido que atravessa serviços sem maestro: pedido → fatura → pagamento → pedido pago, Event Collaboration, Listen to Yourself no billing, after-commit × outbox lado a lado — e o evento que se perde em silêncio depois do commit *(doc vivo, cresce com os módulos de saga)* | *(removida do código na Fase 44; o doc fica como registro)*
-| [Saga coreografada](./06-mensageria/saga-coreografada.md) | Desfazer o que já foi feito em outro serviço: compensações e passo pivô, reserva de estoque gravada como fato (inclusive a rejeição), estorno que reaproveita o cancelamento do pedido e o balanço da coreografia — e o `save` que faltou e deixou a compensação muda | *(removida do código na Fase 44; o doc fica como registro)*
-| [Saga orquestrada](./06-mensageria/saga-orquestrada.md) | Um lugar que sabe em que passo cada pedido está: começa com duas demolições — o checkout assíncrono e a saga coreografada inteira, porque um pedido não pode ter dois condutores — o que sai, o que fica para os comandos e por quê *(doc vivo do módulo 9)* |
-| [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md) | Token com hash no banco, o agregado orquestrando a regra, ativação e recuperação como o **mesmo** fluxo — e por que não se deve dizer quem tem conta |
-| [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) | O contrato invisível entre o HTML e o filtro, o `_csrf` que o Thymeleaf injeta, consentimento próprio — e por que um teste de login pode passar com a tela quebrada |
+Como os serviços conversam por eventos e coordenam processos longos. Os docs desta pasta são **didáticos**: cada um traz o problema, a ideia, o fluxo no AlgaShop, como aplicar e o que lembrar. O detalhe de revisão fica no diário de bordo.
+
+| # | Documento | O que você aprende |
+|---|---|---|
+| 01 | [Fundamentos de EDA](./06-mensageria/01-fundamentos-eda.md) | O que é um evento, os tipos de evento, fila × log e coreografia × orquestração — o mapa antes do broker |
+| 02 | [Kafka a fundo](./06-mensageria/02-kafka-fundamentos.md) | Tópico, partição, key, offset e consumer group: como o Kafka garante ordem e paralelismo |
+| 03 | [Kafka na prática](./06-mensageria/03-kafka-na-pratica.md) | O primeiro evento ponta a ponta: o catálogo publica, o ordering consome, e o `__TypeId__` desacopla os pacotes |
+| 04 | [ECST e validação de eventos](./06-mensageria/04-ecst-e-validacao-de-eventos.md) | O evento que carrega o estado: o consumidor reage sem chamar o produtor, e valida o que recebe |
+| 05 | [Contratos com AsyncAPI](./06-mensageria/05-contratos-asyncapi.md) | Escrever o contrato da mensageria: canais, operações e mensagens de cada serviço |
+| 06 | [Resiliência no producer](./06-mensageria/06-resiliencia-no-producer.md) | O que o produtor consegue garantir: acks, idempotência e o que fazer quando o envio falha |
+| 07 | [Resiliência no consumer](./06-mensageria/07-resiliencia-no-consumer.md) | Quando o consumo falha: retry com backoff, erro que não vale retentar e a DLT |
+| 08 | [Outbox](./06-mensageria/08-outbox.md) | Gravar no banco e publicar no Kafka sem perder nada: a mensagem nasce na mesma transação |
+| 09 | [Workflow coreografado](./06-mensageria/09-workflow-coreografado.md) | Um processo que atravessa serviços só por eventos: pedido → fatura → pagamento → pedido pago |
+| 10 | [Saga coreografada](./06-mensageria/10-saga-coreografada.md) | Desfazer o que já foi feito em outro serviço: compensações por eventos, reserva e estorno |
+| 11 | [Saga orquestrada — conceito e mapa](./06-mensageria/11-saga-orquestrada-conceito-e-mapa.md) | Um coordenador que sabe em que passo cada pedido está: o fluxo inteiro, feliz e com falhas |
+| 12 | [Saga orquestrada — preparando o terreno](./06-mensageria/12-saga-orquestrada-preparando-o-terreno.md) | Por que o checkout assíncrono e a saga coreografada saíram antes de orquestrar |
+| 13 | [Saga orquestrada — estado e persistência](./06-mensageria/13-saga-orquestrada-estado-e-persistencia.md) | A `PlaceOrderSaga`: status × passo, falhas, e como a saga é guardada e começa |
+| 14 | [Saga orquestrada — comandos e respostas](./06-mensageria/14-saga-orquestrada-comandos-e-respostas.md) | Comando, resposta e correlação: reply manual × `@SendTo`, até o caminho feliz completo |
+| 15 | [Saga orquestrada — compensações](./06-mensageria/15-saga-orquestrada-compensacoes.md) | Pagamento recusado e falta de estoque: como o orquestrador desfaz os passos |
+| 16 | [Saga orquestrada — robustez](./06-mensageria/16-saga-orquestrada-robustez.md) | Validar antes de começar, comandos sem outbox e validação de payload no consumidor |
+| 99 | [Diário de bordo da mensageria](./06-mensageria/99-diario-de-bordo.md) | Revisões, bugs encontrados, pendências e testes de cada etapa — consulta, não leitura em sequência |
 
 ### Artefatos
 
@@ -131,167 +156,145 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 
 ---
 
-## Trilha de estudo sugerida
-
-Para revisar o conteúdo do zero, nesta ordem:
-
-**1. Entender o terreno**
-[Arquitetura](./00-visao-geral/arquitetura.md) → [Linha do tempo](./00-visao-geral/linha-do-tempo.md) → [Ambiente local](./04-infraestrutura/ambiente-local.md)
-
-**2. Como o domínio é organizado**
-[Ports & Adapters](./01-arquitetura-design/ports-hexagonal.md) → [Specification](./01-arquitetura-design/specification.md) → [CQS e CQRS](./01-arquitetura-design/cqrs.md)
-
-**3. Como os dados são guardados e consultados**
-[Flyway](./02-persistencia/flyway.md) → [Paginação](./02-persistencia/paginacao.md) → [NoSQL conceitos](./02-persistencia/nosql-conceitos.md) → [MongoDB na prática](./02-persistencia/product-catalog-mongo.md) → [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) → [Índices](./02-persistencia/indices-mongo.md) → [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) → [Normalizado × desnormalizado](./02-persistencia/desnormalizacao-mongo.md) → [Eventos e listeners](./01-arquitetura-design/eventos-e-listeners.md) → [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) → [Transações e replica set](./02-persistencia/transacoes-mongo.md) → [Cache](./01-arquitetura-design/cache.md) → [Redis na prática](./04-infraestrutura/redis.md) → [Armazenamento de arquivos](./02-persistencia/armazenamento-de-arquivos.md)
-
-**4. Como os serviços conversam e falham**
-[Contract tests](./03-testes-integracao/stubs-contract-tests.md) → [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) → [Resiliência](./01-arquitetura-design/resiliencia.md) → [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) → [Health check](./04-infraestrutura/health-checks.md)
-
-**4a. Quem pode chamar**
-[Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) → [Authorization Server](./05-seguranca/authorization-server.md) → [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) → [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) → [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) → [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) → [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) → [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) → [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) → [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) → [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) → [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) → [Verificação de e-mail e troca de senha](./05-seguranca/verificacao-de-email-e-troca-de-senha.md)
-
-**4b. Quanto o sistema aguenta**
-[Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) → [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md)
-
-**5. Como tudo roda**
-[Carga de dados](./04-infraestrutura/carga-de-dados-mongo.md) → [Docker](./04-infraestrutura/docker.md) → [Jobs agendados](./04-infraestrutura/scheduled-jobs.md)
-
----
-
 ## Consulta rápida por assunto
 
 | Preciso lembrar de… | Vá para |
 |---|---|
-| Diferença entre agregado e entidade | [Arquitetura](./00-visao-geral/arquitetura.md) |
-| Onde colocar uma regra de negócio nova | [Ports & Adapters](./01-arquitetura-design/ports-hexagonal.md), [Specification](./01-arquitetura-design/specification.md) |
-| Por que a listagem não devolve o objeto completo | [CQRS](./01-arquitetura-design/cqrs.md), [MongoDB](./02-persistencia/product-catalog-mongo.md) |
-| Embutir ou referenciar no Mongo | [Normalizado × desnormalizado](./02-persistencia/desnormalizacao-mongo.md), [MongoDB](./02-persistencia/product-catalog-mongo.md) |
-| Montar um filtro com N parâmetros opcionais | [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) |
-| Comparar dois campos do mesmo documento | [Consultas com Criteria](./02-persistencia/consultas-mongo-criteria.md) |
-| Juntar duas coleções no Mongo | [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) |
-| Resolver N+1 no Mongo | [Normalizado × desnormalizado](./02-persistencia/desnormalizacao-mongo.md), [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) |
-| Manter uma cópia desnormalizada em dia | [Eventos e listeners](./01-arquitetura-design/eventos-e-listeners.md) |
-| Publicar um evento de domínio a partir do agregado | [Eventos e listeners](./01-arquitetura-design/eventos-e-listeners.md) |
-| Evitar que duas escritas concorrentes se atropelem | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) |
-| Evitar ir ao banco toda vez | [Cache](./01-arquitetura-design/cache.md) |
-| Invalidar cache sem servir dado velho | [Cache](./01-arquitetura-design/cache.md) |
-| Deixar o navegador reaproveitar a resposta (`ETag`, `304`) | [Cache](./01-arquitetura-design/cache.md) |
-| Configurar TTL, eviction e senha do Redis | [Redis na prática](./04-infraestrutura/redis.md) |
-| Impedir que um serviço lento derrube o meu | [Resiliência](./01-arquitetura-design/resiliencia.md) |
-| Decidir o que vale retentar (e o que não vale) | [Resiliência](./01-arquitetura-design/resiliencia.md) |
-| Saber quando um fallback é honesto | [Resiliência](./01-arquitetura-design/resiliencia.md) |
-| Escrever um teste que prova retry e circuito | [Resiliência na prática](./04-infraestrutura/resiliencia-config.md) |
-| Saber se o serviço pode receber tráfego | [Health check e degradação](./04-infraestrutura/health-checks.md) |
-| Diferença entre liveness e readiness | [Health check e degradação](./04-infraestrutura/health-checks.md) |
-| Dependência opcional fora sem derrubar o serviço | [Health check e degradação](./04-infraestrutura/health-checks.md) |
-| Saber quanto o sistema aguenta | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
-| Escolher entre VUs fixos e taxa fixa no k6 | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
-| Fazer um teste de carga reprovar de verdade | [Testes de carga com k6](./03-testes-integracao/testes-de-carga-k6.md) |
-| Decidir se vale ligar threads virtuais | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) |
-| Descobrir qual recurso satura primeiro | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md) |
-| Entender por que o container morreu com exit 137 | [Threads e concorrência](./04-infraestrutura/threads-e-concorrencia.md), [Docker](./04-infraestrutura/docker.md) |
-| Receber upload de arquivo sem passar pelo backend | [Armazenamento de arquivos](./02-persistencia/armazenamento-de-arquivos.md) |
-| Saber o que uma URL pré-assinada garante (e o que não) | [Armazenamento de arquivos](./02-persistencia/armazenamento-de-arquivos.md) |
-| Emular a AWS localmente | [Armazenamento de arquivos](./02-persistencia/armazenamento-de-arquivos.md), [Ambiente local](./04-infraestrutura/ambiente-local.md) |
-| Ter dois adapters para a mesma porta | [Ports & Adapters](./01-arquitetura-design/ports-hexagonal.md) |
-| Diferença entre autenticar e autorizar | [Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) |
-| Escolher entre token opaco e JWT | [Authorization Server](./05-seguranca/authorization-server.md) |
-| Entender por que um JWT não se revoga | [Authorization Server](./05-seguranca/authorization-server.md) |
-| Saber o que é escopo (e o que ele **não** é) | [Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) |
-| Escolher o grant type certo | [Identidade e OAuth 2](./05-seguranca/fundamentos-identidade-oauth2.md) |
-| Descobrir para que serve o `/oauth2/jwks` | [Authorization Server](./05-seguranca/authorization-server.md) |
-| Proteger uma rota por escopo | [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) |
-| Diferença entre 401 e 403 | [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md), [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) |
-| Saber se desligar CSRF é seguro | [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) |
-| Testar autorização sem subir o authorization server | [Resource servers e escopos](./05-seguranca/resource-server-e-escopos.md) |
-| Chamar outro serviço protegido a partir do meu | [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) |
-| Obter e cachear token entre serviços | [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) |
-| Evitar que um serviço dependa do outro **para subir** | [OAuth2 client e token](./05-seguranca/oauth2-client-e-token.md) |
-| Autenticar uma **pessoa** e pedir consentimento | [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) |
-| Entender por que existe um *código* antes do token | [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) |
-| Fazer refresh token rotacionar de verdade | [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) |
-| Saber o que o authorization server precisa persistir | [Authorization code e consentimento](./05-seguranca/authorization-code-e-consentimento.md) |
-| Diferença entre ID token e access token | [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) |
-| Autenticar usuário contra o banco | [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) |
-| Migrar de algoritmo de senha sem invalidar as antigas | [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) |
-| Fazer logout revogar tokens de verdade | [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) |
-| Guardar sessão fora da memória | [OpenID Connect e sessão](./05-seguranca/openid-connect-e-sessao.md) |
-| Saber **quem** está chamando, sem acoplar a aplicação ao Spring Security | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
-| Preencher `createdBy` com o usuário de verdade | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
-| Distinguir token de pessoa de token de máquina | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
-| Fazer um endpoint `/me` sem receber id na URL | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md), [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
-| Apagar um usuário sem quebrar referência de auditoria | [Gestão de usuários e auditoria](./05-seguranca/gestao-de-usuarios-e-auditoria.md) |
-| Autenticar uma SPA ou app mobile sem `client_secret` | [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) |
-| Entender o que o PKCE protege (e o que não protege) | [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) |
-| Renovar token no navegador sem refresh token | [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) |
-| Compartilhar sessão entre subdomínios | [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) |
-| Diferença entre CORS e `frame-ancestors` | [PKCE e clientes públicos](./05-seguranca/pkce-e-clientes-publicos.md) |
-| Diferença entre escopo e papel (e por que os dois) | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) |
-| Transformar papel do usuário em permissão do Spring | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) |
-| Impedir que um usuário use um aplicativo que não é dele | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) |
-| Limitar escopos por papel, no mesmo client | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) |
-| Fazer alguém ver só os próprios recursos | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) |
-| Decidir entre filtrar a consulta e negar com 403 | [RBAC e controle de acesso](./05-seguranca/rbac-e-controle-de-acesso.md) |
-| Eliminar IDOR em vez de mitigar (id fora do path e do body) | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) |
-| Impedir que um recurso alheio confirme a própria existência | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) |
-| Restringir um endpoint a token de máquina (ou excluir máquina dele) | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) |
-| Preencher um campo do input pelo controller sem o body alcançá-lo | [Recursos `/me` e IDOR](./05-seguranca/recursos-me-e-idor.md) |
-| Tirar segredos e configuração do YAML versionado | [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) |
-| Decidir entre Parameter Store e Secrets Manager | [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) |
-| Fixar a chave que assina os JWT (e entender o `kid`) | [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) |
-| Semear a AWS local sem comando manual (CSV + init hook) | [Segredos centralizados e a chave RSA](./05-seguranca/segredos-centralizados-e-chave-rsa.md) |
-| Chamar outro serviço pelo nome, sem URL fixa | [Service discovery](./04-infraestrutura/service-discovery.md) |
-| Balancear chamadas entre réplicas de um serviço | [Service discovery](./04-infraestrutura/service-discovery.md) |
-| Registrar um serviço no Eureka (e saber quem não deve) | [Service discovery](./04-infraestrutura/service-discovery.md) |
-| Ter uma borda de entrada para cada front | [API Gateway](./04-infraestrutura/api-gateway.md), [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) |
-| Configurar CORS na borda certa (e saber quando nem precisa) | [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) |
-| Barrar requisição sem token antes de chegar no serviço | [API Gateway](./04-infraestrutura/api-gateway.md) |
-| Limitar requisições por usuário (rate limit) | [Resiliência na borda](./04-infraestrutura/resiliencia-no-gateway.md) |
-| Cachear resposta na borda (e somar as camadas de cache) | [Resiliência na borda](./04-infraestrutura/resiliencia-no-gateway.md) |
-| Impedir que um serviço lento derrube o gateway | [Resiliência na borda](./04-infraestrutura/resiliencia-no-gateway.md) |
-| Montar um BFF (e entender por que ele dispensa PKCE) | [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) |
-| Compor respostas de vários endpoints numa só | [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) |
-| Otimizar o JSON por tipo de cliente | [BFF e gateways por cliente](./04-infraestrutura/bff-e-gateways-por-cliente.md) |
-| Entender EDA antes de escolher broker | [Fundamentos de EDA](./06-mensageria/fundamentos-eda.md) |
-| Decidir entre fila e log (RabbitMQ × Kafka) | [Fundamentos de EDA](./06-mensageria/fundamentos-eda.md) |
-| Escolher entre coreografia e orquestração | [Fundamentos de EDA](./06-mensageria/fundamentos-eda.md) |
-| Entender partições, offsets e consumer groups | [Kafka a fundo](./06-mensageria/kafka-fundamentos.md) |
-| Decidir a key (e o número de partições) de um tópico | [Kafka a fundo](./06-mensageria/kafka-fundamentos.md) |
-| Publicar e consumir o primeiro evento no Kafka | [Kafka na prática](./06-mensageria/kafka-na-pratica.md) |
-| Desacoplar pacotes de produtor e consumidor (`__TypeId__`) | [Kafka na prática](./06-mensageria/kafka-na-pratica.md) |
-| Aplicar ECST e reagir a eventos no consumidor | [ECST e validação de eventos](./06-mensageria/ecst-e-validacao-de-eventos.md) |
-| Validar eventos com Bean Validation (produtor e consumidor) | [ECST e validação de eventos](./06-mensageria/ecst-e-validacao-de-eventos.md) |
-| Documentar contratos de eventos (AsyncAPI) | [AsyncAPI: contratos](./06-mensageria/asyncapi-contratos.md) |
-| Garantir entrega no producer (acks, idempotence, rollback) | [Resiliência no producer](./06-mensageria/resiliencia-producer-kafka.md) |
-| Tratar falha no consumo (retry, backoff, DLT) | [Resiliência no consumer](./06-mensageria/resiliencia-consumer-kafka.md) |
-| Deduplicar mensagens (idempotência de negócio) | [Resiliência no consumer](./06-mensageria/resiliencia-consumer-kafka.md) |
-| Implementar outbox (e entender o checkout 202 que existiu até a Fase 43) | [Outbox e checkout assíncrono](./06-mensageria/outbox-e-checkout-assincrono.md) |
-| Encadear serviços num processo por eventos (coreografia) | [Workflow coreografado](./06-mensageria/workflow-coreografado.md) |
-| Desfazer passos de outros serviços quando algo falha (saga) | [Saga coreografada](./06-mensageria/saga-coreografada.md) |
-| Coordenar uma saga com um orquestrador | [Saga orquestrada](./06-mensageria/saga-orquestrada.md) |
-| Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
-| Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
-| Fazer uma tela de consentimento própria | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
-| Servir CSS e imagem numa aplicação protegida | [Telas e formulários de login](./05-seguranca/telas-e-formularios-de-login.md) |
-| Dar baixa em estoque sem vender o que não tem | [Concorrência e atomicidade](./02-persistencia/concorrencia-e-atomicidade.md) |
-| Fazer duas escritas caírem juntas, ou nenhuma | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
-| Por que `@Transactional` no Mongo pode não fazer nada | [Transações e replica set](./02-persistencia/transacoes-mongo.md) |
-| Subir um Mongo descartável no teste (Testcontainers) | [Transações e replica set](./02-persistencia/transacoes-mongo.md), [Ambiente local](./04-infraestrutura/ambiente-local.md) |
-| Calcular campo derivado no banco em vez de em Java | [Aggregation Pipeline](./02-persistencia/agregacoes-mongo.md) |
-| Saber se minha consulta usa índice | [Índices no MongoDB](./02-persistencia/indices-mongo.md) |
-| Por que meu índice existe e não foi usado | [Índices no MongoDB](./02-persistencia/indices-mongo.md) |
-| Ordenar resultado de busca por relevância | [Índices no MongoDB](./02-persistencia/indices-mongo.md) |
-| Popular o Mongo com dados de teste | [Carga de dados](./04-infraestrutura/carga-de-dados-mongo.md) |
-| Autenticar um usuário dentro de um teste | [Testando segurança](./03-testes-integracao/testando-seguranca.md) |
-| Saber se meu teste de segurança prova alguma coisa | [Testando segurança](./03-testes-integracao/testando-seguranca.md) |
-| Descobrir o que um `JwtDecoder` mockado deixa de cobrir | [Testando segurança](./03-testes-integracao/testando-seguranca.md) |
-| Substituir uma dependência que nasce dentro de um `@Bean` | [Testando segurança](./03-testes-integracao/testando-seguranca.md) |
-| Devolver 404 ou 422 | [Tratamento de erros](./03-testes-integracao/tratamento-erros-api.md) |
-| Criar uma migration | [Flyway](./02-persistencia/flyway.md) |
-| Testar sem subir o outro serviço | [Contract tests](./03-testes-integracao/stubs-contract-tests.md) |
-| Separar teste rápido de teste que precisa de banco | [Contract tests](./03-testes-integracao/stubs-contract-tests.md) |
-| Em que porta roda cada coisa | [Ambiente local](./04-infraestrutura/ambiente-local.md) |
-| Comandos de submódulo Git | [Ambiente local](./04-infraestrutura/ambiente-local.md) |
+| Diferença entre agregado e entidade | [Arquitetura](./00-visao-geral/01-arquitetura.md) |
+| Onde colocar uma regra de negócio nova | [Ports & Adapters](./01-arquitetura-design/01-ports-hexagonal.md), [Specification](./01-arquitetura-design/03-specification.md) |
+| Por que a listagem não devolve o objeto completo | [CQRS](./01-arquitetura-design/02-cqrs.md), [MongoDB](./02-persistencia/04-product-catalog-mongo.md) |
+| Embutir ou referenciar no Mongo | [Normalizado × desnormalizado](./02-persistencia/08-desnormalizacao-mongo.md), [MongoDB](./02-persistencia/04-product-catalog-mongo.md) |
+| Montar um filtro com N parâmetros opcionais | [Consultas com Criteria](./02-persistencia/05-consultas-mongo-criteria.md) |
+| Comparar dois campos do mesmo documento | [Consultas com Criteria](./02-persistencia/05-consultas-mongo-criteria.md) |
+| Juntar duas coleções no Mongo | [Aggregation Pipeline](./02-persistencia/07-agregacoes-mongo.md) |
+| Resolver N+1 no Mongo | [Normalizado × desnormalizado](./02-persistencia/08-desnormalizacao-mongo.md), [Aggregation Pipeline](./02-persistencia/07-agregacoes-mongo.md) |
+| Manter uma cópia desnormalizada em dia | [Eventos e listeners](./01-arquitetura-design/04-eventos-e-listeners.md) |
+| Publicar um evento de domínio a partir do agregado | [Eventos e listeners](./01-arquitetura-design/04-eventos-e-listeners.md) |
+| Evitar que duas escritas concorrentes se atropelem | [Concorrência e atomicidade](./02-persistencia/09-concorrencia-e-atomicidade.md) |
+| Evitar ir ao banco toda vez | [Cache](./01-arquitetura-design/05-cache.md) |
+| Invalidar cache sem servir dado velho | [Cache](./01-arquitetura-design/05-cache.md) |
+| Deixar o navegador reaproveitar a resposta (`ETag`, `304`) | [Cache](./01-arquitetura-design/05-cache.md) |
+| Configurar TTL, eviction e senha do Redis | [Redis na prática](./04-infraestrutura/05-redis.md) |
+| Impedir que um serviço lento derrube o meu | [Resiliência](./01-arquitetura-design/06-resiliencia.md) |
+| Decidir o que vale retentar (e o que não vale) | [Resiliência](./01-arquitetura-design/06-resiliencia.md) |
+| Saber quando um fallback é honesto | [Resiliência](./01-arquitetura-design/06-resiliencia.md) |
+| Escrever um teste que prova retry e circuito | [Resiliência na prática](./04-infraestrutura/06-resiliencia-config.md) |
+| Saber se o serviço pode receber tráfego | [Health check e degradação](./04-infraestrutura/07-health-checks.md) |
+| Diferença entre liveness e readiness | [Health check e degradação](./04-infraestrutura/07-health-checks.md) |
+| Dependência opcional fora sem derrubar o serviço | [Health check e degradação](./04-infraestrutura/07-health-checks.md) |
+| Saber quanto o sistema aguenta | [Testes de carga com k6](./03-testes-integracao/04-testes-de-carga-k6.md) |
+| Escolher entre VUs fixos e taxa fixa no k6 | [Testes de carga com k6](./03-testes-integracao/04-testes-de-carga-k6.md) |
+| Fazer um teste de carga reprovar de verdade | [Testes de carga com k6](./03-testes-integracao/04-testes-de-carga-k6.md) |
+| Decidir se vale ligar threads virtuais | [Threads e concorrência](./04-infraestrutura/08-threads-e-concorrencia.md) |
+| Descobrir qual recurso satura primeiro | [Threads e concorrência](./04-infraestrutura/08-threads-e-concorrencia.md) |
+| Entender por que o container morreu com exit 137 | [Threads e concorrência](./04-infraestrutura/08-threads-e-concorrencia.md), [Docker](./04-infraestrutura/02-docker.md) |
+| Receber upload de arquivo sem passar pelo backend | [Armazenamento de arquivos](./02-persistencia/11-armazenamento-de-arquivos.md) |
+| Saber o que uma URL pré-assinada garante (e o que não) | [Armazenamento de arquivos](./02-persistencia/11-armazenamento-de-arquivos.md) |
+| Emular a AWS localmente | [Armazenamento de arquivos](./02-persistencia/11-armazenamento-de-arquivos.md), [Ambiente local](./04-infraestrutura/01-ambiente-local.md) |
+| Ter dois adapters para a mesma porta | [Ports & Adapters](./01-arquitetura-design/01-ports-hexagonal.md) |
+| Diferença entre autenticar e autorizar | [Identidade e OAuth 2](./05-seguranca/01-fundamentos-identidade-oauth2.md) |
+| Escolher entre token opaco e JWT | [Authorization Server](./05-seguranca/02-authorization-server.md) |
+| Entender por que um JWT não se revoga | [Authorization Server](./05-seguranca/02-authorization-server.md) |
+| Saber o que é escopo (e o que ele **não** é) | [Identidade e OAuth 2](./05-seguranca/01-fundamentos-identidade-oauth2.md) |
+| Escolher o grant type certo | [Identidade e OAuth 2](./05-seguranca/01-fundamentos-identidade-oauth2.md) |
+| Descobrir para que serve o `/oauth2/jwks` | [Authorization Server](./05-seguranca/02-authorization-server.md) |
+| Proteger uma rota por escopo | [Resource servers e escopos](./05-seguranca/03-resource-server-e-escopos.md) |
+| Diferença entre 401 e 403 | [Resource servers e escopos](./05-seguranca/03-resource-server-e-escopos.md), [Tratamento de erros](./03-testes-integracao/02-tratamento-erros-api.md) |
+| Saber se desligar CSRF é seguro | [Resource servers e escopos](./05-seguranca/03-resource-server-e-escopos.md) |
+| Testar autorização sem subir o authorization server | [Resource servers e escopos](./05-seguranca/03-resource-server-e-escopos.md) |
+| Chamar outro serviço protegido a partir do meu | [OAuth2 client e token](./05-seguranca/04-oauth2-client-e-token.md) |
+| Obter e cachear token entre serviços | [OAuth2 client e token](./05-seguranca/04-oauth2-client-e-token.md) |
+| Evitar que um serviço dependa do outro **para subir** | [OAuth2 client e token](./05-seguranca/04-oauth2-client-e-token.md) |
+| Autenticar uma **pessoa** e pedir consentimento | [Authorization code e consentimento](./05-seguranca/05-authorization-code-e-consentimento.md) |
+| Entender por que existe um *código* antes do token | [Authorization code e consentimento](./05-seguranca/05-authorization-code-e-consentimento.md) |
+| Fazer refresh token rotacionar de verdade | [Authorization code e consentimento](./05-seguranca/05-authorization-code-e-consentimento.md) |
+| Saber o que o authorization server precisa persistir | [Authorization code e consentimento](./05-seguranca/05-authorization-code-e-consentimento.md) |
+| Diferença entre ID token e access token | [OpenID Connect e sessão](./05-seguranca/07-openid-connect-e-sessao.md) |
+| Autenticar usuário contra o banco | [OpenID Connect e sessão](./05-seguranca/07-openid-connect-e-sessao.md) |
+| Migrar de algoritmo de senha sem invalidar as antigas | [OpenID Connect e sessão](./05-seguranca/07-openid-connect-e-sessao.md) |
+| Fazer logout revogar tokens de verdade | [OpenID Connect e sessão](./05-seguranca/07-openid-connect-e-sessao.md) |
+| Guardar sessão fora da memória | [OpenID Connect e sessão](./05-seguranca/07-openid-connect-e-sessao.md) |
+| Saber **quem** está chamando, sem acoplar a aplicação ao Spring Security | [Gestão de usuários e auditoria](./05-seguranca/08-gestao-de-usuarios-e-auditoria.md) |
+| Preencher `createdBy` com o usuário de verdade | [Gestão de usuários e auditoria](./05-seguranca/08-gestao-de-usuarios-e-auditoria.md) |
+| Distinguir token de pessoa de token de máquina | [Gestão de usuários e auditoria](./05-seguranca/08-gestao-de-usuarios-e-auditoria.md) |
+| Fazer um endpoint `/me` sem receber id na URL | [Recursos `/me` e IDOR](./05-seguranca/12-recursos-me-e-idor.md), [Gestão de usuários e auditoria](./05-seguranca/08-gestao-de-usuarios-e-auditoria.md) |
+| Apagar um usuário sem quebrar referência de auditoria | [Gestão de usuários e auditoria](./05-seguranca/08-gestao-de-usuarios-e-auditoria.md) |
+| Autenticar uma SPA ou app mobile sem `client_secret` | [PKCE e clientes públicos](./05-seguranca/10-pkce-e-clientes-publicos.md) |
+| Entender o que o PKCE protege (e o que não protege) | [PKCE e clientes públicos](./05-seguranca/10-pkce-e-clientes-publicos.md) |
+| Renovar token no navegador sem refresh token | [PKCE e clientes públicos](./05-seguranca/10-pkce-e-clientes-publicos.md) |
+| Compartilhar sessão entre subdomínios | [PKCE e clientes públicos](./05-seguranca/10-pkce-e-clientes-publicos.md) |
+| Diferença entre CORS e `frame-ancestors` | [PKCE e clientes públicos](./05-seguranca/10-pkce-e-clientes-publicos.md) |
+| Diferença entre escopo e papel (e por que os dois) | [RBAC e controle de acesso](./05-seguranca/11-rbac-e-controle-de-acesso.md) |
+| Transformar papel do usuário em permissão do Spring | [RBAC e controle de acesso](./05-seguranca/11-rbac-e-controle-de-acesso.md) |
+| Impedir que um usuário use um aplicativo que não é dele | [RBAC e controle de acesso](./05-seguranca/11-rbac-e-controle-de-acesso.md) |
+| Limitar escopos por papel, no mesmo client | [RBAC e controle de acesso](./05-seguranca/11-rbac-e-controle-de-acesso.md) |
+| Fazer alguém ver só os próprios recursos | [RBAC e controle de acesso](./05-seguranca/11-rbac-e-controle-de-acesso.md) |
+| Decidir entre filtrar a consulta e negar com 403 | [RBAC e controle de acesso](./05-seguranca/11-rbac-e-controle-de-acesso.md) |
+| Eliminar IDOR em vez de mitigar (id fora do path e do body) | [Recursos `/me` e IDOR](./05-seguranca/12-recursos-me-e-idor.md) |
+| Impedir que um recurso alheio confirme a própria existência | [Recursos `/me` e IDOR](./05-seguranca/12-recursos-me-e-idor.md) |
+| Restringir um endpoint a token de máquina (ou excluir máquina dele) | [Recursos `/me` e IDOR](./05-seguranca/12-recursos-me-e-idor.md) |
+| Preencher um campo do input pelo controller sem o body alcançá-lo | [Recursos `/me` e IDOR](./05-seguranca/12-recursos-me-e-idor.md) |
+| Tirar segredos e configuração do YAML versionado | [Segredos centralizados e a chave RSA](./05-seguranca/13-segredos-centralizados-e-chave-rsa.md) |
+| Decidir entre Parameter Store e Secrets Manager | [Segredos centralizados e a chave RSA](./05-seguranca/13-segredos-centralizados-e-chave-rsa.md) |
+| Fixar a chave que assina os JWT (e entender o `kid`) | [Segredos centralizados e a chave RSA](./05-seguranca/13-segredos-centralizados-e-chave-rsa.md) |
+| Semear a AWS local sem comando manual (CSV + init hook) | [Segredos centralizados e a chave RSA](./05-seguranca/13-segredos-centralizados-e-chave-rsa.md) |
+| Chamar outro serviço pelo nome, sem URL fixa | [Service discovery](./04-infraestrutura/09-service-discovery.md) |
+| Balancear chamadas entre réplicas de um serviço | [Service discovery](./04-infraestrutura/09-service-discovery.md) |
+| Registrar um serviço no Eureka (e saber quem não deve) | [Service discovery](./04-infraestrutura/09-service-discovery.md) |
+| Ter uma borda de entrada para cada front | [API Gateway](./04-infraestrutura/10-api-gateway.md), [BFF e gateways por cliente](./04-infraestrutura/12-bff-e-gateways-por-cliente.md) |
+| Configurar CORS na borda certa (e saber quando nem precisa) | [BFF e gateways por cliente](./04-infraestrutura/12-bff-e-gateways-por-cliente.md) |
+| Barrar requisição sem token antes de chegar no serviço | [API Gateway](./04-infraestrutura/10-api-gateway.md) |
+| Limitar requisições por usuário (rate limit) | [Resiliência na borda](./04-infraestrutura/11-resiliencia-no-gateway.md) |
+| Cachear resposta na borda (e somar as camadas de cache) | [Resiliência na borda](./04-infraestrutura/11-resiliencia-no-gateway.md) |
+| Impedir que um serviço lento derrube o gateway | [Resiliência na borda](./04-infraestrutura/11-resiliencia-no-gateway.md) |
+| Montar um BFF (e entender por que ele dispensa PKCE) | [BFF e gateways por cliente](./04-infraestrutura/12-bff-e-gateways-por-cliente.md) |
+| Compor respostas de vários endpoints numa só | [BFF e gateways por cliente](./04-infraestrutura/12-bff-e-gateways-por-cliente.md) |
+| Otimizar o JSON por tipo de cliente | [BFF e gateways por cliente](./04-infraestrutura/12-bff-e-gateways-por-cliente.md) |
+| Entender EDA antes de escolher broker | [Fundamentos de EDA](./06-mensageria/01-fundamentos-eda.md) |
+| Decidir entre fila e log (RabbitMQ × Kafka) | [Fundamentos de EDA](./06-mensageria/01-fundamentos-eda.md) |
+| Escolher entre coreografia e orquestração | [Fundamentos de EDA](./06-mensageria/01-fundamentos-eda.md) |
+| Entender partições, offsets e consumer groups | [Kafka a fundo](./06-mensageria/02-kafka-fundamentos.md) |
+| Decidir a key (e o número de partições) de um tópico | [Kafka a fundo](./06-mensageria/02-kafka-fundamentos.md) |
+| Publicar e consumir o primeiro evento no Kafka | [Kafka na prática](./06-mensageria/03-kafka-na-pratica.md) |
+| Desacoplar pacotes de produtor e consumidor (`__TypeId__`) | [Kafka na prática](./06-mensageria/03-kafka-na-pratica.md) |
+| Aplicar ECST e reagir a eventos no consumidor | [ECST e validação de eventos](./06-mensageria/04-ecst-e-validacao-de-eventos.md) |
+| Validar eventos com Bean Validation (produtor e consumidor) | [ECST e validação de eventos](./06-mensageria/04-ecst-e-validacao-de-eventos.md) |
+| Documentar contratos de eventos (AsyncAPI) | [AsyncAPI: contratos](./06-mensageria/05-contratos-asyncapi.md) |
+| Garantir entrega no producer (acks, idempotence, rollback) | [Resiliência no producer](./06-mensageria/06-resiliencia-no-producer.md) |
+| Tratar falha no consumo (retry, backoff, DLT) | [Resiliência no consumer](./06-mensageria/07-resiliencia-no-consumer.md) |
+| Deduplicar mensagens (idempotência de negócio) | [Resiliência no consumer](./06-mensageria/07-resiliencia-no-consumer.md) |
+| Implementar outbox (e entender o checkout 202 que existiu até a Fase 43) | [Outbox](./06-mensageria/08-outbox.md) |
+| Encadear serviços num processo por eventos (coreografia) | [Workflow coreografado](./06-mensageria/09-workflow-coreografado.md) |
+| Desfazer passos de outros serviços quando algo falha (saga) | [Saga coreografada](./06-mensageria/10-saga-coreografada.md) |
+| Coordenar uma saga com um orquestrador | [Saga orquestrada — conceito e mapa](./06-mensageria/11-saga-orquestrada-conceito-e-mapa.md) |
+| Modelar o estado de uma saga (status × passo) | [Saga orquestrada — estado e persistência](./06-mensageria/13-saga-orquestrada-estado-e-persistencia.md) |
+| Mandar um comando e receber a resposta (correlação, `@SendTo`) | [Saga orquestrada — comandos e respostas](./06-mensageria/14-saga-orquestrada-comandos-e-respostas.md) |
+| Desfazer passos quando um serviço recusa (compensação orquestrada) | [Saga orquestrada — compensações](./06-mensageria/15-saga-orquestrada-compensacoes.md) |
+| Validar o payload que chega pelo Kafka | [Saga orquestrada — robustez](./06-mensageria/16-saga-orquestrada-robustez.md) |
+| Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
+| Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
+| Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
+| Fazer uma tela de consentimento própria | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
+| Servir CSS e imagem numa aplicação protegida | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
+| Dar baixa em estoque sem vender o que não tem | [Concorrência e atomicidade](./02-persistencia/09-concorrencia-e-atomicidade.md) |
+| Fazer duas escritas caírem juntas, ou nenhuma | [Transações e replica set](./02-persistencia/10-transacoes-mongo.md) |
+| Por que `@Transactional` no Mongo pode não fazer nada | [Transações e replica set](./02-persistencia/10-transacoes-mongo.md) |
+| Subir um Mongo descartável no teste (Testcontainers) | [Transações e replica set](./02-persistencia/10-transacoes-mongo.md), [Ambiente local](./04-infraestrutura/01-ambiente-local.md) |
+| Calcular campo derivado no banco em vez de em Java | [Aggregation Pipeline](./02-persistencia/07-agregacoes-mongo.md) |
+| Saber se minha consulta usa índice | [Índices no MongoDB](./02-persistencia/06-indices-mongo.md) |
+| Por que meu índice existe e não foi usado | [Índices no MongoDB](./02-persistencia/06-indices-mongo.md) |
+| Ordenar resultado de busca por relevância | [Índices no MongoDB](./02-persistencia/06-indices-mongo.md) |
+| Popular o Mongo com dados de teste | [Carga de dados](./04-infraestrutura/03-carga-de-dados-mongo.md) |
+| Autenticar um usuário dentro de um teste | [Testando segurança](./03-testes-integracao/05-testando-seguranca.md) |
+| Saber se meu teste de segurança prova alguma coisa | [Testando segurança](./03-testes-integracao/05-testando-seguranca.md) |
+| Descobrir o que um `JwtDecoder` mockado deixa de cobrir | [Testando segurança](./03-testes-integracao/05-testando-seguranca.md) |
+| Substituir uma dependência que nasce dentro de um `@Bean` | [Testando segurança](./03-testes-integracao/05-testando-seguranca.md) |
+| Devolver 404 ou 422 | [Tratamento de erros](./03-testes-integracao/02-tratamento-erros-api.md) |
+| Criar uma migration | [Flyway](./02-persistencia/01-flyway.md) |
+| Testar sem subir o outro serviço | [Contract tests](./03-testes-integracao/01-stubs-contract-tests.md) |
+| Separar teste rápido de teste que precisa de banco | [Contract tests](./03-testes-integracao/01-stubs-contract-tests.md) |
+| Em que porta roda cada coisa | [Ambiente local](./04-infraestrutura/01-ambiente-local.md) |
+| Comandos de submódulo Git | [Ambiente local](./04-infraestrutura/01-ambiente-local.md) |
 
 ---
 
@@ -307,7 +310,7 @@ cd microservices/algashop-ordering
 ./gradlew bootRun
 ```
 
-Passo a passo completo, mapa de portas e solução de problemas: **[Ambiente local](./04-infraestrutura/ambiente-local.md)**.
+Passo a passo completo, mapa de portas e solução de problemas: **[Ambiente local](./04-infraestrutura/01-ambiente-local.md)**.
 
 ---
 
@@ -319,9 +322,9 @@ Passo a passo completo, mapa de portas e solução de problemas: **[Ambiente loc
 
 ## Sobre a organização deste repositório
 
-As pastas são numeradas para dar **ordem de leitura**, não só agrupamento — a numeração vai do mais conceitual (visão geral, design) ao mais operacional (infraestrutura).
+As pastas **e os arquivos** são numerados para dar **ordem de leitura**, não só agrupamento — a numeração vai do mais conceitual (visão geral, design) ao mais operacional (infraestrutura), e termina na mensageria, que junta quase tudo o que veio antes.
 
-Cada documento segue a mesma estrutura:
+Os documentos das pastas 00 a 05 seguem a estrutura:
 
 1. **O problema** que o conceito resolve
 2. **A solução** explicada com código real do projeto
@@ -329,4 +332,6 @@ Cada documento segue a mesma estrutura:
 4. **Pendências registradas** — o que ficou por fazer, declarado abertamente
 5. **Checklist** de revisão
 
-O item 4 é proposital: documentação que só mostra o que deu certo não ajuda a estudar. As pendências marcam onde o próximo aprendizado começa.
+Os da mensageria (06) seguem um modelo mais didático — **Em uma frase · O problema · A ideia · Como funciona no AlgaShop · Como aplicar · Para lembrar · Cuidados · Onde ver no código** — e as revisões, bugs e pendências de cada etapa ficam no [diário de bordo](./06-mensageria/99-diario-de-bordo.md).
+
+As pendências são propositais: documentação que só mostra o que deu certo não ajuda a estudar. Elas marcam onde o próximo aprendizado começa.
