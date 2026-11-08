@@ -948,7 +948,7 @@ O workflow aprende a andar para trás. Sem transação que abrace três bancos, 
 
 ---
 
-## Fase 44 — Saga orquestrada (nov/2026) ← etapa atual
+## Fase 44 — Saga orquestrada (nov/2026)
 
 O módulo começa apagando código, em duas demolições. Primeiro sai o checkout assíncrono v2 da Fase 41 (202 Accepted, comando para o próprio serviço, Listen to Yourself, tópico `ordering.order.commands`), porque a saga orquestrada vai começar **na mesma transação que grava o pedido**, e esse ponto só existe no checkout síncrono v1. A corrente de eventos não muda: o v1 já publica `OrderPlaced` pela outbox. Depois sai a **saga coreografada inteira**: os consumidores que faziam o pedido andar nos três serviços, porque na orquestração quem decide o próximo passo é o ordering, e dois mecanismos conduzindo o mesmo pedido gerariam fatura e reserva em dobro. Entre a demolição e a construção, o pedido para em `PLACED`, de propósito.
 
@@ -981,6 +981,22 @@ O módulo começa apagando código, em duas demolições. Primeiro sai o checkou
 | Validar no consumidor | `KafkaBeanValidationConfigurer` no billing e no catálogo: o `@Valid` dos `@KafkaHandler` passa a valer, e o payload inválido vai à DLT sem chegar ao handler e sem retry |
 
 > [`11-saga-orquestrada-conceito-e-mapa.md`](../06-mensageria/11-saga-orquestrada-conceito-e-mapa.md)
+
+---
+
+## Fase 45 — Serviço de notificações (nov/2026) ← etapa atual
+
+Nasce um serviço novo, `notifications`, para entregar e-mail aos clientes. A divisão é a que guia o módulo inteiro: o `ordering` decide **quando** notificar, o `notifications` decide **como** entregar (template, envio, retentativa). O e-mail fica **fora da saga**, porque não tem compensação, e o comando `SendEmail` vai sair pela outbox com um id derivado do evento, para o consumidor descartar duplicados. A primeira peça construída é a porta de entrada dos templates: o HTML só é salvo se passar pela validação.
+
+| Marco | O que se aprende |
+|---|---|
+| Contratos primeiro | OpenAPI (e-mails e templates, 422 para HTML inválido) e AsyncAPI (`notifications.email.commands` + DLT, header `idempotency-key`) escritos antes do código |
+| Esqueleto do serviço | Portas na aplicação (`EmailTemplateHtmlValidator`, `EmailTemplateRenderer`, `EmailSender`) e stubs na infraestrutura, prontos para as próximas aulas |
+| Quando × como | O serviço dono do fato manda um comando com tudo que o e-mail precisa; o notificador não chama ninguém |
+| E-mail fora da saga | Efeito colateral sem compensação: só sai depois do confirmado, e a saga não espera por ele |
+| Validação do HTML com jsoup | `setTrackErrors` revela o que o parser consertaria em silêncio; lista de bloqueio de tags, eventos e esquemas de URL, com normalização contra ofuscação e os `th:*` do Thymeleaf incluídos; 79 testes e jacoco no build |
+
+> [`01-servico-de-notificacoes-conceito.md`](../07-notificacoes/01-servico-de-notificacoes-conceito.md)
 
 ---
 
@@ -1033,6 +1049,7 @@ O módulo começa apagando código, em duas demolições. Primeiro sai o checkou
 - Outbox com polling publisher no ordering (o checkout assíncrono com 202 e Listen to Yourself da Fase 41 foi removido na Fase 44)
 - Workflow coreografado pedido → fatura → pagamento → pedido pago entre ordering e billing, com `OrderPaid` publicado para o catálogo
 - Saga coreografada completa entre ordering, billing e catálogo na Fase 43 — removida do código na Fase 44 para a orquestração; ficaram as operações de trabalho (fatura, estorno, reserva) e os eventos de produto no carrinho
+- Serviço `notifications` iniciado na Fase 45: contratos, esqueleto em portas e validação do HTML do template com jsoup (render, envio e consumidor do `SendEmail` ainda em stub)
 
 **Próximos passos naturais:**
 - **Outbox no billing** — hoje `InvoiceIssued` e `InvoicePaid` saem after-commit; falha no Kafka depois do commit é só logada e o workflow trava em silêncio

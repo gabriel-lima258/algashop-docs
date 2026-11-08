@@ -2,7 +2,7 @@
 
 > **Em uma frase:** a saga fica mais robusta quando recusa cedo o que já se sabe que vai falhar, funciona com ou sem outbox sem mudar o contrato, e quando cada consumidor valida o payload antes de executar.
 
-⬅️ Anterior: [Saga orquestrada: compensações](./15-saga-orquestrada-compensacoes.md) · ➡️ Próximo: [Diário de bordo](./99-diario-de-bordo.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Saga orquestrada: compensações](./15-saga-orquestrada-compensacoes.md) · ➡️ Próximo: [Serviço de notificações: o conceito](../07-notificacoes/01-servico-de-notificacoes-conceito.md) · 📓 [Diário de bordo](./99-diario-de-bordo.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 

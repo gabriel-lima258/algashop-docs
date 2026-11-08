@@ -13,6 +13,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | **`algashop-ordering`** | 8081 | PostgreSQL + Redis | DDD tático, arquitetura hexagonal, CQRS, domain events, cache client-side, resiliência |
 | **`algashop-billing`** | 8082 | PostgreSQL | Integração com gateway de pagamento, resiliência por idempotência, Testcontainers |
 | **`product-catalog`** | 8083 | MongoDB (replica set) + Redis | Modelagem documental e desnormalização, eventos de domínio, concorrência atômica, transação multi-coleção, cache server-side, REST Docs |
+| **`notifications`** | 8084 | PostgreSQL | E-mail por templates: o ordering decide *quando*, ele decide *como*; HTML do template validado na entrada (jsoup) — em construção |
 | **`billing-scheduler`** | — | — | Jobs agendados, cancelamento de faturas expiradas |
 | **`authorization-server`** | 9000 | PostgreSQL | OAuth 2.1 e OIDC, gestão de usuários, PKCE para cliente público, sessão em banco |
 | **`service-registry`** | 8761 | — | Eureka Server: registro e descoberta de serviços, dashboard das instâncias |
@@ -27,7 +28,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 
 ## Trilha de leitura
 
-Cada pasta é uma etapa, e **dentro de cada pasta os arquivos são numerados na ordem em que devem ser lidos** (`01-…`, `02-…`). Siga as pastas de 00 a 06; dentro de cada uma, siga os números.
+Cada pasta é uma etapa, e **dentro de cada pasta os arquivos são numerados na ordem em que devem ser lidos** (`01-…`, `02-…`). Siga as pastas de 00 a 07; dentro de cada uma, siga os números.
 
 > 💡 Quer rodar o projeto antes de estudar? Leia [Ambiente local](./04-infraestrutura/01-ambiente-local.md) logo depois da visão geral.
 
@@ -38,7 +39,7 @@ Comece aqui: o mapa do sistema e a história de como ele foi construído.
 | # | Documento | O que você aprende |
 |---|---|---|
 | 01 | [Arquitetura](./00-visao-geral/01-arquitetura.md) | Mapa dos serviços, comunicação entre eles, persistência poliglota e os princípios que se repetem |
-| 02 | [Linha do tempo](./00-visao-geral/02-linha-do-tempo.md) | A jornada em 44 fases — o que foi construído em cada etapa e por que naquela ordem |
+| 02 | [Linha do tempo](./00-visao-geral/02-linha-do-tempo.md) | A jornada em 45 fases — o que foi construído em cada etapa e por que naquela ordem |
 
 ### 01 — Arquitetura e design
 
@@ -146,6 +147,15 @@ Como os serviços conversam por eventos e coordenam processos longos. Os docs de
 | 15 | [Saga orquestrada — compensações](./06-mensageria/15-saga-orquestrada-compensacoes.md) | Pagamento recusado e falta de estoque: como o orquestrador desfaz os passos |
 | 16 | [Saga orquestrada — robustez](./06-mensageria/16-saga-orquestrada-robustez.md) | Validar antes de começar, comandos sem outbox e validação de payload no consumidor |
 | 99 | [Diário de bordo da mensageria](./06-mensageria/99-diario-de-bordo.md) | Revisões, bugs encontrados, pendências e testes de cada etapa — consulta, não leitura em sequência |
+
+### 07 — Notificações
+
+O serviço que entrega e-mail aos clientes. Está em construção: os docs crescem a cada aula, e as pendências ficam no próprio doc.
+
+| # | Documento | O que você aprende |
+|---|---|---|
+| 01 | [Serviço de notificações: o conceito](./07-notificacoes/01-servico-de-notificacoes-conceito.md) | *Quando* × *como* notificar, por que o e-mail fica fora da saga, `SendEmail` pela outbox e idempotência por id derivado do evento |
+| 02 | [Validação do HTML do template](./07-notificacoes/02-validacao-de-html-do-template.md) | Validar na entrada com jsoup: erros de parse que o parser esconderia, lista de bloqueio, ofuscação de `javascript:` e por que os `th:*` também entram |
 
 ### Artefatos
 
@@ -271,6 +281,9 @@ Como os serviços conversam por eventos e coordenam processos longos. Os docs de
 | Mandar um comando e receber a resposta (correlação, `@SendTo`) | [Saga orquestrada — comandos e respostas](./06-mensageria/14-saga-orquestrada-comandos-e-respostas.md) |
 | Desfazer passos quando um serviço recusa (compensação orquestrada) | [Saga orquestrada — compensações](./06-mensageria/15-saga-orquestrada-compensacoes.md) |
 | Validar o payload que chega pelo Kafka | [Saga orquestrada — robustez](./06-mensageria/16-saga-orquestrada-robustez.md) |
+| Separar quem decide *quando* notificar de quem entrega o e-mail | [Serviço de notificações: o conceito](./07-notificacoes/01-servico-de-notificacoes-conceito.md) |
+| Evitar e-mail duplicado com entrega pelo menos uma vez | [Serviço de notificações: o conceito](./07-notificacoes/01-servico-de-notificacoes-conceito.md) |
+| Validar o HTML de um template antes de salvar | [Validação do HTML do template](./07-notificacoes/02-validacao-de-html-do-template.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
