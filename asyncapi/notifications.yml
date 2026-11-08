@@ -1,0 +1,76 @@
+asyncapi: 3.1.0
+
+info:
+  title: AlgaShop - Notifications AsyncAPI
+  version: "1.0"
+  description: >-
+    Asynchronous contract of the Notifications service. It receives commands to
+    send an email, renders the stored template with the command variables and
+    delivers it through SMTP. The recipient data travels in the command, so
+    Notifications does not call other services.
+
+defaultContentType: application/json
+
+servers:
+  development:
+    host: "algashop-kafka-1:9092"
+    protocol: kafka
+
+channels:
+  emailCommands:
+    address: notifications.email.commands
+    title: Email commands
+    messages:
+      sendEmail:
+        $ref: "./messages.yml#/components/messages/SendEmailCommand"
+    bindings:
+      kafka:
+        topic: notifications.email.commands
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
+  emailCommandsDeadLetter:
+    address: notifications.dlt.notifications.email.commands
+    title: Email commands dead-letter topic
+    messages:
+      sendEmail:
+        $ref: "./messages.yml#/components/messages/SendEmailCommand"
+    bindings:
+      kafka:
+        topic: notifications.dlt.notifications.email.commands
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+          retention.ms: 2592000000
+        bindingVersion: "0.5.0"
+
+operations:
+  consumeEmailCommands:
+    action: receive
+    channel:
+      $ref: "#/channels/emailCommands"
+    summary: Sends an email using a stored template.
+    tags:
+      - name: Commands
+    messages:
+      - $ref: "#/channels/emailCommands/messages/sendEmail"
+    bindings:
+      kafka:
+        groupId:
+          type: string
+          const: notifications.email-commands
+        bindingVersion: "0.5.0"
+
+  publishFailedEmailCommands:
+    action: send
+    channel:
+      $ref: "#/channels/emailCommandsDeadLetter"
+    summary: Moves failed email commands to the Notifications dead-letter topic.
+    tags:
+      - name: Dead letter
+    messages:
+      - $ref: "#/channels/emailCommandsDeadLetter/messages/sendEmail"

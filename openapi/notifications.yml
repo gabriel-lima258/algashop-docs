@@ -1,0 +1,263 @@
+openapi: 3.1.0
+
+info:
+  title: AlgaShop - Notifications API
+  version: "1.0"
+  description: >-
+    Manages the email templates used by the Notifications service.
+
+servers:
+  - url: http://localhost:8084
+    description: Development
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Emails
+  - name: Email templates
+
+paths:
+  /api/v1/emails:
+    post:
+      tags: [Emails]
+      summary: Sends an email from a template
+      security:
+        - bearerAuth: ["emails:send"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendEmail" }
+            examples:
+              welcome:
+                summary: Welcome email (seeded "Welcome" template, simplest case)
+                value:
+                  recipient:
+                    email: john.doe@example.com
+                    name: John Doe
+                  templateId: 0198d0a1-7e5b-7a3c-9f42-1c6d8b2e4a90
+                  variables:
+                    couponCode: WELCOME10
+              orderPlaced:
+                summary: Order confirmation (seeded "Order Placed" template)
+                value:
+                  recipient:
+                    email: john.doe@example.com
+                    name: John Doe
+                  templateId: 0198d0a1-2c44-7d0b-8e11-9a0b7c5d3f21
+                  variables:
+                    orderId: 01K0ORDER
+                    placedAt: "2026-10-09T14:30:00.123-03:00"
+                    expectedDeliveryDate: "2026-10-15"
+                    shippingCost: 49.9
+                    totalAmount: 2599.9
+                    items:
+                      - productName: Notebook Alga
+                        quantity: 1
+                        price: 2500.0
+                        totalAmount: 2500.0
+                      - productName: Mouse Pro
+                        quantity: 2
+                        price: 25.0
+                        totalAmount: 50.0
+      responses:
+        "204": { description: Email sent }
+        "400":
+          description: >-
+            Invalid body: missing or blank `recipient.email` or `recipient.name`, invalid `recipient.email`, missing `recipient` or `templateId`, malformed JSON
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/ProblemDetail" }
+        "422": { $ref: "#/components/responses/ProblemDetail" }
+        "502": { $ref: "#/components/responses/ProblemDetail" }
+
+  /api/v1/email-templates:
+    get:
+      tags: [Email templates]
+      summary: Lists email templates
+      security:
+        - bearerAuth: ["email-templates:read"]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, default: 20 } }
+        - { name: sort, in: query, schema: { type: string, example: "name,asc" } }
+      responses:
+        "200":
+          description: A page of templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: array
+                    items: { $ref: "#/components/schemas/EmailTemplateOutput" }
+                  page:
+                    type: object
+                    properties:
+                      size: { type: integer }
+                      number: { type: integer }
+                      totalElements: { type: integer, format: int64 }
+                      totalPages: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Email templates]
+      summary: Creates an email template
+      security:
+        - bearerAuth: ["email-templates:write"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmailTemplateInput" }
+            examples:
+              welcome:
+                summary: Simple welcome template
+                value:
+                  name: Welcome
+                  subject: "Welcome to AlgaShop, [[${recipient.name}]]!"
+                  body: >-
+                    <!DOCTYPE html><html><body style="font-family: Arial, Helvetica, sans-serif; color: #222;"><h2>Hello,
+                    <span th:text="${recipient.name}">customer</span>!</h2><p>Welcome to AlgaShop. Use the coupon
+                    <strong th:text="${couponCode}">COUPON</strong> on your first order.</p></body></html>
+      responses:
+        "201":
+          description: Created
+          headers:
+            Location: { schema: { type: string, format: uri } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailTemplateOutput" }
+        "400": { $ref: "#/components/responses/ProblemDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ProblemDetail" }
+
+  /api/v1/email-templates/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Email templates]
+      summary: Finds an email template
+      security:
+        - bearerAuth: ["email-templates:read"]
+      responses:
+        "200":
+          description: The template
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailTemplateOutput" }
+        "400": { $ref: "#/components/responses/ProblemDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/ProblemDetail" }
+    put:
+      tags: [Email templates]
+      summary: Replaces an email template
+      security:
+        - bearerAuth: ["email-templates:write"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmailTemplateInput" }
+            examples:
+              welcome:
+                summary: Simple welcome template
+                value:
+                  name: Welcome
+                  subject: "Welcome to AlgaShop, [[${recipient.name}]]!"
+                  body: >-
+                    <!DOCTYPE html><html><body style="font-family: Arial, Helvetica, sans-serif; color: #222;"><h2>Hello,
+                    <span th:text="${recipient.name}">customer</span>!</h2><p>Welcome to AlgaShop. Use the coupon
+                    <strong th:text="${couponCode}">COUPON</strong> on your first order.</p></body></html>
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailTemplateOutput" }
+        "400": { $ref: "#/components/responses/ProblemDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/ProblemDetail" }
+        "422": { $ref: "#/components/responses/ProblemDetail" }
+    delete:
+      tags: [Email templates]
+      summary: Deletes an email template
+      security:
+        - bearerAuth: ["email-templates:write"]
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/ProblemDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/ProblemDetail" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        OAuth2 access token issued by the authorization server. Operations list the required scope
+        (`emails:send`, `email-templates:read`, `email-templates:write`).
+
+  responses:
+    ProblemDetail:
+      description: Error (RFC 9457 problem details)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Unauthorized:
+      description: Missing, invalid or expired bearer token (no body, `WWW-Authenticate` header)
+    Forbidden:
+      description: The token does not carry the scope required by the operation (no body)
+
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+
+    SendEmail:
+      type: object
+      required: [recipient, templateId]
+      properties:
+        recipient:
+          type: object
+          required: [email, name]
+          properties:
+            email: { type: string, format: email, maxLength: 254 }
+            name: { type: string, minLength: 1 }
+        templateId: { type: string, format: uuid }
+        variables:
+          type: object
+          additionalProperties: true
+          description: Variables available to the template, besides `recipient`.
+
+    EmailTemplateInput:
+      type: object
+      required: [name, subject, body]
+      properties:
+        name: { type: string, maxLength: 100, description: Template name. }
+        subject: { type: string, maxLength: 255, description: TEXT template. }
+        body: { type: string, description: HTML template. }
+
+    EmailTemplateOutput:
+      allOf:
+        - $ref: "#/components/schemas/EmailTemplateInput"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }

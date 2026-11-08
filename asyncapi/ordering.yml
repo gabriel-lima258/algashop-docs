@@ -104,6 +104,21 @@ channels:
           min.insync.replicas: 2
         bindingVersion: "0.5.0"
 
+  notificationEmailCommands:
+    address: notifications.email.commands
+    title: Notification email commands
+    messages:
+      sendEmail:
+        $ref: "./messages.yml#/components/messages/SendEmailCommand"
+    bindings:
+      kafka:
+        topic: notifications.email.commands
+        partitions: 3
+        replicas: 3
+        topicConfiguration:
+          min.insync.replicas: 2
+        bindingVersion: "0.5.0"
+
   sagaReplies:
     address: ordering.saga.replies
     title: Place Order Saga replies
@@ -243,6 +258,16 @@ operations:
       messages:
         - $ref: "#/channels/sagaReplies/messages/stockReservationConfirmed"
         - $ref: "#/channels/sagaReplies/messages/stockReservationRejected"
+
+  sendOrderConfirmationEmail:
+    action: send
+    channel:
+      $ref: "#/channels/notificationEmailCommands"
+    summary: Asks Notifications to email the customer that the order was received.
+    tags:
+      - name: Notifications
+    messages:
+      - $ref: "#/channels/notificationEmailCommands/messages/sendEmail"
 
   consumeSagaReplies:
     action: receive

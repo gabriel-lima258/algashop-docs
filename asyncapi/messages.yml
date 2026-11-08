@@ -265,6 +265,39 @@ components:
       traits:
         - $ref: "#/components/messageTraits/KafkaOrderKey"
 
+    SendEmailCommand:
+      name: SendEmailCommand
+      title: Send Email Command
+      summary: Asks Notifications to send an email rendered from a template.
+      contentType: application/json
+      tags:
+        - name: Email
+      headers:
+        $ref: "#/components/schemas/SendEmailHeaders"
+      payload:
+        $ref: "#/components/schemas/SendEmailPayload"
+      examples:
+        - name: OrderPlaced
+          headers:
+            __TypeId__: Notifications.SendEmailCommand
+            idempotency-key: 0198d0a4-6a3f-7b2e-9a51-3f6f1c2d4e10
+          payload:
+            recipient:
+              email: john.doe@example.com
+              name: John Doe
+            templateId: 0198d0a1-2c44-7d0b-8e11-9a0b7c5d3f21
+            variables:
+              orderId: ORD-1001
+              placedAt: "2026-10-09T14:30:00-03:00"
+              totalAmount: 129.9
+              shippingCost: 9.9
+              expectedDeliveryDate: "2026-10-15"
+              items:
+                - productName: Mouse
+                  quantity: 2
+                  price: 60.0
+                  totalAmount: 120.0
+
     InvoicePaidReply:
       name: InvoicePaidReply
       title: Invoice Paid Reply
@@ -564,7 +597,7 @@ components:
           properties:
             __TypeId__:
               type: string
-              const: Billing.IssueInvoiceIntegrationCommand
+              const: Ordering.IssueInvoiceIntegrationCommand
               description: Logical type used by the Jackson deserializer.
 
     CancelInvoiceHeaders:
@@ -588,8 +621,26 @@ components:
           properties:
             __TypeId__:
               type: string
-              const: Stock.ReserveStockIntegrationCommand
+              const: Ordering.ReserveStockIntegrationCommand
               description: Logical type used by the Jackson deserializer.
+
+    SendEmailHeaders:
+      type: object
+      required:
+        - __TypeId__
+        - idempotency-key
+      properties:
+        __TypeId__:
+          type: string
+          const: Notifications.SendEmailCommand
+          description: Type id used to pick the payload class.
+        idempotency-key:
+          type: string
+          format: uuid
+          description: >-
+            Unique id of the command. A second command with the same key is
+            discarded, so producers must reuse it when re-sending the same
+            command and generate a new one for a new email.
 
     InvoicePaidReplyHeaders:
       allOf:
@@ -624,7 +675,7 @@ components:
           properties:
             __TypeId__:
               type: string
-              const: Stock.StockReservationConfirmedIntegrationReply
+              const: ProductCatalog.StockReservationConfirmedIntegrationReply
               description: Logical type used by the Jackson deserializer.
 
     StockReservationRejectedReplyHeaders:
@@ -636,7 +687,7 @@ components:
           properties:
             __TypeId__:
               type: string
-              const: Stock.StockReservationRejectedIntegrationReply
+              const: ProductCatalog.StockReservationRejectedIntegrationReply
               description: Logical type used by the Jackson deserializer.
 
     ProductAddedPayload:
@@ -1163,6 +1214,39 @@ components:
           type: integer
           minimum: 1
           example: 2
+
+    SendEmailPayload:
+      type: object
+      required:
+        - recipient
+        - templateId
+      properties:
+        recipient:
+          type: object
+          required:
+            - email
+            - name
+          properties:
+            email:
+              type: string
+              format: email
+              maxLength: 254
+              description: Validated before sending; an invalid address sends the command to the dead-letter topic.
+            name:
+              type: string
+              minLength: 1
+              description: Display name of the recipient. Also exposed to the template as recipient.name.
+        templateId:
+          type: string
+          format: uuid
+          description: Id of the email template, as returned by the email-templates REST API.
+        variables:
+          type: object
+          additionalProperties: true
+          description: >-
+            Values available to the Thymeleaf template as ${name}. The recipient
+            is always available as ${recipient.name} and ${recipient.email} and
+            cannot be overridden.
 
     InvoicePaidReplyPayload:
       type: object
