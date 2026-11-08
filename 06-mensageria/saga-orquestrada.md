@@ -1551,6 +1551,91 @@ Ordering `check` verde: 314 unitários, 12 de contrato, 185 de integração.
 
 ---
 
+## Validando os payloads no consumidor
+
+Os comandos e eventos que o billing e o catálogo consomem já tinham Bean Validation nas cópias locais (`@NotBlank orderId`, `@Size(min = 1) items`, `@Positive quantity`…), e os handlers já recebiam `@Payload @Valid`. Mesmo assim, **nada era validado**: uma mensagem incompleta chegava ao application service como se fosse válida.
+
+### Por que o `@Valid` era ignorado
+
+Em um `@KafkaHandler`, quem resolve o `@Payload` é o Spring Kafka, não o Spring MVC. Ele só aplica o `@Valid` se o `KafkaListenerEndpointRegistrar` tiver um `Validator` registrado, e por padrão não tem. O ordering registra desde a resiliência do consumer; billing e catálogo, não. A anotação estava lá, mas sem ninguém para executá-la.
+
+### O `KafkaBeanValidationConfigurer`
+
+Um em cada serviço, em `infrastructure/kafka`:
+
+```java
+@Configuration
+@RequiredArgsConstructor
+public class KafkaBeanValidationConfigurer implements KafkaListenerConfigurer {
+
+    private final LocalValidatorFactoryBean validator;
+
+    @Override
+    public void configureKafkaListeners(KafkaListenerEndpointRegistrar registrar) {
+        registrar.setValidator(validator);
+    }
+}
+```
+
+- `KafkaListenerConfigurer` é o ponto de extensão que o Spring Kafka chama ao montar os listeners. O configurer entrega a ele o `Validator`, e a partir daí **todo** `@KafkaHandler` com `@Valid` passa a validar. Os listeners não mudam.
+- O `LocalValidatorFactoryBean` é o que o Spring Boot já cria (com o `spring-boot-starter-validation`). Ele é reaproveitado, sem segunda instância, e chega por construtor (`@RequiredArgsConstructor`), como no resto desses serviços.
+
+### O caminho do payload inválido
+
+```mermaid
+flowchart LR
+    A["record no tópico"] --> B["deserializa<br/>(__TypeId__ → classe)"]
+    B --> C{"@Valid<br/>Validator"}
+    C -->|"válido"| D["handler executa"]
+    C -->|"inválido"| E["MethodArgumentNotValidException<br/>handler NÃO executa"]
+    E --> F["DefaultErrorHandler:<br/>exceção fatal, sem retry"]
+    F --> G[("DLT do tópico de origem<br/>kafka_dlt-exception-message = campo violado")]
+```
+
+A validação acontece **antes** do método: o log nem mostra o `Received ...` do handler. O `MethodArgumentNotValidException` já está na lista de exceções fatais **padrão** do `DefaultErrorHandler`, então a mensagem vai para a DLT na hora, sem as esperas de 2, 4 e 8 segundos. Por isso o `KafkaConfig` dos dois serviços não mudou.
+
+| Serviço | Handler validado | Payload | DLT |
+|---|---|---|---|
+| billing | `KafkaInvoiceIntegrationCommandListener` | `IssueInvoiceIntegrationCommand`, `CancelInvoiceIntegrationCommand` | `billing.dlt.billing.invoice.commands` |
+| billing | `KafkaInvoiceIntegrationEventListener` | `InvoiceIssuedIntegrationEvent` | `billing.dlt.billing.invoice.events` |
+| catálogo | `KafkaStockIntegrationCommandListener` | `ReserveStockIntegrationCommand` | `product-catalog.dlt.product-catalog.stock.commands` |
+
+O handler default (`@KafkaHandler(isDefault = true)`, `@Payload Object`) continua sem `@Valid`: ele recebe tipos desconhecidos, e não há o que validar neles.
+
+### A saga continua passando
+
+Validar no consumidor só é seguro se o produtor legítimo respeitar as mesmas regras. Aqui respeita: as constraints dos snapshots do billing são cópia das do `OrderSnapshot` do ordering (`complement` e `creditCardId` opcionais, `zipCode` com 5 caracteres), e o ordering sempre manda o `ReserveStock` com itens, produto e quantidade positiva. Se um payload legítimo violasse uma constraint, a correção seria na constraint ou no produtor, nunca desligar a validação. A pista estaria no `kafka_dlt-exception-message` da DLT.
+
+### Testes
+
+`KafkaBeanValidationConfigurerTest`, um em cada serviço, sem Spring, Kafka ou banco: `LocalValidatorFactoryBean` criado à mão (com `afterPropertiesSet()`), `new KafkaListenerEndpointRegistrar()`, e as violações coletadas num `BeanPropertyBindingResult`.
+
+| Teste | Billing | Catálogo |
+|---|---|---|
+| o registrar devolve o mesmo Validator | ✅ | ✅ |
+| payload inválido aponta o campo | `CancelInvoiceIntegrationCommand("")` → `orderId` | `ReserveStock` sem itens → `items` |
+| payload válido não aponta nada | ✅ | ✅ |
+
+Billing `check` verde (51 unitários, 20 de integração); catálogo `check` verde (120 unitários, 17 de contrato, 12 de integração). Os testes de integração existentes continuam passando com a validação ligada.
+
+### Roteiro de verificação com os serviços rodando
+
+Pela GUI do Kafka, com billing, catálogo e ordering no ar:
+
+1. `billing.invoice.commands`, chave `01K00000000000000000000000`, `__TypeId__` `Billing.CancelInvoiceIntegrationCommand`, `kafka_correlationId` com um UUID qualquer, `kafka_replyTopic` `ordering.saga.replies`, valor `{ "orderId": "" }` → chega na hora a `billing.dlt.billing.invoice.commands`, e o log do billing **não** tem `Received CancelInvoiceIntegrationCommand`.
+2. `billing.invoice.events`, `__TypeId__` `Billing.InvoiceIssuedIntegrationEvent`, valor sem `invoiceId` → `billing.dlt.billing.invoice.events`.
+3. `product-catalog.stock.commands`, `__TypeId__` `Stock.ReserveStockIntegrationCommand`, mesmos headers de correlação, valor `{ "orderId": "01K00000000000000000000000", "items": [] }` → `product-catalog.dlt.product-catalog.stock.commands`; nenhum reply novo em `ordering.saga.replies` e nenhuma reserva para esse pedido.
+4. Nas três mensagens da DLT, o header `kafka_dlt-exception-message` aponta o campo violado.
+5. Checkout v1 com o Visa final 1022 e estoque suficiente: pedido `READY`, saga `SUCCEEDED` / `APPROVING_ORDER`. Com um produto de saldo menor que a compra, a saga termina `COMPENSATED` / `CANCELLING_ORDER` / `OUT_OF_STOCK` (é o único caminho que envia o `CancelInvoice`; lembrando que a validação de quantidade no ordering barra esse caso na compra direta).
+6. Durante os checkouts, nenhuma mensagem nova nas DLTs além das três produzidas à mão.
+
+### Revisão
+
+- Os dois configurers atendem ao enunciado. O comentário deles tinha uma frase quebrada e passou a citar também o destino do payload inválido (DLT, sem retry).
+- **Comentário desatualizado no ordering**: o `KafkaBeanValidationConfigurer` do ordering ainda diz que o inválido sofre "10 tentativas sem backoff" e que não há DLQ. Isso deixou de valer desde a resiliência do consumer (DLT por tópico e exceções não-retryable).
+
+---
+
 ## Próximas aulas (a documentar)
 
 O modelo, a persistência, o início da saga e o contrato já existem (seções acima). Os métodos de transição, os comandos e as respostas em código entram aqui conforme o módulo avança. A comparação com a coreografia vai seguir as perguntas que o [balanço da 8.13](./saga-coreografada.md#813--opinião-sobre-saga-com-coreografia) deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?
