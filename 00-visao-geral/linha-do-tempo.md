@@ -977,6 +977,7 @@ O módulo começa apagando código, em duas demolições. Primeiro sai o checkou
 | Compensação: falta de estoque | `StockReservationRejectedReply` → saga COMPENSATING/CANCELLING_INVOICE (OUT_OF_STOCK) → `CancelInvoice` ao billing; a volta reaproveita o `onInvoiceCanceled`. Falta o billing executar o comando |
 | Billing estorna com `@SendTo` | `CancelInvoice` → estorno síncrono → `InvoiceCanceledReply` automático: o mesmo serviço usa reply manual (IssueInvoice) e `@SendTo` (CancelInvoice), conforme a resposta já existir ou não no fim do listener |
 | Validar antes da saga | Quantidade conferida na compra (`InsufficientQuantityException`, 422): evita cobrar e estornar; é pré-validação, a compensação `OUT_OF_STOCK` continua necessária |
+| Comandos sem outbox | `KafkaPlaceOrderSagaIntegrationCommandPublisher` ativo com o outbox desligado: mesmo tópico, key e headers do outbox; envio bloqueante dentro da transação, com o dual-write que a outbox evita como troca explícita |
 
 > [`saga-orquestrada.md`](../06-mensageria/saga-orquestrada.md)
 

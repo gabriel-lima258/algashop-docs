@@ -1481,6 +1481,76 @@ A saga **continua** precisando da compensação por falta de estoque. Entre a le
 
 ---
 
+## Comandos da saga sem outbox
+
+Desde que a saga passou a enviar comandos, o ordering **não subia** com `algashop.messaging.outbox.enabled=false`: a porta `ForPublishingPlaceOrderSagaIntegrationCommands` só tinha a implementação de outbox. Os eventos de pedido sempre tiveram as duas (`OutboxOrderIntegrationEventPublisher` e `KafkaOrderIntegrationEventPublisher`); agora os comandos também têm.
+
+### Dois publicadores, uma propriedade
+
+| Publicador | Ativo quando | Como o comando sai |
+|---|---|---|
+| `OutboxPlaceOrderSagaIntegrationCommandPublisher` | `outbox.enabled = true` | Grava uma linha na outbox; o dispatcher envia depois |
+| `KafkaPlaceOrderSagaIntegrationCommandPublisher` | `outbox.enabled = false` **ou ausente** | `kafkaTemplate.send(...).get(40s)`, na hora |
+
+As duas condições se complementam (`havingValue = "true"` × `havingValue = "false", matchIfMissing = true`), então a porta tem sempre exatamente uma implementação, qualquer que seja a configuração. O coordenador não muda uma linha: ele só conhece a porta.
+
+### O mesmo contrato, por outro caminho
+
+O participante (billing ou catálogo) não pode perceber qual publicador enviou o comando:
+
+| | Outbox | Kafka direto |
+|---|---|---|
+| Tópico | `PlaceOrderSagaCommandTopics.of(command)` | o **mesmo** `PlaceOrderSagaCommandTopics.of(command)` |
+| Key | `aggregate_id` da linha (`orderId`) | `command.getAggregateId()` (`orderId`) |
+| `kafka_correlationId` | coluna `correlation_id` | o `correlationId` recebido (o `sagaId`) |
+| `kafka_replyTopic` | coluna `reply_topic` | `saga-replies-topic-name` da configuração |
+| `__TypeId__` | coluna `message_type`, gerada pelo serializer na gravação | gerado pelo serializer do `KafkaTemplate` no envio |
+| `idempotency-key` | sempre (id da linha) | só se o comando tiver chave; hoje nenhum tem |
+
+Reaproveitar o `PlaceOrderSagaCommandTopics` é o que garante "uma decisão só" sobre o tópico: um comando novo ganha uma linha no `switch` e passa a funcionar nos dois caminhos. E, como o tópico é calculado ao montar o `ProducerRecord`, um comando que a saga não conhece lança `IllegalArgumentException` **antes** de qualquer envio.
+
+### O que muda na garantia
+
+| | Outbox | Kafka direto |
+|---|---|---|
+| Quando o comando sai | depois do commit, pelo dispatcher (até um `poll-interval`) | durante a transação, antes do commit |
+| Kafka fora do ar | o checkout funciona; o comando espera na outbox | o checkout **falha**: `CommandPublishingException` desfaz pedido e saga |
+| Commit falha depois do envio | impossível: a linha e o resto commitam juntos | **comando já enviado para um pedido que não existe** |
+
+O envio direto, bloqueante e dentro da transação, protege um lado: se o Kafka não confirmar em 40 segundos, nada é gravado. Mas não protege o outro: se o envio funcionar e o commit falhar depois, o billing recebe um `IssueInvoice` de um pedido que voltou atrás. É o dual-write que a outbox existe para eliminar, e é por isso que ela é o padrão (`enabled: true`). O publicador direto é a alternativa para quem desliga a outbox, com essa troca explícita.
+
+### Testes
+
+`KafkaPlaceOrderSagaIntegrationCommandPublisherTest`, sem Spring, Kafka ou Postgres: `KafkaTemplate` mockado, `PlaceOrderSagaCommandTopics` real e propriedades preenchidas à mão.
+
+| Teste | O que prova |
+|---|---|
+| `shouldSendIssueInvoiceToBillingWithKeyAndCorrelationHeaders` | tópico `billing.invoice.commands`, key = orderId, valor é o próprio comando, `kafka_correlationId` e `kafka_replyTopic` corretos, sem `idempotency-key` |
+| `shouldSendCancelInvoiceToBilling` | `CancelInvoice` também vai para `billing.invoice.commands` |
+| `shouldSendReserveStockToProductCatalog` | `ReserveStock` vai para `product-catalog.stock.commands` |
+| `shouldThrowCommandPublishingExceptionWhenKafkaDoesNotConfirm` | `failedFuture` vira `CommandPublishingException` |
+| `shouldRejectUnknownCommandWithoutSendingAnything` | comando sem rota: `IllegalArgumentException` e nenhuma interação com o `KafkaTemplate` |
+
+Ordering `check` verde: 314 unitários, 12 de contrato, 185 de integração.
+
+### Roteiro de verificação manual
+
+1. `algashop.messaging.outbox.enabled: false` no `application-development-env.yaml` do ordering; o serviço tem de subir.
+2. Checkout v1 com o Visa final 1022 e estoque suficiente: no log, o `IssueInvoiceIntegrationCommand` é publicado em `billing.invoice.commands` **antes** de `Place order saga started`. Pedido `READY`, saga `SUCCEEDED` / `APPROVING_ORDER`.
+3. Na GUI do Kafka, as mensagens de `billing.invoice.commands` e `product-catalog.stock.commands`: key, `__TypeId__` (`Billing.IssueInvoiceIntegrationCommand` / `Stock.ReserveStockIntegrationCommand`), `kafka_correlationId` igual ao `saga_id` da `saga_instance`, `kafka_replyTopic`.
+4. `select count(*) from outbox where aggregate_id = '<orderId>'` deve devolver zero.
+5. Visa final 1030: saga `COMPENSATED` / `CANCELLING_ORDER` / `PAYMENT_REFUSED`.
+6. Produto com saldo menor que a compra: `Billing.CancelInvoiceIntegrationCommand` em `billing.invoice.commands`, saga `COMPENSATED` / `CANCELLING_ORDER` / `OUT_OF_STOCK`. (Com a validação de quantidade da seção anterior, esse caso só chega à saga se o estoque mudar entre a compra e a reserva, ou pelo checkout do carrinho, que não confere quantidade.)
+7. Opcional: parar os containers do Kafka e fazer um checkout. A requisição demora e falha, e nem pedido nem saga são gravados.
+8. Voltar `outbox.enabled` para `true`.
+
+### Revisão
+
+- O publicador atende o enunciado: ativação, tópico pela mesma decisão do outbox, headers, valor, envio bloqueante de 40 segundos, `CommandPublishingException` e nenhuma transação própria. Ganhou um comentário curto.
+- **Observação**: o `catch` pega a `KafkaException` do Spring, mas não a `org.apache.kafka.common.KafkaException`, que o `send` pode lançar de forma síncrona (uma falha de serialização, por exemplo). Ela escaparia sem virar `CommandPublishingException`. A transação ainda volta, só que com outra exceção. É o mesmo padrão do `KafkaOrderIntegrationEventPublisher`; o publisher do catálogo trata as duas.
+
+---
+
 ## Próximas aulas (a documentar)
 
 O modelo, a persistência, o início da saga e o contrato já existem (seções acima). Os métodos de transição, os comandos e as respostas em código entram aqui conforme o módulo avança. A comparação com a coreografia vai seguir as perguntas que o [balanço da 8.13](./saga-coreografada.md#813--opinião-sobre-saga-com-coreografia) deixou: onde fica o estado "em que passo está o pedido 42"? Quem decide a compensação? O que acontece com os três kits de consumidor copiados?
