@@ -996,6 +996,7 @@ Nasce um serviço novo, `notifications`, para entregar e-mail aos clientes. A di
 | E-mail fora da saga | Efeito colateral sem compensação: só sai depois do confirmado, e a saga não espera por ele |
 | Validação do HTML com jsoup | `setTrackErrors` revela o que o parser consertaria em silêncio; lista de bloqueio de tags, eventos e esquemas de URL, com normalização contra ofuscação e os `th:*` do Thymeleaf incluídos; 79 testes e jacoco no build |
 | Render com Thymeleaf | Template do banco com `StringTemplateResolver`; assunto em `TEXT` e corpo em `HTML` com escape automático; no cadastro, render sem variáveis reprova sintaxe e tolera falta de valor — checando assunto e corpo separados, para um não esconder o outro |
+| Envio por SMTP | Porta `EmailSender` com adapter JavaMail; `spring.mail` do Boot × remetente próprio validado na subida; falha ao montar (não retentável) × falha ao enviar (retentável); teste de integração contra o Mailpit |
 
 > [`01-servico-de-notificacoes-conceito.md`](../07-notificacoes/01-servico-de-notificacoes-conceito.md)
 
@@ -1050,7 +1051,7 @@ Nasce um serviço novo, `notifications`, para entregar e-mail aos clientes. A di
 - Outbox com polling publisher no ordering (o checkout assíncrono com 202 e Listen to Yourself da Fase 41 foi removido na Fase 44)
 - Workflow coreografado pedido → fatura → pagamento → pedido pago entre ordering e billing, com `OrderPaid` publicado para o catálogo
 - Saga coreografada completa entre ordering, billing e catálogo na Fase 43 — removida do código na Fase 44 para a orquestração; ficaram as operações de trabalho (fatura, estorno, reserva) e os eventos de produto no carrinho
-- Serviço `notifications` iniciado na Fase 45: contratos, esqueleto em portas e validação do HTML do template com jsoup e render com Thymeleaf (envio, cadastro e consumidor do `SendEmail` ainda em stub)
+- Serviço `notifications` iniciado na Fase 45: contratos, esqueleto em portas e validação do HTML do template com jsoup, render com Thymeleaf e envio por SMTP (cadastro de templates, caso de uso de envio e consumidor do `SendEmail` ainda em stub)
 
 **Próximos passos naturais:**
 - **Outbox no billing** — hoje `InvoiceIssued` e `InvoicePaid` saem after-commit; falha no Kafka depois do commit é só logada e o workflow trava em silêncio

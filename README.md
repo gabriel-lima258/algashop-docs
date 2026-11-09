@@ -13,7 +13,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | **`algashop-ordering`** | 8081 | PostgreSQL + Redis | DDD tático, arquitetura hexagonal, CQRS, domain events, cache client-side, resiliência |
 | **`algashop-billing`** | 8082 | PostgreSQL | Integração com gateway de pagamento, resiliência por idempotência, Testcontainers |
 | **`product-catalog`** | 8083 | MongoDB (replica set) + Redis | Modelagem documental e desnormalização, eventos de domínio, concorrência atômica, transação multi-coleção, cache server-side, REST Docs |
-| **`notifications`** | 8084 | PostgreSQL | E-mail por templates: o ordering decide *quando*, ele decide *como*; HTML do template validado na entrada (jsoup) e renderizado com Thymeleaf — em construção |
+| **`notifications`** | 8084 | PostgreSQL | E-mail por templates: o ordering decide *quando*, ele decide *como*; HTML do template validado na entrada (jsoup) renderizado com Thymeleaf e enviado por SMTP — em construção |
 | **`billing-scheduler`** | — | — | Jobs agendados, cancelamento de faturas expiradas |
 | **`authorization-server`** | 9000 | PostgreSQL | OAuth 2.1 e OIDC, gestão de usuários, PKCE para cliente público, sessão em banco |
 | **`service-registry`** | 8761 | — | Eureka Server: registro e descoberta de serviços, dashboard das instâncias |
@@ -157,6 +157,7 @@ O serviço que entrega e-mail aos clientes. Está em construção: os docs cresc
 | 01 | [Serviço de notificações: o conceito](./07-notificacoes/01-servico-de-notificacoes-conceito.md) | *Quando* × *como* notificar, por que o e-mail fica fora da saga, `SendEmail` pela outbox e idempotência por id derivado do evento |
 | 02 | [Validação do HTML do template](./07-notificacoes/02-validacao-de-html-do-template.md) | Validar na entrada com jsoup: erros de parse que o parser esconderia, lista de bloqueio, ofuscação de `javascript:` e por que os `th:*` também entram |
 | 03 | [Renderização do template com Thymeleaf](./07-notificacoes/03-renderizacao-do-template-com-thymeleaf.md) | Template do banco com `StringTemplateResolver`, assunto em TEXT × corpo em HTML, escape automático — e o render a seco que reprova sintaxe sem exigir valores |
+| 04 | [Envio de e-mail por SMTP](./07-notificacoes/04-envio-de-email-por-smtp.md) | Porta `EmailSender` × adapter JavaMail, `spring.mail` × remetente validado na subida, falha de montagem × de envio — e o Mailpit como SMTP falso |
 
 ### Artefatos
 
@@ -287,6 +288,8 @@ O serviço que entrega e-mail aos clientes. Está em construção: os docs cresc
 | Validar o HTML de um template antes de salvar | [Validação do HTML do template](./07-notificacoes/02-validacao-de-html-do-template.md) |
 | Renderizar um template guardado no banco (Thymeleaf sem MVC) | [Renderização do template com Thymeleaf](./07-notificacoes/03-renderizacao-do-template-com-thymeleaf.md) |
 | Impedir que uma variável vire HTML no e-mail (escape) | [Renderização do template com Thymeleaf](./07-notificacoes/03-renderizacao-do-template-com-thymeleaf.md) |
+| Enviar e-mail HTML por SMTP com JavaMail | [Envio de e-mail por SMTP](./07-notificacoes/04-envio-de-email-por-smtp.md) |
+| Testar e-mail sem mandar de verdade (Mailpit) | [Envio de e-mail por SMTP](./07-notificacoes/04-envio-de-email-por-smtp.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |

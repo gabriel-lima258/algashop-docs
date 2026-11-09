@@ -2,7 +2,7 @@
 
 > **Em uma frase:** o template guardado no banco é preenchido pelo Thymeleaf com as variáveis do `SendEmail` — o assunto como texto, o corpo como HTML com escape automático — e, no cadastro, um render "a seco" reprova erro de sintaxe sem exigir valores.
 
-⬅️ Anterior: [Validação do HTML do template](./02-validacao-de-html-do-template.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Validação do HTML do template](./02-validacao-de-html-do-template.md) · ➡️ Próximo: [Envio de e-mail por SMTP](./04-envio-de-email-por-smtp.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 

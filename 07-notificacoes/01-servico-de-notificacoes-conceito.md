@@ -98,7 +98,8 @@ Os templates ficam no banco do `notifications` e são mantidos pela API `/api/v1
 | Esqueleto do serviço (portas, stubs, exceções) | pronto |
 | Validação do HTML do template (jsoup) | pronta, com testes |
 | Render com Thymeleaf | pronto, com testes |
-| CRUD de templates e envio por SMTP | stub |
+| Envio por SMTP (JavaMail + Mailpit) | pronto, com teste de integração |
+| CRUD de templates | stub |
 | Consumidor do `SendEmail`, idempotência e DLT | ainda não existe |
 | `ordering` publicando `SendEmail` pela outbox | ainda não existe |
 
