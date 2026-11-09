@@ -97,7 +97,7 @@ Os templates ficam no banco do `notifications` e são mantidos pela API `/api/v1
 | Contratos OpenAPI e AsyncAPI | escritos |
 | Esqueleto do serviço (portas, stubs, exceções) | pronto |
 | Validação do HTML do template (jsoup) | pronta, com testes |
-| Render com Thymeleaf | stub |
+| Render com Thymeleaf | pronto, com testes |
 | CRUD de templates e envio por SMTP | stub |
 | Consumidor do `SendEmail`, idempotência e DLT | ainda não existe |
 | `ordering` publicando `SendEmail` pela outbox | ainda não existe |

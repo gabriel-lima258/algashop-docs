@@ -2,7 +2,7 @@
 
 > **Em uma frase:** o HTML de um template é checado **antes de ser salvo** — sintaxe com o parser do jsoup e segurança com uma lista de bloqueio — para que nenhum e-mail quebrado ou perigoso chegue ao cliente.
 
-⬅️ Anterior: [Serviço de notificações: o conceito](./01-servico-de-notificacoes-conceito.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Serviço de notificações: o conceito](./01-servico-de-notificacoes-conceito.md) · ➡️ Próximo: [Renderização do template com Thymeleaf](./03-renderizacao-do-template-com-thymeleaf.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
@@ -109,7 +109,7 @@ Já `th:text`, `th:if` e `data-*` passam: não carregam URL nem código.
 
 - **Lista de bloqueio nunca é completa.** Ela barra os ataques conhecidos. Uma lista de permissão (só tags e atributos liberados) é mais segura, mas mais trabalhosa.
 - **`th:utext` e `th:attr`** conseguem montar HTML e atributos no render. A validação olha o template, não o resultado do render.
-- **Validar o template não valida as variáveis.** O Thymeleaf escapa `th:text`; nunca use `th:utext` com dado vindo do cliente.
+- **Validar o template não valida as variáveis.** O Thymeleaf escapa `th:text`; nunca use `th:utext` com dado vindo do cliente ([detalhes](./03-renderizacao-do-template-com-thymeleaf.md#escape-automático)).
 
 ## Pendências
 
@@ -117,7 +117,7 @@ Já `th:text`, `th:if` e `data-*` passam: não carregam URL nem código.
 - `style` com `url(javascript:)` ou `expression()`, e as tags `<svg>`, `<math>`, `<link>` e `<meta http-equiv="refresh">` não são barrados.
 - `srcset` com várias URLs: só o começo do valor é checado.
 - O validador ainda não é chamado: `EmailTemplateManagementApplicationService` é stub. Quando sair do stub, falta mapear `InvalidTemplateHtmlException` → 422 no `ApiExceptionHandler`.
-- O render (`EmailTemplateRendererImpl`) é stub.
+- ~~O render é stub~~ — pronto com Thymeleaf ([doc 03](./03-renderizacao-do-template-com-thymeleaf.md)).
 
 ## Testes
 
