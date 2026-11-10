@@ -1001,6 +1001,7 @@ Nasce um serviço novo, `notifications`, para entregar e-mail aos clientes. A di
 | API de envio (desafio) | `POST /api/v1/emails` com o corpo modelado como comando (reutilizável no Kafka), `@Valid` aninhado, `recipient` colocado por último para o cliente não trocar o destinatário, ordem template → render → envio sem capturar exceção (404/422/502) e log só com o `templateId` |
 | Resource server (desafio) | Cliente `algashop-notifications-service` (client_credentials, JWT de 1h) com secret `{bcrypt}` no Parameter Store; notifications stateless com `issuer-uri` do parâmetro compartilhado (9000, não 8081); escopo por meta-anotação; 401/403 sem corpo pelo Spring Security; perfil `test` para os testes não dependerem do LocalStack |
 | Eureka e gateway-admin (desafio) | Registro como `NOTIFICATIONS` (id aleatório, IP, desligado nos testes); `emails-route` e `email-templates-route` por `lb://notifications` com os métodos do contrato + OPTIONS; 401/404/503 no gateway e 403 no serviço; 5 e 5 entre duas instâncias |
+| Comandos pelo Kafka (desafio) | `notifications.email.commands` entregue ao mesmo `SendEmailApplicationService`; `__TypeId__` lógico, `ErrorHandlingDeserializer`, `earliest`, `@Valid` com validator no registrar; só `MailSendException` é retentada (2/4/8 s), o resto vai direto para a DLT na mesma partição |
 
 > [`01-servico-de-notificacoes-conceito.md`](../07-notificacoes/01-servico-de-notificacoes-conceito.md)
 
@@ -1055,7 +1056,7 @@ Nasce um serviço novo, `notifications`, para entregar e-mail aos clientes. A di
 - Outbox com polling publisher no ordering (o checkout assíncrono com 202 e Listen to Yourself da Fase 41 foi removido na Fase 44)
 - Workflow coreografado pedido → fatura → pagamento → pedido pago entre ordering e billing, com `OrderPaid` publicado para o catálogo
 - Saga coreografada completa entre ordering, billing e catálogo na Fase 43 — removida do código na Fase 44 para a orquestração; ficaram as operações de trabalho (fatura, estorno, reserva) e os eventos de produto no carrinho
-- Serviço `notifications` iniciado na Fase 45: contratos, esqueleto em portas e validação do HTML do template com jsoup, render com Thymeleaf, envio por SMTP e as APIs de cadastro de templates e de envio, protegidas por JWT e escopo, registrado no Eureka e roteado pelo gateway-admin (consumidor do `SendEmail` pelo Kafka ainda não existe)
+- Serviço `notifications` iniciado na Fase 45: contratos, esqueleto em portas e validação do HTML do template com jsoup, render com Thymeleaf, envio por SMTP e as APIs de cadastro de templates e de envio, protegidas por JWT e escopo, registrado no Eureka e roteado pelo gateway-admin, consumindo o `SendEmail` pelo Kafka com retry e DLT (idempotência e produtor no ordering ainda não existem)
 
 **Próximos passos naturais:**
 - **Outbox no billing** — hoje `InvoiceIssued` e `InvoicePaid` saem after-commit; falha no Kafka depois do commit é só logada e o workflow trava em silêncio

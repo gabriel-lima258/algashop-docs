@@ -2,7 +2,7 @@
 
 > **Em uma frase:** o notifications se registra no Eureka como `NOTIFICATIONS`, e o gateway-admin passa a rotear `/api/v1/emails` e `/api/v1/email-templates` para `lb://notifications` — pelo nome, sem saber IP nem porta, e balanceando entre as instâncias.
 
-⬅️ Anterior: [Segurança: resource server](./07-seguranca-resource-server.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Segurança: resource server](./07-seguranca-resource-server.md) · ➡️ Próximo: [Comandos de e-mail pelo Kafka](./09-comandos-de-email-pelo-kafka.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 

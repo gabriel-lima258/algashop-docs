@@ -103,7 +103,8 @@ Os templates ficam no banco do `notifications` e são mantidos pela API `/api/v1
 | API de envio (`POST /api/v1/emails`) | pronta, com testes |
 | Segurança (JWT + escopo por endpoint) | pronta, com testes |
 | Eureka + rotas no gateway-admin | pronto |
-| Consumidor do `SendEmail`, idempotência e DLT | ainda não existe |
+| Consumidor do `SendEmail` com retry e DLT | pronto ([doc 09](./09-comandos-de-email-pelo-kafka.md)) |
+| Idempotência pelo `idempotency-key` | ainda não existe |
 | `ordering` publicando `SendEmail` pela outbox | ainda não existe |
 
 ## Como aplicar
