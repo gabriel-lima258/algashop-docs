@@ -13,7 +13,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | **`algashop-ordering`** | 8081 | PostgreSQL + Redis | DDD tático, arquitetura hexagonal, CQRS, domain events, cache client-side, resiliência |
 | **`algashop-billing`** | 8082 | PostgreSQL | Integração com gateway de pagamento, resiliência por idempotência, Testcontainers |
 | **`product-catalog`** | 8083 | MongoDB (replica set) + Redis | Modelagem documental e desnormalização, eventos de domínio, concorrência atômica, transação multi-coleção, cache server-side, REST Docs |
-| **`notifications`** | 8084 | PostgreSQL | E-mail por templates: o ordering decide *quando*, ele decide *como*; HTML do template validado na entrada (jsoup) renderizado com Thymeleaf e enviado por SMTP; APIs de cadastro de templates e de envio protegidas por JWT e escopo, registrado no Eureka e exposto pelo gateway-admin; consome `SendEmail` pelo Kafka com retry e DLT — em construção |
+| **`notifications`** | 8084 | PostgreSQL | E-mail por templates: o ordering decide *quando*, ele decide *como*; HTML do template validado na entrada (jsoup) renderizado com Thymeleaf e enviado por SMTP; APIs de cadastro de templates e de envio protegidas por JWT e escopo, registrado no Eureka e exposto pelo gateway-admin; consome `SendEmail` pelo Kafka com retry e DLT, publicado pelo ordering via outbox a cada pedido — em construção |
 | **`billing-scheduler`** | — | — | Jobs agendados, cancelamento de faturas expiradas |
 | **`authorization-server`** | 9000 | PostgreSQL | OAuth 2.1 e OIDC, gestão de usuários, PKCE para cliente público, sessão em banco |
 | **`service-registry`** | 8761 | — | Eureka Server: registro e descoberta de serviços, dashboard das instâncias |
@@ -163,6 +163,7 @@ O serviço que entrega e-mail aos clientes. Está em construção: os docs cresc
 | 07 | [Segurança: resource server](./07-notificacoes/07-seguranca-resource-server.md) | As duas pontas (auth server emite, notifications exige), secret com `{bcrypt}` no Parameter Store, escopo por meta-anotação, 401 × 403 sem corpo — e o `$` a mais que quebrava o hash |
 | 08 | [Eureka e gateway-admin](./07-notificacoes/08-eureka-e-gateway-admin.md) | Registro por nome com id aleatório e IP, rotas `lb://` com os métodos do contrato e o preflight, quem responde 401/403/404/503 — e o `lb://notification` sem "s" |
 | 09 | [Comandos de e-mail pelo Kafka](./07-notificacoes/09-comandos-de-email-pelo-kafka.md) | Mesma regra, outra porta: o listener entrega ao mesmo caso de uso; só o SMTP é retentado (2/4/8 s), o resto vai direto para a DLT na mesma partição — e o alias e o pacote copiados do billing |
+| 10 | [Comando de e-mail a partir do ordering](./07-notificacoes/10-comando-de-email-a-partir-do-ordering.md) | O `OrderPlacedEvent` grava o `SendEmail` na outbox, na transação do pedido; chave = id do pedido, sem reply (dispare e esqueça); template e tópico por propriedade validada — e o assembler que não compilava |
 
 ### Artefatos
 
@@ -304,6 +305,7 @@ O serviço que entrega e-mail aos clientes. Está em construção: os docs cresc
 | Registrar um serviço novo no Eureka e roteá-lo no gateway | [Eureka e gateway-admin](./07-notificacoes/08-eureka-e-gateway-admin.md) |
 | Decidir o que retentar e o que mandar direto para a DLT | [Comandos de e-mail pelo Kafka](./07-notificacoes/09-comandos-de-email-pelo-kafka.md) |
 | Receber o mesmo comando por REST e por Kafka sem duplicar regra | [Comandos de e-mail pelo Kafka](./07-notificacoes/09-comandos-de-email-pelo-kafka.md) |
+| Mandar um comando sem resposta pela outbox (dispare e esqueça) | [Comando de e-mail a partir do ordering](./07-notificacoes/10-comando-de-email-a-partir-do-ordering.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |

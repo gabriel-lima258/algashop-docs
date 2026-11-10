@@ -2,7 +2,7 @@
 
 > **Em uma frase:** o notifications passa a receber o `SendEmail` também pelo tópico `notifications.email.commands`, entrega ao **mesmo** `SendEmailApplicationService` da API REST e decide, para cada falha, se vale tentar de novo (SMTP fora do ar) ou mandar direto para a DLT (todo o resto).
 
-⬅️ Anterior: [Eureka e gateway-admin](./08-eureka-e-gateway-admin.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Eureka e gateway-admin](./08-eureka-e-gateway-admin.md) · ➡️ Próximo: [Comando de e-mail a partir do ordering](./10-comando-de-email-a-partir-do-ordering.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
@@ -94,7 +94,7 @@ Validação do payload e desserialização **já são** não retentáveis no Spr
 - **Dado pessoal no log de erro:** quando a validação falha, o Spring Kafka registra o stack trace com o `failedMessage`, e o `toString()` do comando (Lombok `@Data`) mostra o e-mail e as variáveis. O log de **recebimento** está limpo; o de erro, não.
 - Idempotência pelo header `idempotency-key` (desafio posterior): hoje um comando entregue duas vezes manda dois e-mails.
 - Externalizar partições, réplicas e retenção (hoje fixos no `KafkaConfig`).
-- O produtor de verdade (ordering) vem no próximo desafio.
+- ~~O produtor de verdade (ordering)~~ — feito no [doc 10](./10-comando-de-email-a-partir-do-ordering.md).
 
 ## Testes
 

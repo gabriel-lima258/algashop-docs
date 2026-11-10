@@ -105,7 +105,7 @@ Os templates ficam no banco do `notifications` e são mantidos pela API `/api/v1
 | Eureka + rotas no gateway-admin | pronto |
 | Consumidor do `SendEmail` com retry e DLT | pronto ([doc 09](./09-comandos-de-email-pelo-kafka.md)) |
 | Idempotência pelo `idempotency-key` | ainda não existe |
-| `ordering` publicando `SendEmail` pela outbox | ainda não existe |
+| `ordering` publicando `SendEmail` pela outbox | pronto ([doc 10](./10-comando-de-email-a-partir-do-ordering.md)) |
 
 ## Como aplicar
 
