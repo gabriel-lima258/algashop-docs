@@ -45,7 +45,7 @@ sequenceDiagram
     Note over M: caixa em http://localhost:8025
 ```
 
-> O sender está pronto e testado contra o Mailpit. O `SendEmailApplicationService`, que vai juntar render e envio, ainda é stub.
+> O `SendEmailApplicationService` junta render e envio na [API de envio](./06-api-de-envio-de-emails.md).
 
 ### Montar a mensagem
 
@@ -104,7 +104,7 @@ Essa diferença vai importar quando o consumidor do `SendEmail` existir: a prime
 - Perfis `docker-env` e `production-env` vazios: falta `spring.mail.host: algashop-mailpit` (e o datasource) no Docker; o notifications ainda não está no compose.
 - O teste de integração prova só que o SMTP aceitou. Falta conferir a mensagem na API do Mailpit (`/api/v1/search?query=to:...`); o destinatário com UUID já prepara isso.
 - Sem versão em texto puro (`multipart/alternative`): alguns clientes de e-mail preferem.
-- Ligar render + envio no `SendEmailApplicationService`; retentativa e DLT chegam com o consumidor do `SendEmail`.
+- ~~Ligar render + envio no `SendEmailApplicationService`~~ — feito ([doc 06](./06-api-de-envio-de-emails.md)). Retentativa e DLT chegam com o consumidor do `SendEmail`.
 
 ## Testes
 

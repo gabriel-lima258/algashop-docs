@@ -998,6 +998,7 @@ Nasce um serviço novo, `notifications`, para entregar e-mail aos clientes. A di
 | Render com Thymeleaf | Template do banco com `StringTemplateResolver`; assunto em `TEXT` e corpo em `HTML` com escape automático; no cadastro, render sem variáveis reprova sintaxe e tolera falta de valor — checando assunto e corpo separados, para um não esconder o outro |
 | Envio por SMTP | Porta `EmailSender` com adapter JavaMail; `spring.mail` do Boot × remetente próprio validado na subida; falha ao montar (não retentável) × falha ao enviar (retentável); teste de integração contra o Mailpit |
 | API de templates (desafio) | CRUD no PostgreSQL que valida antes de gravar (renderer + validator → 422), 404 antes de 422 no update, UUIDv7 gerado no construtor com `version` nulo decidindo persist × merge, `PagedModel` no formato do contrato e `afterMigrate.sql` só em dev |
+| API de envio (desafio) | `POST /api/v1/emails` com o corpo modelado como comando (reutilizável no Kafka), `@Valid` aninhado, `recipient` colocado por último para o cliente não trocar o destinatário, ordem template → render → envio sem capturar exceção (404/422/502) e log só com o `templateId` |
 
 > [`01-servico-de-notificacoes-conceito.md`](../07-notificacoes/01-servico-de-notificacoes-conceito.md)
 
@@ -1052,7 +1053,7 @@ Nasce um serviço novo, `notifications`, para entregar e-mail aos clientes. A di
 - Outbox com polling publisher no ordering (o checkout assíncrono com 202 e Listen to Yourself da Fase 41 foi removido na Fase 44)
 - Workflow coreografado pedido → fatura → pagamento → pedido pago entre ordering e billing, com `OrderPaid` publicado para o catálogo
 - Saga coreografada completa entre ordering, billing e catálogo na Fase 43 — removida do código na Fase 44 para a orquestração; ficaram as operações de trabalho (fatura, estorno, reserva) e os eventos de produto no carrinho
-- Serviço `notifications` iniciado na Fase 45: contratos, esqueleto em portas e validação do HTML do template com jsoup, render com Thymeleaf, envio por SMTP e API de cadastro de templates (caso de uso de envio e consumidor do `SendEmail` ainda em stub)
+- Serviço `notifications` iniciado na Fase 45: contratos, esqueleto em portas e validação do HTML do template com jsoup, render com Thymeleaf, envio por SMTP e as APIs de cadastro de templates e de envio (consumidor do `SendEmail` pelo Kafka ainda não existe)
 
 **Próximos passos naturais:**
 - **Outbox no billing** — hoje `InvoiceIssued` e `InvoicePaid` saem after-commit; falha no Kafka depois do commit é só logada e o workflow trava em silêncio

@@ -100,6 +100,7 @@ Os templates ficam no banco do `notifications` e são mantidos pela API `/api/v1
 | Render com Thymeleaf | pronto, com testes |
 | Envio por SMTP (JavaMail + Mailpit) | pronto, com teste de integração |
 | API de cadastro de templates (PostgreSQL) | pronta, com testes |
+| API de envio (`POST /api/v1/emails`) | pronta, com testes |
 | Consumidor do `SendEmail`, idempotência e DLT | ainda não existe |
 | `ordering` publicando `SendEmail` pela outbox | ainda não existe |
 
@@ -132,5 +133,5 @@ Os templates ficam no banco do `notifications` e são mantidos pela API `/api/v1
 - [`openapi/notifications.yml`](../openapi/notifications.yml): API de e-mails e de templates.
 - [`asyncapi/notifications.yml`](../asyncapi/notifications.yml): canal `notifications.email.commands` e a DLT.
 - [`asyncapi/messages.yml`](../asyncapi/messages.yml): o `SendEmailCommand` e o header `idempotency-key`.
-- `SendEmailApplicationService` (notifications): caso de uso do envio (stub por enquanto).
+- `SendEmailApplicationService` (notifications): caso de uso do envio ([doc 06](./06-api-de-envio-de-emails.md)).
 - `EmailTemplateRenderer` e `EmailSender` (notifications): portas de render e de envio.

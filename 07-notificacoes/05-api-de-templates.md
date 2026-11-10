@@ -2,7 +2,7 @@
 
 > **Em uma frase:** os templates de e-mail ganham uma API REST que **valida antes de gravar** — o HTML pelo jsoup e a sintaxe pelo Thymeleaf — e guarda o assunto e o corpo no PostgreSQL, com id UUIDv7 gerado pela aplicação.
 
-⬅️ Anterior: [Envio de e-mail por SMTP](./04-envio-de-email-por-smtp.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Envio de e-mail por SMTP](./04-envio-de-email-por-smtp.md) · ➡️ Próximo: [API de envio de e-mails](./06-api-de-envio-de-emails.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
