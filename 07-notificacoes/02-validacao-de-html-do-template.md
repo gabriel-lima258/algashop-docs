@@ -50,7 +50,7 @@ sequenceDiagram
     end
 ```
 
-> Hoje o validador está pronto e testado; a chamada pelo caso de uso e o 422 entram quando o CRUD de templates sair do stub.
+> O cadastro de templates chama o validador antes de gravar ([API de cadastro de templates](./05-api-de-templates.md)).
 
 ### Etapa 1 — sintaxe
 
@@ -116,7 +116,7 @@ Já `th:text`, `th:if` e `data-*` passam: não carregam URL nem código.
 - `th:utext`, `th:attr="href=javascript:..."` e `th:attrappend` não são cobertos.
 - `style` com `url(javascript:)` ou `expression()`, e as tags `<svg>`, `<math>`, `<link>` e `<meta http-equiv="refresh">` não são barrados.
 - `srcset` com várias URLs: só o começo do valor é checado.
-- O validador ainda não é chamado: `EmailTemplateManagementApplicationService` é stub. Quando sair do stub, falta mapear `InvalidTemplateHtmlException` → 422 no `ApiExceptionHandler`.
+- ~~O validador ainda não é chamado~~ — o cadastro valida antes de gravar e o `ApiExceptionHandler` devolve 422 ([doc 05](./05-api-de-templates.md)).
 - ~~O render é stub~~ — pronto com Thymeleaf ([doc 03](./03-renderizacao-do-template-com-thymeleaf.md)).
 
 ## Testes

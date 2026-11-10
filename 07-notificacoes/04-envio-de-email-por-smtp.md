@@ -2,7 +2,7 @@
 
 > **Em uma frase:** o e-mail já renderizado sai por SMTP pelo `JavaMailSender` do Spring Boot, atrás da porta `EmailSender`; em desenvolvimento, o servidor é o Mailpit, que aceita tudo, não entrega nada e mostra a caixa de entrada no navegador.
 
-⬅️ Anterior: [Renderização do template com Thymeleaf](./03-renderizacao-do-template-com-thymeleaf.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Renderização do template com Thymeleaf](./03-renderizacao-do-template-com-thymeleaf.md) · ➡️ Próximo: [API de cadastro de templates](./05-api-de-templates.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 

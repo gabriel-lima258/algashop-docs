@@ -117,8 +117,8 @@ O `Locale` é fixo em `Locale.US` (contratos e templates em inglês): `$1,234.50
 
 ## Pendências
 
-- Ligar o renderer ao `SendEmailApplicationService` e o `assertRenderable` ao cadastro de templates.
-- Mapear `TemplateRenderException` para 422 no `ApiExceptionHandler`.
+- Ligar o renderer ao `SendEmailApplicationService`. ~~E o `assertRenderable` ao cadastro~~ — feito ([doc 05](./05-api-de-templates.md)).
+- ~~Mapear `TemplateRenderException` para 422~~ — o `ApiExceptionHandler` já mapeia.
 - Decidir se o `Locale` deve vir do destinatário (hoje é fixo em `US`).
 - Detectar variável usada no template e ausente no comando (hoje vira vazio em silêncio).
 
