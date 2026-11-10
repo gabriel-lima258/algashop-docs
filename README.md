@@ -13,7 +13,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | **`algashop-ordering`** | 8081 | PostgreSQL + Redis | DDD tático, arquitetura hexagonal, CQRS, domain events, cache client-side, resiliência |
 | **`algashop-billing`** | 8082 | PostgreSQL | Integração com gateway de pagamento, resiliência por idempotência, Testcontainers |
 | **`product-catalog`** | 8083 | MongoDB (replica set) + Redis | Modelagem documental e desnormalização, eventos de domínio, concorrência atômica, transação multi-coleção, cache server-side, REST Docs |
-| **`notifications`** | 8084 | PostgreSQL | E-mail por templates: o ordering decide *quando*, ele decide *como*; HTML do template validado na entrada (jsoup) renderizado com Thymeleaf e enviado por SMTP; APIs de cadastro de templates e de envio protegidas por JWT e escopo — em construção |
+| **`notifications`** | 8084 | PostgreSQL | E-mail por templates: o ordering decide *quando*, ele decide *como*; HTML do template validado na entrada (jsoup) renderizado com Thymeleaf e enviado por SMTP; APIs de cadastro de templates e de envio protegidas por JWT e escopo, registrado no Eureka e exposto pelo gateway-admin — em construção |
 | **`billing-scheduler`** | — | — | Jobs agendados, cancelamento de faturas expiradas |
 | **`authorization-server`** | 9000 | PostgreSQL | OAuth 2.1 e OIDC, gestão de usuários, PKCE para cliente público, sessão em banco |
 | **`service-registry`** | 8761 | — | Eureka Server: registro e descoberta de serviços, dashboard das instâncias |
@@ -161,6 +161,7 @@ O serviço que entrega e-mail aos clientes. Está em construção: os docs cresc
 | 05 | [API de cadastro de templates](./07-notificacoes/05-api-de-templates.md) | CRUD que valida antes de gravar, 404 antes de 422, UUIDv7 gerado na aplicação e o `version` nulo que decide persist × merge, `PagedModel` — com o roteiro de testes do Postman |
 | 06 | [API de envio de e-mails](./07-notificacoes/06-api-de-envio-de-emails.md) | Corpo como **comando** (o mesmo tipo vai vir pelo Kafka), `@Valid` aninhado, destinatário que as variáveis não sobrescrevem, 204/400/404/422/502 — e log sem dado pessoal |
 | 07 | [Segurança: resource server](./07-notificacoes/07-seguranca-resource-server.md) | As duas pontas (auth server emite, notifications exige), secret com `{bcrypt}` no Parameter Store, escopo por meta-anotação, 401 × 403 sem corpo — e o `$` a mais que quebrava o hash |
+| 08 | [Eureka e gateway-admin](./07-notificacoes/08-eureka-e-gateway-admin.md) | Registro por nome com id aleatório e IP, rotas `lb://` com os métodos do contrato e o preflight, quem responde 401/403/404/503 — e o `lb://notification` sem "s" |
 
 ### Artefatos
 
@@ -299,6 +300,7 @@ O serviço que entrega e-mail aos clientes. Está em construção: os docs cresc
 | Impedir que o cliente troque o destinatário pelas variáveis | [API de envio de e-mails](./07-notificacoes/06-api-de-envio-de-emails.md) |
 | Proteger um serviço novo com JWT e escopo por endpoint | [Segurança: resource server](./07-notificacoes/07-seguranca-resource-server.md) |
 | Cadastrar um cliente `client_credentials` com secret no Parameter Store | [Segurança: resource server](./07-notificacoes/07-seguranca-resource-server.md) |
+| Registrar um serviço novo no Eureka e roteá-lo no gateway | [Eureka e gateway-admin](./07-notificacoes/08-eureka-e-gateway-admin.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |

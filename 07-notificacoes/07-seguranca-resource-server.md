@@ -2,7 +2,7 @@
 
 > **Em uma frase:** a porta 8084 fecha. Toda chamada precisa de um JWT válido, emitido pelo authorization server, e cada endpoint exige o seu escopo — `emails:send`, `email-templates:read` ou `email-templates:write`.
 
-⬅️ Anterior: [API de envio de e-mails](./06-api-de-envio-de-emails.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [API de envio de e-mails](./06-api-de-envio-de-emails.md) · ➡️ Próximo: [Eureka e gateway-admin](./08-eureka-e-gateway-admin.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 

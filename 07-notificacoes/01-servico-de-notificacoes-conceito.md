@@ -102,6 +102,7 @@ Os templates ficam no banco do `notifications` e são mantidos pela API `/api/v1
 | API de cadastro de templates (PostgreSQL) | pronta, com testes |
 | API de envio (`POST /api/v1/emails`) | pronta, com testes |
 | Segurança (JWT + escopo por endpoint) | pronta, com testes |
+| Eureka + rotas no gateway-admin | pronto |
 | Consumidor do `SendEmail`, idempotência e DLT | ainda não existe |
 | `ordering` publicando `SendEmail` pela outbox | ainda não existe |
 
