@@ -101,6 +101,7 @@ Os templates ficam no banco do `notifications` e são mantidos pela API `/api/v1
 | Envio por SMTP (JavaMail + Mailpit) | pronto, com teste de integração |
 | API de cadastro de templates (PostgreSQL) | pronta, com testes |
 | API de envio (`POST /api/v1/emails`) | pronta, com testes |
+| Segurança (JWT + escopo por endpoint) | pronta, com testes |
 | Consumidor do `SendEmail`, idempotência e DLT | ainda não existe |
 | `ordering` publicando `SendEmail` pela outbox | ainda não existe |
 

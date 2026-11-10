@@ -126,7 +126,7 @@ Tem uma pegadinha. O Spring Data decide entre `persist` (novo) e `merge` (existe
 ## Pendências
 
 - ~~`sort` por campo inexistente responde 500~~ — corrigido: `PropertyReferenceException` → **400** `Invalid sort property: foo`.
-- Sem segurança por enquanto (fora do desafio): o contrato pede `email-templates:read` e `email-templates:write`.
+- ~~Sem segurança~~ — exige `email-templates:read`/`write` desde o [doc 07](./07-seguranca-resource-server.md).
 - Sem teste de integração do controller nem do repositório (o comportamento foi conferido à mão, abaixo).
 
 ## Testes

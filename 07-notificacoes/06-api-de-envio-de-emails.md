@@ -2,7 +2,7 @@
 
 > **Em uma frase:** `POST /api/v1/emails` recebe um **comando** de envio (destinatário, template e variáveis), carrega o template salvo, renderiza assunto e corpo com o destinatário protegido e entrega ao SMTP — respondendo 204, e cada falha com o seu status.
 
-⬅️ Anterior: [API de cadastro de templates](./05-api-de-templates.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [API de cadastro de templates](./05-api-de-templates.md) · ➡️ Próximo: [Segurança: resource server](./07-seguranca-resource-server.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
@@ -111,7 +111,7 @@ O Jackson converte o JSON em `Map`, `List`, `String` e números. Números viram 
 ## Pendências
 
 - Diferenciar `MailPreparationException` (dado ruim) de `MailSendException` (SMTP) no `ApiExceptionHandler`.
-- Sem segurança por enquanto (fora do desafio): o contrato pede o escopo `emails:send`.
+- ~~Sem segurança~~ — exige `emails:send` desde o [doc 07](./07-seguranca-resource-server.md).
 - Sem teste de integração do controller; o roteiro abaixo foi conferido à mão.
 
 ## Testes
