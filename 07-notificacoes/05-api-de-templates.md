@@ -93,7 +93,7 @@ Tem uma pegadinha. O Spring Data decide entre `persist` (novo) e `merge` (existe
 
 | Método | Rota | Sucesso | Erros |
 |---|---|---|---|
-| GET | `/api/v1/email-templates?page&size&sort` | 200 + página | — |
+| GET | `/api/v1/email-templates?page&size&sort` | 200 + página | 400 (`sort` por campo inexistente) |
 | GET | `/api/v1/email-templates/{id}` | 200 | 404 |
 | POST | `/api/v1/email-templates` | 201 + `Location` | 400, 422 |
 | PUT | `/api/v1/email-templates/{id}` | 200 | 400, 404, 422 |
@@ -119,18 +119,19 @@ Tem uma pegadinha. O Spring Data decide entre `persist` (novo) e `merge` (existe
 ## Cuidados
 
 - **O 422 mostra só a primeira família de erros.** O renderer roda antes do validator; um corpo com sintaxe quebrada **e** `<script>` só reporta a sintaxe.
+- **`sort` vem do cliente.** Um campo que não existe faz o Spring Data falhar ao montar o `ORDER BY` com `PropertyReferenceException`. Sem tratamento, vira 500; o `ApiExceptionHandler` devolve **400** citando só o nome pedido, sem expor a classe JPA. No Spring Data 4 a classe mora em `org.springframework.data.core` (antes era `data.mapping`).
 - **`afterMigrate.sql` apaga a tabela** a cada subida em desenvolvimento. Nunca leve esse arquivo para outro perfil.
 - **Não troque `Long version` por `long`:** o `save` passaria a fazer `merge` e uma busca extra a cada criação.
 
 ## Pendências
 
-- `sort` por campo inexistente (`?sort=foo`) responde **500**: falta tratar `PropertyReferenceException` como 400.
+- ~~`sort` por campo inexistente responde 500~~ — corrigido: `PropertyReferenceException` → **400** `Invalid sort property: foo`.
 - Sem segurança por enquanto (fora do desafio): o contrato pede `email-templates:read` e `email-templates:write`.
 - Sem teste de integração do controller nem do repositório (o comportamento foi conferido à mão, abaixo).
 
 ## Testes
 
-- `./gradlew check`, 09/11/2026: **111 testes, 0 falhas**. Novo: `EmailTemplateManagementApplicationServiceTest` (Mockito, 8 testes) — create válido salva e devolve um UUID versão 7 com `version` nulo; HTML proibido e sintaxe inválida não salvam; update e delete de id inexistente dão 404 sem validar; update inválido não altera a entidade; update válido troca os três campos; delete remove.
+- `./gradlew check`, 09/11/2026: **112 testes, 0 falhas**. `EmailTemplateControllerSortTest` (`@WebMvcTest`, 1 teste): `?sort=foo` → 400 com `title` e `detail`. Novo: `EmailTemplateManagementApplicationServiceTest` (Mockito, 8 testes) — create válido salva e devolve um UUID versão 7 com `version` nulo; HTML proibido e sintaxe inválida não salvam; update e delete de id inexistente dão 404 sem validar; update inválido não altera a entidade; update válido troca os três campos; delete remove.
 - Roteiro do enunciado contra o serviço rodando na 8084 (09/11/2026):
 
 | # | Cenário | Esperado | Obtido |
@@ -147,6 +148,7 @@ Tem uma pegadinha. O Spring Data decide entre `persist` (novo) e `merge` (existe
 | 10 | DELETE + GET | 204, depois 404 | 204, 404 |
 | 11 | PUT/DELETE de id removido | 404 | 404, 404 (PUT com `<script>` também 404) |
 | 12 | `?size=1&sort=name,asc` | página de 1 | `size: 1` |
+| 13 | `?sort=foo` | 400 | 400 `Invalid sort property: foo` (instância temporária na 18084 com o código novo; `?sort=name,desc` segue 200) |
 
 ## Dados de teste (Postman)
 
@@ -189,6 +191,6 @@ Base: `http://localhost:8084/api/v1/email-templates`, `Content-Type: application
 - `EmailTemplateManagementApplicationService` (notifications, aplicação): escrita com validação antes de gravar.
 - `EmailTemplateQueryServiceImpl` (notifications, infraestrutura/persistência): leitura que devolve `EmailTemplateOutput`.
 - `EmailTemplateController` (notifications, apresentação): os cinco endpoints.
-- `ApiExceptionHandler` (notifications, apresentação): 404 e 422.
+- `ApiExceptionHandler` (notifications, apresentação): 404, 422 e 400 para `sort` inválido.
 - `V001__create-table-email-template.sql` e `db/testdata/afterMigrate.sql`: tabela e o Order Placed.
 - [`openapi/notifications.yml`](../openapi/notifications.yml): o contrato.
