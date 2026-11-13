@@ -1018,6 +1018,8 @@ Até aqui o sistema aprendeu a **fazer**. Agora o negócio quer **entender** o q
 | Vendas por mês no ordering | `GET /api/v1/metrics/sales-overview`: receita pela data do pagamento, cancelado fora, mês vazio com zero; escopo `metrics:read` **e** papel MANAGER; rota no gateway-admin; massa de 600 pedidos em 12 meses |
 | Totais de clientes e carrinhos (desafio) | `GET /api/v1/metrics/total-overview` numa consulta só: cliente ativo = não arquivado (com ou sem carrinho), carrinho ativo = com item e de cliente ativo; `left join` com o filtro na junção e `count(coluna)`; `@CanReadMetrics` vira escopo + `not hasRole('CUSTOMER')` para o token de máquina passar |
 | Pagamentos no billing (desafio) | `GET /api/v1/metrics/payments-overview`: o número mora com o dono do fato (fatura, não a cópia no pedido); pagas e não canceladas, pelo mês do `paid_at`, por forma de pagamento, sem linhas zeradas; intervalo até o dia 1 do mês seguinte; `@CanReadMetrics` no billing; `billing-metrics-route` com caminho exato |
+| Relatórios estratégicos: reporting database e ETL (conceito) | Pergunta que cruza ordering e product-catalog; ETL copia de tempos em tempos para um banco só de leitura, onde o `join` volta; consistência eventual como preço; reporting database × API composition × ECST |
+| CDC por log como captura (conceito) | O **E** do ETL lê o registro de transações (WAL) em vez de consultar as tabelas: vê inserir, alterar e apagar, na ordem e quase na hora, sem tocar no serviço; por consulta × por trigger × por log; CDC (cópia de linhas) × evento de integração (contrato de negócio) |
 
 > [`01-relatorios-e-metricas-conceito.md`](../08-relatorios/01-relatorios-e-metricas-conceito.md)
 

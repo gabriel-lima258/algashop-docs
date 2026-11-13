@@ -2,7 +2,7 @@
 
 > **Em uma frase:** o billing responde quantas faturas foram pagas e quanto entrou, por mês e por forma de pagamento. Antes da consulta vem uma pergunta de arquitetura: **qual serviço é o dono desse número?**
 
-⬅️ Anterior: [Totais de clientes e carrinhos](./03-totais-de-clientes-e-carrinhos.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Totais de clientes e carrinhos](./03-totais-de-clientes-e-carrinhos.md) · ➡️ Próximo: [Relatórios estratégicos: reporting database e ETL](./05-relatorios-estrategicos-e-reporting-database.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
