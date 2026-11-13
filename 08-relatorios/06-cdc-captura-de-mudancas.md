@@ -2,7 +2,7 @@
 
 > **Em uma frase:** em vez de perguntar ao banco "como estão os dados agora?" de tempos em tempos, o **CDC** (Change Data Capture) acompanha o **registro de transações** do próprio banco e entrega cada inserir, alterar e apagar, na ordem e quase na hora. É ele que faz o **E** do ETL no AlgaShop.
 
-⬅️ Anterior: [Relatórios estratégicos: reporting database e ETL](./05-relatorios-estrategicos-e-reporting-database.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Relatórios estratégicos: reporting database e ETL](./05-relatorios-estrategicos-e-reporting-database.md) · ➡️ Próximo: [Kafka Connect](./07-kafka-connect.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
@@ -111,7 +111,7 @@ Por isso o CDC serve bem para alimentar o reporting database e mal para integrar
 
 ## Pendências
 
-- A ferramenta de CDC e a configuração do Postgres para expor o WAL (vêm nos desafios).
+- A ferramenta de CDC: o Kafka Connect com o Debezium ([doc 07](./07-kafka-connect.md)); a configuração do Postgres para expor o WAL vem nos desafios.
 - As primeiras tabelas capturadas (pedidos e itens do ordering; produtos e categorias do product-catalog) e o reporting database.
 
 ## Onde ver

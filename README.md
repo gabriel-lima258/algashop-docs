@@ -177,6 +177,7 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | 04 | [Pagamentos por mês no billing](./08-relatorios/04-pagamentos-por-mes-no-billing.md) | O número mora com o dono do fato (pagamento → billing, não a cópia no ordering); pago e cancelado não conta; sem linhas zeradas; o dia 31 até o último instante — e a coluna `method` do curso que aqui é `payment_method` |
 | 05 | [Relatórios estratégicos: reporting database e ETL](./08-relatorios/05-relatorios-estrategicos-e-reporting-database.md) | Pergunta que cruza serviços sem `join` entre bancos: ETL (extrair, transformar, carregar) até um banco só de leitura, com consistência eventual — e quando usar reporting database, API composition ou ECST |
 | 06 | [CDC: capturar as mudanças](./08-relatorios/06-cdc-captura-de-mudancas.md) | Capturar o que mudou, não como está: CDC por consulta, por trigger e por log; por que o log (WAL) vê tudo sem tocar no serviço — e por que CDC não é evento de integração |
+| 07 | [Kafka Connect](./08-relatorios/07-kafka-connect.md) | Mover dados entre bancos e Kafka por configuração: conector (o quê), task (quem faz), worker (onde roda), source × sink, tópicos internos de configs/offsets/status, converter (bytes) × transform (ajuste) |
 
 ### Artefatos
 
@@ -330,6 +331,8 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | Copiar dados de um serviço sem consultar o banco o tempo todo | [CDC: capturar as mudanças](./08-relatorios/06-cdc-captura-de-mudancas.md) |
 | Escolher entre CDC por consulta, por trigger e por log | [CDC: capturar as mudanças](./08-relatorios/06-cdc-captura-de-mudancas.md) |
 | Diferenciar CDC de evento de integração | [CDC: capturar as mudanças](./08-relatorios/06-cdc-captura-de-mudancas.md) |
+| Entender worker, conector e task no Kafka Connect | [Kafka Connect](./08-relatorios/07-kafka-connect.md) |
+| Diferenciar converter de transform | [Kafka Connect](./08-relatorios/07-kafka-connect.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |

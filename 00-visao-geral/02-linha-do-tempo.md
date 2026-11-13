@@ -1020,6 +1020,7 @@ Até aqui o sistema aprendeu a **fazer**. Agora o negócio quer **entender** o q
 | Pagamentos no billing (desafio) | `GET /api/v1/metrics/payments-overview`: o número mora com o dono do fato (fatura, não a cópia no pedido); pagas e não canceladas, pelo mês do `paid_at`, por forma de pagamento, sem linhas zeradas; intervalo até o dia 1 do mês seguinte; `@CanReadMetrics` no billing; `billing-metrics-route` com caminho exato |
 | Relatórios estratégicos: reporting database e ETL (conceito) | Pergunta que cruza ordering e product-catalog; ETL copia de tempos em tempos para um banco só de leitura, onde o `join` volta; consistência eventual como preço; reporting database × API composition × ECST |
 | CDC por log como captura (conceito) | O **E** do ETL lê o registro de transações (WAL) em vez de consultar as tabelas: vê inserir, alterar e apagar, na ordem e quase na hora, sem tocar no serviço; por consulta × por trigger × por log; CDC (cópia de linhas) × evento de integração (contrato de negócio) |
+| Kafka Connect (conceito) | O ETL por configuração: conectores criados por JSON na API REST, plugins (Debezium, Confluent Hub), source × sink com o tópico no meio, tasks (`tasks.max`; 1 para CDC), workers standalone × distribuído, configs/offsets/status em tópicos internos, converters (JSON com schema embutido) e transforms (SMTs) |
 
 > [`01-relatorios-e-metricas-conceito.md`](../08-relatorios/01-relatorios-e-metricas-conceito.md)
 
