@@ -10,7 +10,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 
 | Serviço | Porta | Banco | Destaque técnico |
 |---|---|---|---|
-| **`algashop-ordering`** | 8081 | PostgreSQL + Redis | DDD tático, arquitetura hexagonal, CQRS, domain events, cache client-side, resiliência |
+| **`algashop-ordering`** | 8081 | PostgreSQL + Redis | DDD tático, arquitetura hexagonal, CQRS, domain events, cache client-side, resiliência; métricas de vendas por mês para gerentes |
 | **`algashop-billing`** | 8082 | PostgreSQL | Integração com gateway de pagamento, resiliência por idempotência, Testcontainers |
 | **`product-catalog`** | 8083 | MongoDB (replica set) + Redis | Modelagem documental e desnormalização, eventos de domínio, concorrência atômica, transação multi-coleção, cache server-side, REST Docs |
 | **`notifications`** | 8084 | PostgreSQL | E-mail por templates: o ordering decide *quando*, ele decide *como*; HTML do template validado na entrada (jsoup) renderizado com Thymeleaf e enviado por SMTP; APIs de cadastro de templates e de envio protegidas por JWT e escopo, registrado no Eureka e exposto pelo gateway-admin; consome `SendEmail` pelo Kafka com retry e DLT, publicado pelo ordering via outbox a cada pedido — em construção |
@@ -165,6 +165,15 @@ O serviço que entrega e-mail aos clientes. Está em construção: os docs cresc
 | 09 | [Comandos de e-mail pelo Kafka](./07-notificacoes/09-comandos-de-email-pelo-kafka.md) | Mesma regra, outra porta: o listener entrega ao mesmo caso de uso; só o SMTP é retentado (2/4/8 s), o resto vai direto para a DLT na mesma partição — e o alias e o pacote copiados do billing |
 | 10 | [Comando de e-mail a partir do ordering](./07-notificacoes/10-comando-de-email-a-partir-do-ordering.md) | O `OrderPlacedEvent` grava o `SendEmail` na outbox, na transação do pedido; chave = id do pedido, sem reply (dispare e esqueça); template e tópico por propriedade validada — e o assembler que não compilava |
 
+### 08 — Relatórios
+
+Relatórios e streaming de dados entre microsserviços. Está em construção: os docs crescem a cada aula, e as pendências ficam no próprio doc.
+
+| # | Documento | O que você aprende |
+|---|---|---|
+| 01 | [Relatórios e métricas: o conceito](./08-relatorios/01-relatorios-e-metricas-conceito.md) | Operacional (agora), tático (período fechado) e estratégico (tendência); por que relatório é difícil com um banco por serviço; o próprio serviço responde × streaming até um banco dedicado |
+| 02 | [Primeira métrica: vendas por mês](./08-relatorios/02-primeira-metrica-vendas-por-mes.md) | Um relatório tático no ordering: receita pela data do pagamento, cancelado fora, mês vazio com zero, escopo **e** papel MANAGER — e o contrato colado por cima |
+
 ### Artefatos
 
 | Pasta | Conteúdo |
@@ -306,6 +315,9 @@ O serviço que entrega e-mail aos clientes. Está em construção: os docs cresc
 | Decidir o que retentar e o que mandar direto para a DLT | [Comandos de e-mail pelo Kafka](./07-notificacoes/09-comandos-de-email-pelo-kafka.md) |
 | Receber o mesmo comando por REST e por Kafka sem duplicar regra | [Comandos de e-mail pelo Kafka](./07-notificacoes/09-comandos-de-email-pelo-kafka.md) |
 | Mandar um comando sem resposta pela outbox (dispare e esqueça) | [Comando de e-mail a partir do ordering](./07-notificacoes/10-comando-de-email-a-partir-do-ordering.md) |
+| Saber se um relatório é operacional, tático ou estratégico | [Relatórios e métricas: o conceito](./08-relatorios/01-relatorios-e-metricas-conceito.md) |
+| Decidir entre consultar o próprio serviço e montar um banco de relatórios | [Relatórios e métricas: o conceito](./08-relatorios/01-relatorios-e-metricas-conceito.md) |
+| Proteger um endpoint com escopo e papel ao mesmo tempo | [Primeira métrica: vendas por mês](./08-relatorios/02-primeira-metrica-vendas-por-mes.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |

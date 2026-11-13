@@ -576,6 +576,70 @@ paths:
         500:
           $ref: "#/components/responses/InternalError"
 
+  /api/v1/metrics/sales-overview:
+    get:
+      summary: Sales per month
+      description: >-
+        Paid and not canceled orders grouped by the month of the payment.
+        Months without sales are returned with zero. Administrative: requires scope metrics:read and the MANAGER role (back-office managers only).
+      tags:
+        - Metrics
+      security:
+        - oauth2: ["metrics:read"]
+      parameters:
+        - schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          name: yearMonthStart
+          in: query
+          required: false
+          description: First month of the period (inclusive). Default is January of the current year.
+          example: "2026-01"
+        - schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          name: yearMonthEnd
+          in: query
+          required: false
+          description: Last month of the period (inclusive). Default is December of the current year.
+          example: "2026-12"
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SalesOverview"
+        400:
+          $ref: "#/components/responses/BadRequest"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        403:
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/metrics/total-overview:
+    get:
+      summary: Active customers and shopping carts
+      description: >-
+        Administrative: requires scope metrics:read and the MANAGER role (back-office managers only).
+      tags:
+        - Metrics
+      security:
+        - oauth2: ["metrics:read"]
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TotalOverview"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        403:
+          $ref: "#/components/responses/Forbidden"
+
 components:
   securitySchemes:
     oauth2:
@@ -599,6 +663,7 @@ components:
             shopping-carts:read: Read shopping carts
             shopping-carts:write: Manage shopping carts
             shipping-costs:preview: Preview shipping costs
+            metrics:read: Read sales metrics (MANAGER role only)
   parameters:
     page:
       schema:
@@ -1362,3 +1427,36 @@ components:
           format: date
           description: Expected delivery date
           example: "2026-02-01"
+    SalesOverview:
+      type: object
+      required:
+        - yearMonth
+        - quantity
+        - revenue
+      properties:
+        yearMonth:
+          type: string
+          description: Month of the payment (`yyyy-MM`)
+          example: "2026-07"
+        quantity:
+          type: integer
+          description: Number of sales in the month
+          example: 40
+        revenue:
+          type: number
+          description: Sum of the total amount of the sales in the month
+          example: 499881.89
+    TotalOverview:
+      type: object
+      required:
+        - activeCustomers
+        - activeShoppingCarts
+      properties:
+        activeCustomers:
+          type: integer
+          description: Customers that are not archived
+          example: 21
+        activeShoppingCarts:
+          type: integer
+          description: Shopping carts with at least one item, of active customers
+          example: 2

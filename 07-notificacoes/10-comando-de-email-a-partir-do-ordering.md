@@ -2,7 +2,7 @@
 
 > **Em uma frase:** quando um pedido é realizado, o `ordering` grava um `SendEmail` na **outbox**, na mesma transação do pedido, para o tópico `notifications.email.commands`. Ele só diz **para quem**, **qual template** e **com quais variáveis**. Não espera resposta: é "dispare e esqueça".
 
-⬅️ Anterior: [Comandos de e-mail pelo Kafka](./09-comandos-de-email-pelo-kafka.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Comandos de e-mail pelo Kafka](./09-comandos-de-email-pelo-kafka.md) · ➡️ Próximo: [Relatórios e métricas: o conceito](../08-relatorios/01-relatorios-e-metricas-conceito.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
@@ -104,7 +104,7 @@ O adapter da outbox só existe com `algashop.messaging.outbox.enabled=true`. Sem
 
 ## Pendências
 
-- **Roteiro ponta a ponta incompleto.** Só o primeiro cenário foi conferido (abaixo). O pedido desse checkout foi apagado por uma subida do ordering, antes de chegar ao Kafka (ver Cuidados). Faltam o Kafka, o Mailpit, a saga, o notifications parado e o template inexistente.
+- ~~Roteiro ponta a ponta incompleto~~ — confirmado pelo usuário em 10/11/2026 (ver Testes).
 - O `CheckoutApplicationServiceIT` citado no enunciado **já estava corrigido** (commit `c9a4aaa`): ele verifica `onOrderPlacedPublishIntegrationEvent` e `onOrderPlacedStartSaga`. Agora ele verifica também o e-mail.
 - Idempotência no notifications pelo `idempotency-key` (próximo desafio).
 - Dado pessoal do comando no log de erro do notifications (pendência do [doc 09](./09-comandos-de-email-pelo-kafka.md)).
@@ -114,7 +114,14 @@ O adapter da outbox só existe com `algashop.messaging.outbox.enabled=true`. Sem
 - `ordering`, `./gradlew check`, 10/11/2026: **514 testes, 0 falhas** (inclui `compileTestJava`). Novo: `OrderPlacedEmailCommandAssemblerTest` (3, sem Spring nem banco). Ele confere o destinatário, o template, o `aggregateId`, as seis variáveis com os valores e tipos, os itens ordenados pelo id com as quatro chaves, e os argumentos nulos lançando exceção. O `CheckoutApplicationServiceIT` agora verifica as três reações.
 - Boot do jar com o perfil de desenvolvimento: sobe com `outbox.enabled=true` (adapter da outbox) e com `false` (par Kafka).
 - Checkout do usuário (pedido `0S6HDDGP3V0WE`), pelo log do ordering: na mesma requisição, `IssueInvoiceIntegrationCommand` → `billing.invoice.commands`, `SendEmailIntegrationCommand` → `notifications.email.commands` e `OrderPlacedIntegrationEvent` → `ordering.order.events`, os três com `aggregateId=0S6HDDGP3V0WE`. As três reações rodaram, e a saga e o evento de integração continuam.
-- Restante do roteiro: **não rodado** (ver Pendências).
+- Roteiro ponta a ponta **confirmado pelo usuário** (10/11/2026). Conferido por mim no pedido `0S6HE51GZV0ZT`:
+  - `notifications.email.commands`, partição 2: chave `0S6HE51GZV0ZT`, `__TypeId__` = `Notifications.SendEmailCommand` e `idempotency-key` = UUID;
+  - o corpo vai só com `recipient`, `templateId` e `variables` (sem `aggregateId` nem `idempotencyKey`);
+  - as datas vão em ISO-8601 e os valores numéricos como número;
+  - Mailpit: `Order 0S6HE51GZV0ZT received` para John Doe;
+  - `Ordering.OrderPlacedIntegrationEvent` publicado em `ordering.order.events` com a mesma chave;
+  - a saga foi criada (no momento da conferência, `RUNNING` / `INVOICING`);
+  - nenhuma mensagem do pedido na DLT do notifications.
 
 ## Roteiro ponta a ponta (para rodar)
 

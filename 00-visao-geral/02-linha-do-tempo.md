@@ -984,7 +984,7 @@ O módulo começa apagando código, em duas demolições. Primeiro sai o checkou
 
 ---
 
-## Fase 45 — Serviço de notificações (nov/2026) ← etapa atual
+## Fase 45 — Serviço de notificações (nov/2026)
 
 Nasce um serviço novo, `notifications`, para entregar e-mail aos clientes. A divisão é a que guia o módulo inteiro: o `ordering` decide **quando** notificar, o `notifications` decide **como** entregar (template, envio, retentativa). O e-mail fica **fora da saga**, porque não tem compensação, e o comando `SendEmail` vai sair pela outbox com um id derivado do evento, para o consumidor descartar duplicados. A primeira peça construída é a porta de entrada dos templates: o HTML só é salvo se passar pela validação.
 
@@ -1005,6 +1005,19 @@ Nasce um serviço novo, `notifications`, para entregar e-mail aos clientes. A di
 | Comando a partir do ordering (desafio) | `OrderPlacedEvent` → `SendEmailIntegrationCommand` na outbox, na transação do checkout, para `notifications.email.commands`; chave = id do pedido, `idempotency-key` = id da outbox, sem reply; template e tópico em propriedades validadas; par Kafka para o outbox desligado |
 
 > [`01-servico-de-notificacoes-conceito.md`](../07-notificacoes/01-servico-de-notificacoes-conceito.md)
+
+---
+
+## Fase 46 — Relatórios e streaming de dados (nov/2026) ← etapa atual
+
+Até aqui o sistema aprendeu a **fazer**. Agora o negócio quer **entender** o que aconteceu. Relatório é uma pergunta aos dados, e o tipo dela decide o caminho: **operacional** (agora, item por item), **tático** (período fechado, totais) ou **estratégico** (tendência). Com um banco por serviço não existe `join` entre eles. O que cabe num serviço, ele mesmo responde; o que cruza serviços vai por streaming até um banco e um serviço dedicados.
+
+| Marco | O que se aprende |
+|---|---|
+| Três tipos de relatório | Pergunta, público, janela de tempo e frequência de cada um; os dois caminhos (o próprio serviço × streaming para um banco de relatórios) |
+| Vendas por mês no ordering | `GET /api/v1/metrics/sales-overview`: receita pela data do pagamento, cancelado fora, mês vazio com zero; escopo `metrics:read` **e** papel MANAGER; rota no gateway-admin; massa de 600 pedidos em 12 meses |
+
+> [`01-relatorios-e-metricas-conceito.md`](../08-relatorios/01-relatorios-e-metricas-conceito.md)
 
 ---
 
@@ -1058,6 +1071,7 @@ Nasce um serviço novo, `notifications`, para entregar e-mail aos clientes. A di
 - Workflow coreografado pedido → fatura → pagamento → pedido pago entre ordering e billing, com `OrderPaid` publicado para o catálogo
 - Saga coreografada completa entre ordering, billing e catálogo na Fase 43 — removida do código na Fase 44 para a orquestração; ficaram as operações de trabalho (fatura, estorno, reserva) e os eventos de produto no carrinho
 - Serviço `notifications` iniciado na Fase 45: contratos, esqueleto em portas e validação do HTML do template com jsoup, render com Thymeleaf, envio por SMTP e as APIs de cadastro de templates e de envio, protegidas por JWT e escopo, registrado no Eureka e roteado pelo gateway-admin, consumindo o `SendEmail` pelo Kafka com retry e DLT e recebendo do ordering, pela outbox, o e-mail de cada pedido realizado (idempotência ainda não existe)
+- Módulo de relatórios iniciado na Fase 46: os três tipos de relatório e a primeira métrica (vendas por mês) respondida pelo próprio ordering; o banco de relatórios por streaming ainda não existe
 
 **Próximos passos naturais:**
 - **Outbox no billing** — hoje `InvoiceIssued` e `InvoicePaid` saem after-commit; falha no Kafka depois do commit é só logada e o workflow trava em silêncio

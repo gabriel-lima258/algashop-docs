@@ -161,7 +161,54 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/v1/metrics/payments-overview:
+    get:
+      summary: Paid invoices per month and payment method
+      description: >-
+        Paid invoices grouped by the month of the payment and by payment
+        method. Requires scope metrics:read and the MANAGER role.
+      tags:
+        - Metrics
+      security:
+        - bearerAuth: []
+      parameters:
+        - schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          name: yearMonthStart
+          in: query
+          required: false
+          description: First month of the period (inclusive). Default is January of the current year.
+          example: "2026-01"
+        - schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          name: yearMonthEnd
+          in: query
+          required: false
+          description: Last month of the period (inclusive). Default is December of the current year.
+          example: "2026-12"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaymentsOverview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        Access token issued by the AlgaShop Authorization Server. The metrics
+        endpoint also checks the scope metrics:read and the MANAGER role.
   responses:
     NotFound:
       description: Resource not found
@@ -440,6 +487,28 @@ components:
           example: "18fcd9fb-4ce7-44d6-9583-14d8b3dc5aff"
         method:
           $ref: "#/components/schemas/PaymentMethod"
+    PaymentsOverview:
+      type: object
+      required:
+        - yearMonth
+        - paymentMethod
+        - quantity
+        - totalAmount
+      properties:
+        yearMonth:
+          type: string
+          description: Month of the payment (`yyyy-MM`)
+          example: "2026-07"
+        paymentMethod:
+          $ref: "#/components/schemas/PaymentMethod"
+        quantity:
+          type: integer
+          description: Number of paid invoices
+          example: 26
+        totalAmount:
+          type: number
+          description: Sum of the paid invoices
+          example: 417107.93
     InvoiceStatus:
       type: string
       example: "UNPAID"
