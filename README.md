@@ -11,7 +11,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | Serviço | Porta | Banco | Destaque técnico |
 |---|---|---|---|
 | **`algashop-ordering`** | 8081 | PostgreSQL + Redis | DDD tático, arquitetura hexagonal, CQRS, domain events, cache client-side, resiliência; métricas de vendas por mês e totais de clientes e carrinhos para o back-office |
-| **`algashop-billing`** | 8082 | PostgreSQL | Integração com gateway de pagamento, resiliência por idempotência, Testcontainers |
+| **`algashop-billing`** | 8082 | PostgreSQL | Integração com gateway de pagamento, resiliência por idempotência, Testcontainers; métrica de pagamentos por mês e forma de pagamento |
 | **`product-catalog`** | 8083 | MongoDB (replica set) + Redis | Modelagem documental e desnormalização, eventos de domínio, concorrência atômica, transação multi-coleção, cache server-side, REST Docs |
 | **`notifications`** | 8084 | PostgreSQL | E-mail por templates: o ordering decide *quando*, ele decide *como*; HTML do template validado na entrada (jsoup) renderizado com Thymeleaf e enviado por SMTP; APIs de cadastro de templates e de envio protegidas por JWT e escopo, registrado no Eureka e exposto pelo gateway-admin; consome `SendEmail` pelo Kafka com retry e DLT, publicado pelo ordering via outbox a cada pedido — em construção |
 | **`billing-scheduler`** | — | — | Jobs agendados, cancelamento de faturas expiradas |
@@ -174,6 +174,7 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | 01 | [Relatórios e métricas: o conceito](./08-relatorios/01-relatorios-e-metricas-conceito.md) | Operacional (agora), tático (período fechado) e estratégico (tendência); por que relatório é difícil com um banco por serviço; o próprio serviço responde × streaming até um banco dedicado |
 | 02 | [Primeira métrica: vendas por mês](./08-relatorios/02-primeira-metrica-vendas-por-mes.md) | Um relatório tático no ordering: receita pela data do pagamento, cancelado fora, mês vazio com zero, escopo **e** papel MANAGER — e o contrato colado por cima |
 | 03 | [Totais de clientes e carrinhos](./08-relatorios/03-totais-de-clientes-e-carrinhos.md) | A definição de "ativo" decide o número; contar com `left join` sem errar (coluna × linha, filtro na junção × no final) — e a regra que barrava o token de máquina |
+| 04 | [Pagamentos por mês no billing](./08-relatorios/04-pagamentos-por-mes-no-billing.md) | O número mora com o dono do fato (pagamento → billing, não a cópia no ordering); pago e cancelado não conta; sem linhas zeradas; o dia 31 até o último instante — e a coluna `method` do curso que aqui é `payment_method` |
 
 ### Artefatos
 
@@ -320,6 +321,8 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | Decidir entre consultar o próprio serviço e montar um banco de relatórios | [Relatórios e métricas: o conceito](./08-relatorios/01-relatorios-e-metricas-conceito.md) |
 | Liberar leitura para o back-office e para tokens de máquina, sem liberar o cliente | [Totais de clientes e carrinhos](./08-relatorios/03-totais-de-clientes-e-carrinhos.md) |
 | Contar duas tabelas numa consulta sem inflar o número | [Totais de clientes e carrinhos](./08-relatorios/03-totais-de-clientes-e-carrinhos.md) |
+| Decidir qual serviço responde por um relatório | [Pagamentos por mês no billing](./08-relatorios/04-pagamentos-por-mes-no-billing.md) |
+| Filtrar por mês uma coluna com data e hora sem perder o último dia | [Pagamentos por mês no billing](./08-relatorios/04-pagamentos-por-mes-no-billing.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |

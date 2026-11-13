@@ -199,6 +199,10 @@ paths:
                   $ref: "#/components/schemas/PaymentsOverview"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Missing or invalid access token
+        "403":
+          description: Token without the metrics:read scope, or issued to a CUSTOMER
 
 components:
   securitySchemes:

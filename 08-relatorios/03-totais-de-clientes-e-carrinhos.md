@@ -2,7 +2,7 @@
 
 > **Em uma frase:** o ordering responde quantos clientes e quantos carrinhos estão **ativos** agora. O código é pequeno; o difícil é a **definição** de "ativo" e uma contagem que não engana quando junta duas tabelas.
 
-⬅️ Anterior: [Primeira métrica: vendas por mês](./02-primeira-metrica-vendas-por-mes.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Primeira métrica: vendas por mês](./02-primeira-metrica-vendas-por-mes.md) · ➡️ Próximo: [Pagamentos por mês no billing](./04-pagamentos-por-mes-no-billing.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 

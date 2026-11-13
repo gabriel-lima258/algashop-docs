@@ -1,0 +1,523 @@
+{
+    "version": "2.0.0",
+    "runtimeConfiguration": {
+        "environment": "default",
+        "laxTestingModeEnabled": false,
+        "apiConnectivityCheck": true,
+        "logLevel": "error",
+        "logDestination": "stdout+platform",
+        "logMaxFileSize": 2147483648,
+        "requestHeaderNameRequestId": "x-scan-request-id",
+        "requestHeaderNameScenarioId": "x-scan-scenario-id",
+        "requestHeaderNameRequestType": "x-scan-request-type",
+        "requestFlowrate": 100,
+        "requestTimeout": 30,
+        "requestTlsInsecureSkipVerify": true,
+        "responseFollowRedirection": false,
+        "responseMaxBodySizeScan": 10485760,
+        "happyPathOnly": false,
+        "maxRequestRetryAttempts": 5,
+        "maxScanDuration": 1800,
+        "memoryLimit": 2147483648,
+        "memoryTimeSpan": 10,
+        "reportMaxRequestSizeHappyPath": 8092,
+        "reportMaxRequestSizeTest": 8092,
+        "reportIncludeRequestBody": true,
+        "reportIncludeResponseBody": true,
+        "reportMaxHttpResponseSizeHappyPath": 8092,
+        "reportMaxBodySizeHappyPath": 8092,
+        "reportMaxHttpResponseSizeTest": 8092,
+        "reportMaxBodySizeTest": 8092,
+        "reportIssuesOnly": false,
+        "reportMaxIssues": 1000,
+        "reportMaxSize": 20971520,
+        "reportGenerateCurlCommand": true,
+        "normalizeServerUrls": true
+    },
+    "customizations": {
+        "happyPaths": {
+            "retry": 1,
+            "responsePolicy": {
+                "httpStatusExpected": true,
+                "mustBeConformant": true
+            },
+            "httpStatusExpected": [
+                "2XX",
+                "404"
+            ]
+        },
+        "tests": {
+            "responsePolicy": {
+                "httpStatusExpected": true,
+                "mustBeConformant": true
+            }
+        },
+        "requests": {}
+    },
+    "authenticationDetails": [
+        {
+            "bearerAuth": {
+                "type": "bearer",
+                "default": "bearerAuth",
+                "credentials": {
+                    "bearerAuth": {
+                        "description": "bearerAuth security",
+                        "credential": "{{bearerAuth}}"
+                    }
+                }
+            }
+        }
+    ],
+    "operations": {
+        "/api/v1/customers/me/credit-cards/{creditCardId}:delete": {
+            "operationId": "/api/v1/customers/me/credit-cards/{creditCardId}:delete",
+            "scenarios": [
+                {
+                    "key": "happy.path",
+                    "fuzzing": true,
+                    "requests": [
+                        {
+                            "$ref": "#/operations/~1api~1v1~1customers~1me~1credit-cards~1{creditCardId}:delete/request",
+                            "fuzzing": true
+                        }
+                    ]
+                }
+            ],
+            "request": {
+                "operationId": "/api/v1/customers/me/credit-cards/{creditCardId}:delete",
+                "request": {
+                    "type": "42c",
+                    "details": {
+                        "url": "{{host}}/api/v1/customers/me/credit-cards/{creditCardId}",
+                        "method": "DELETE",
+                        "paths": [
+                            {
+                                "key": "creditCardId",
+                                "value": "vvcqnrwxlqhjjajhypgsszbluwguyidg"
+                            }
+                        ]
+                    }
+                },
+                "defaultResponse": "204",
+                "responses": {
+                    "204": {
+                        "expectations": {
+                            "httpStatus": 204
+                        }
+                    },
+                    "404": {
+                        "expectations": {
+                            "httpStatus": 404
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/customers/me/credit-cards/{creditCardId}:get": {
+            "operationId": "/api/v1/customers/me/credit-cards/{creditCardId}:get",
+            "scenarios": [
+                {
+                    "key": "happy.path",
+                    "fuzzing": true,
+                    "requests": [
+                        {
+                            "$ref": "#/operations/~1api~1v1~1customers~1me~1credit-cards~1{creditCardId}:get/request",
+                            "fuzzing": true
+                        }
+                    ]
+                }
+            ],
+            "request": {
+                "operationId": "/api/v1/customers/me/credit-cards/{creditCardId}:get",
+                "request": {
+                    "type": "42c",
+                    "details": {
+                        "url": "{{host}}/api/v1/customers/me/credit-cards/{creditCardId}",
+                        "method": "GET",
+                        "paths": [
+                            {
+                                "key": "creditCardId",
+                                "value": "clunxdiwwyjoszpyxktepzfjwtqvljrh"
+                            }
+                        ]
+                    }
+                },
+                "defaultResponse": "200",
+                "responses": {
+                    "200": {
+                        "expectations": {
+                            "httpStatus": 200
+                        }
+                    },
+                    "404": {
+                        "expectations": {
+                            "httpStatus": 404
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/customers/me/credit-cards:get": {
+            "operationId": "/api/v1/customers/me/credit-cards:get",
+            "scenarios": [
+                {
+                    "key": "happy.path",
+                    "fuzzing": true,
+                    "requests": [
+                        {
+                            "$ref": "#/operations/~1api~1v1~1customers~1me~1credit-cards:get/request",
+                            "fuzzing": true
+                        }
+                    ]
+                }
+            ],
+            "request": {
+                "operationId": "/api/v1/customers/me/credit-cards:get",
+                "request": {
+                    "type": "42c",
+                    "details": {
+                        "url": "{{host}}/api/v1/customers/me/credit-cards",
+                        "method": "GET"
+                    }
+                },
+                "defaultResponse": "200",
+                "responses": {
+                    "200": {
+                        "expectations": {
+                            "httpStatus": 200
+                        }
+                    },
+                    "404": {
+                        "expectations": {
+                            "httpStatus": 404
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/customers/me/credit-cards:post": {
+            "operationId": "/api/v1/customers/me/credit-cards:post",
+            "scenarios": [
+                {
+                    "key": "happy.path",
+                    "fuzzing": true,
+                    "requests": [
+                        {
+                            "$ref": "#/operations/~1api~1v1~1customers~1me~1credit-cards:post/request",
+                            "fuzzing": true
+                        }
+                    ]
+                }
+            ],
+            "request": {
+                "operationId": "/api/v1/customers/me/credit-cards:post",
+                "request": {
+                    "type": "42c",
+                    "details": {
+                        "url": "{{host}}/api/v1/customers/me/credit-cards",
+                        "method": "POST",
+                        "headers": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "requestBody": {
+                            "mode": "json",
+                            "json": {
+                                "tokenizedCard": "14d8b3dc5aff"
+                            }
+                        }
+                    }
+                },
+                "defaultResponse": "201",
+                "responses": {
+                    "201": {
+                        "expectations": {
+                            "httpStatus": 201
+                        }
+                    },
+                    "400": {
+                        "expectations": {
+                            "httpStatus": 400
+                        }
+                    },
+                    "404": {
+                        "expectations": {
+                            "httpStatus": 404
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/customers/me/orders/{orderId}/invoice:get": {
+            "operationId": "/api/v1/customers/me/orders/{orderId}/invoice:get",
+            "scenarios": [
+                {
+                    "key": "happy.path",
+                    "fuzzing": true,
+                    "requests": [
+                        {
+                            "$ref": "#/operations/~1api~1v1~1customers~1me~1orders~1{orderId}~1invoice:get/request",
+                            "fuzzing": true
+                        }
+                    ]
+                }
+            ],
+            "request": {
+                "operationId": "/api/v1/customers/me/orders/{orderId}/invoice:get",
+                "request": {
+                    "type": "42c",
+                    "details": {
+                        "url": "{{host}}/api/v1/customers/me/orders/{orderId}/invoice",
+                        "method": "GET",
+                        "paths": [
+                            {
+                                "key": "orderId",
+                                "value": "lpsqlltygkwbyojxxdlvajhflavzamgg"
+                            }
+                        ]
+                    }
+                },
+                "defaultResponse": "200",
+                "responses": {
+                    "200": {
+                        "expectations": {
+                            "httpStatus": 200
+                        }
+                    },
+                    "404": {
+                        "expectations": {
+                            "httpStatus": 404
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/metrics/payments-overview:get": {
+            "operationId": "/api/v1/metrics/payments-overview:get",
+            "scenarios": [
+                {
+                    "key": "happy.path",
+                    "fuzzing": true,
+                    "requests": [
+                        {
+                            "$ref": "#/operations/~1api~1v1~1metrics~1payments-overview:get/request",
+                            "fuzzing": true
+                        }
+                    ]
+                }
+            ],
+            "request": {
+                "operationId": "/api/v1/metrics/payments-overview:get",
+                "auth": [
+                    "bearerAuth"
+                ],
+                "request": {
+                    "type": "42c",
+                    "details": {
+                        "url": "{{host}}/api/v1/metrics/payments-overview",
+                        "method": "GET",
+                        "queries": [
+                            {
+                                "key": "yearMonthEnd",
+                                "value": "9007-12"
+                            },
+                            {
+                                "key": "yearMonthStart",
+                                "value": "9212-10"
+                            }
+                        ]
+                    }
+                },
+                "defaultResponse": "200",
+                "responses": {
+                    "200": {
+                        "expectations": {
+                            "httpStatus": 200
+                        }
+                    },
+                    "400": {
+                        "expectations": {
+                            "httpStatus": 400
+                        }
+                    },
+                    "401": {
+                        "expectations": {
+                            "httpStatus": 401
+                        }
+                    },
+                    "403": {
+                        "expectations": {
+                            "httpStatus": 403
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/orders/{orderId}/invoice:get": {
+            "operationId": "/api/v1/orders/{orderId}/invoice:get",
+            "scenarios": [
+                {
+                    "key": "happy.path",
+                    "fuzzing": true,
+                    "requests": [
+                        {
+                            "$ref": "#/operations/~1api~1v1~1orders~1{orderId}~1invoice:get/request",
+                            "fuzzing": true
+                        }
+                    ]
+                }
+            ],
+            "request": {
+                "operationId": "/api/v1/orders/{orderId}/invoice:get",
+                "request": {
+                    "type": "42c",
+                    "details": {
+                        "url": "{{host}}/api/v1/orders/{orderId}/invoice",
+                        "method": "GET",
+                        "paths": [
+                            {
+                                "key": "orderId",
+                                "value": "txvnoqjuiobkftwzgqkfbbjqnmnnubuv"
+                            }
+                        ]
+                    }
+                },
+                "defaultResponse": "200",
+                "responses": {
+                    "200": {
+                        "expectations": {
+                            "httpStatus": 200
+                        }
+                    },
+                    "404": {
+                        "expectations": {
+                            "httpStatus": 404
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/orders/{orderId}/invoice:post": {
+            "operationId": "/api/v1/orders/{orderId}/invoice:post",
+            "scenarios": [
+                {
+                    "key": "happy.path",
+                    "fuzzing": true,
+                    "requests": [
+                        {
+                            "$ref": "#/operations/~1api~1v1~1orders~1{orderId}~1invoice:post/request",
+                            "fuzzing": true
+                        }
+                    ]
+                }
+            ],
+            "request": {
+                "operationId": "/api/v1/orders/{orderId}/invoice:post",
+                "request": {
+                    "type": "42c",
+                    "details": {
+                        "url": "{{host}}/api/v1/orders/{orderId}/invoice",
+                        "method": "POST",
+                        "paths": [
+                            {
+                                "key": "orderId",
+                                "value": "syesqwtdhaffdzrlznacvglsazjdivyc"
+                            }
+                        ],
+                        "headers": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "requestBody": {
+                            "mode": "json",
+                            "json": {
+                                "customerId": "6e148bd5-47f6-4022-b9da-07cfaa294f7a",
+                                "items": [
+                                    {
+                                        "amount": 4100.9,
+                                        "name": "Notebook H11 - x2"
+                                    },
+                                    {
+                                        "amount": 4100.9,
+                                        "name": "Notebook H11 - x2"
+                                    },
+                                    {
+                                        "amount": 4100.9,
+                                        "name": "Notebook H11 - x2"
+                                    },
+                                    {
+                                        "amount": 4100.9,
+                                        "name": "Notebook H11 - x2"
+                                    }
+                                ],
+                                "payer": {
+                                    "address": {
+                                        "city": "Yostfort",
+                                        "complement": "Apt. 901",
+                                        "neighborhood": "North Ville",
+                                        "number": "1200",
+                                        "state": "South Carolina",
+                                        "street": "Bourbon Street",
+                                        "zipCode": "70283"
+                                    },
+                                    "document": "255-08-0578",
+                                    "email": "john.doe@email.com",
+                                    "fullName": "John Doe",
+                                    "phone": "5511912341234"
+                                },
+                                "paymentSettings": {
+                                    "creditCardId": "18fcd9fb-4ce7-44d6-9583-14d8b3dc5aff",
+                                    "method": "CREDIT_CARD"
+                                }
+                            }
+                        }
+                    }
+                },
+                "defaultResponse": "201",
+                "responses": {
+                    "201": {
+                        "expectations": {
+                            "httpStatus": 201
+                        }
+                    },
+                    "400": {
+                        "expectations": {
+                            "httpStatus": 400
+                        }
+                    },
+                    "404": {
+                        "expectations": {
+                            "httpStatus": 404
+                        }
+                    },
+                    "500": {
+                        "expectations": {
+                            "httpStatus": 500
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "environments": {
+        "default": {
+            "variables": {
+                "bearerAuth": {
+                    "from": "environment",
+                    "name": "SCAN42C_SECURITY_BEARERAUTH",
+                    "required": true
+                },
+                "host": {
+                    "from": "environment",
+                    "name": "SCAN42C_HOST",
+                    "required": false,
+                    "default": "http://localhost:8082"
+                }
+            }
+        }
+    }
+}

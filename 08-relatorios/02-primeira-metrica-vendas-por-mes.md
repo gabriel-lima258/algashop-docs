@@ -93,7 +93,7 @@ Com poucos pedidos de teste, não dá para ver um gráfico. Por isso, no ambient
 
 ## Pendências
 
-- `payments-overview` (billing): só no contrato, sem código ainda.
+- ~~`payments-overview` (billing)~~ — feito no [doc 04](./04-pagamentos-por-mes-no-billing.md).
 - ~~`total-overview` (ordering)~~ — feito no [doc 03](./03-totais-de-clientes-e-carrinhos.md).
 - O serviço e o banco de relatórios do caminho 2.
 - Os 16 testes de integração do authorization server continuam falhando pelo `jwk.privateKey` nulo, como antes deste módulo.

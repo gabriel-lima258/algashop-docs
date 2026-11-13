@@ -1017,6 +1017,7 @@ Até aqui o sistema aprendeu a **fazer**. Agora o negócio quer **entender** o q
 | Três tipos de relatório | Pergunta, público, janela de tempo e frequência de cada um; os dois caminhos (o próprio serviço × streaming para um banco de relatórios) |
 | Vendas por mês no ordering | `GET /api/v1/metrics/sales-overview`: receita pela data do pagamento, cancelado fora, mês vazio com zero; escopo `metrics:read` **e** papel MANAGER; rota no gateway-admin; massa de 600 pedidos em 12 meses |
 | Totais de clientes e carrinhos (desafio) | `GET /api/v1/metrics/total-overview` numa consulta só: cliente ativo = não arquivado (com ou sem carrinho), carrinho ativo = com item e de cliente ativo; `left join` com o filtro na junção e `count(coluna)`; `@CanReadMetrics` vira escopo + `not hasRole('CUSTOMER')` para o token de máquina passar |
+| Pagamentos no billing (desafio) | `GET /api/v1/metrics/payments-overview`: o número mora com o dono do fato (fatura, não a cópia no pedido); pagas e não canceladas, pelo mês do `paid_at`, por forma de pagamento, sem linhas zeradas; intervalo até o dia 1 do mês seguinte; `@CanReadMetrics` no billing; `billing-metrics-route` com caminho exato |
 
 > [`01-relatorios-e-metricas-conceito.md`](../08-relatorios/01-relatorios-e-metricas-conceito.md)
 
@@ -1072,7 +1073,7 @@ Até aqui o sistema aprendeu a **fazer**. Agora o negócio quer **entender** o q
 - Workflow coreografado pedido → fatura → pagamento → pedido pago entre ordering e billing, com `OrderPaid` publicado para o catálogo
 - Saga coreografada completa entre ordering, billing e catálogo na Fase 43 — removida do código na Fase 44 para a orquestração; ficaram as operações de trabalho (fatura, estorno, reserva) e os eventos de produto no carrinho
 - Serviço `notifications` iniciado na Fase 45: contratos, esqueleto em portas e validação do HTML do template com jsoup, render com Thymeleaf, envio por SMTP e as APIs de cadastro de templates e de envio, protegidas por JWT e escopo, registrado no Eureka e roteado pelo gateway-admin, consumindo o `SendEmail` pelo Kafka com retry e DLT e recebendo do ordering, pela outbox, o e-mail de cada pedido realizado (idempotência ainda não existe)
-- Módulo de relatórios iniciado na Fase 46: os três tipos de relatório e as primeiras métricas (vendas por mês e totais de clientes e carrinhos) respondidas pelo próprio ordering; o banco de relatórios por streaming ainda não existe
+- Módulo de relatórios iniciado na Fase 46: os três tipos de relatório e as primeiras métricas respondidas por cada serviço dono do dado (vendas e totais no ordering, pagamentos no billing); o banco de relatórios por streaming ainda não existe
 
 **Próximos passos naturais:**
 - **Outbox no billing** — hoje `InvoiceIssued` e `InvoicePaid` saem after-commit; falha no Kafka depois do commit é só logada e o workflow trava em silêncio

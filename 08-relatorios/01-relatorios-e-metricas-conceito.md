@@ -101,4 +101,5 @@ O preço é que o relatório fica **um pouco atrasado**: ele mostra o que já ch
 ## Onde ver
 
 - [Primeira métrica: vendas por mês](./02-primeira-metrica-vendas-por-mes.md) e [Totais de clientes e carrinhos](./03-totais-de-clientes-e-carrinhos.md): o caminho 1 no ordering.
+- [Pagamentos por mês no billing](./04-pagamentos-por-mes-no-billing.md): o caminho 1 no billing, e por que o número mora com o dono do fato.
 - [Mensageria](../06-mensageria/03-kafka-na-pratica.md): o Kafka que o projeto já usa é uma ferramenta de streaming.
