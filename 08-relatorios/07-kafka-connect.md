@@ -2,7 +2,7 @@
 
 > **Em uma frase:** o **Kafka Connect** é um serviço pronto, que roda ao lado do Kafka e move dados entre os bancos e os tópicos só por **configuração**. Os **conectores** dizem o quê, de onde e para onde. As **tasks** fazem o trabalho. Os **workers** são os processos que rodam tudo. Os **converters** traduzem para bytes, e os **transforms** fazem pequenos ajustes no caminho.
 
-⬅️ Anterior: [CDC: capturar as mudanças](./06-cdc-captura-de-mudancas.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [CDC: capturar as mudanças](./06-cdc-captura-de-mudancas.md) · ➡️ Próximo: [Kafka Connect no Docker com Debezium](./08-kafka-connect-no-docker-com-debezium.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
@@ -174,7 +174,7 @@ Transforms servem para ajustes **pequenos**: renomear, tirar um campo, mudar o n
 
 ## Pendências
 
-- Subir o Kafka Connect no `docker-compose`, ligado aos 3 brokers.
+- ~~Subir o Kafka Connect no `docker-compose`, ligado aos 3 brokers~~ — feito no [doc 08](./08-kafka-connect-no-docker-com-debezium.md).
 - Preparar o Postgres do ordering para o CDC (WAL lógico) e criar o conector Debezium.
 - Criar o banco de relatórios e o conector sink.
 

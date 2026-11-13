@@ -178,13 +178,14 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | 05 | [Relatórios estratégicos: reporting database e ETL](./08-relatorios/05-relatorios-estrategicos-e-reporting-database.md) | Pergunta que cruza serviços sem `join` entre bancos: ETL (extrair, transformar, carregar) até um banco só de leitura, com consistência eventual — e quando usar reporting database, API composition ou ECST |
 | 06 | [CDC: capturar as mudanças](./08-relatorios/06-cdc-captura-de-mudancas.md) | Capturar o que mudou, não como está: CDC por consulta, por trigger e por log; por que o log (WAL) vê tudo sem tocar no serviço — e por que CDC não é evento de integração |
 | 07 | [Kafka Connect](./08-relatorios/07-kafka-connect.md) | Mover dados entre bancos e Kafka por configuração: conector (o quê), task (quem faz), worker (onde roda), source × sink, tópicos internos de configs/offsets/status, converter (bytes) × transform (ajuste) |
+| 08 | [Kafka Connect no Docker com Debezium](./08-relatorios/08-kafka-connect-no-docker-com-debezium.md) | O worker como container: imagem do Debezium com os plugins de CDC, `GROUP_ID` e os tópicos internos replicados em 3, 8083 na rede × 8086 no host, o Kafka UI enxergando o Connect — e a memória no limite |
 
 ### Artefatos
 
 | Pasta | Conteúdo |
 |---|---|
 | [`domain-diagram/`](./domain-diagram/) | Diagramas de domínio em PDF — ordering, billing, product-catalog |
-| [`openapi/`](./openapi/) | Especificações OpenAPI dos três serviços com API REST |
+| [`openapi/`](./openapi/) | Especificações OpenAPI dos serviços com API REST e da API REST do Kafka Connect (`apache-kafka-connect.yml`) |
 
 ---
 
@@ -333,6 +334,7 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | Diferenciar CDC de evento de integração | [CDC: capturar as mudanças](./08-relatorios/06-cdc-captura-de-mudancas.md) |
 | Entender worker, conector e task no Kafka Connect | [Kafka Connect](./08-relatorios/07-kafka-connect.md) |
 | Diferenciar converter de transform | [Kafka Connect](./08-relatorios/07-kafka-connect.md) |
+| Subir o Kafka Connect no Docker e conferir plugins e tópicos internos | [Kafka Connect no Docker com Debezium](./08-relatorios/08-kafka-connect-no-docker-com-debezium.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
