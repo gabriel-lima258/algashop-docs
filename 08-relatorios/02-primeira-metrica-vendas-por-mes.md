@@ -2,7 +2,7 @@
 
 > **Em uma frase:** o ordering responde "quantos pedidos foram pagos e quanto entrou em cada mês" num endpoint só para gerentes. É um relatório **tático**, feito pelo caminho mais simples: o próprio serviço consulta o próprio banco.
 
-⬅️ Anterior: [Relatórios e métricas: o conceito](./01-relatorios-e-metricas-conceito.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Relatórios e métricas: o conceito](./01-relatorios-e-metricas-conceito.md) · ➡️ Próximo: [Totais de clientes e carrinhos](./03-totais-de-clientes-e-carrinhos.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
@@ -54,6 +54,8 @@ O último ponto tem um truque: o banco primeiro cria uma lista com **todos** os 
 
 ### Quem pode ver
 
+> **A regra mudou no [doc 03](./03-totais-de-clientes-e-carrinhos.md#quem-pode-ver-a-regra-mudou):** hoje é escopo `metrics:read` e **não ser CUSTOMER**, porque o token de máquina do `algashop-test` não tem papel e era barrado. Abaixo, a regra como foi feita nesta aula.
+
 Duas condições, as **duas** obrigatórias:
 
 - **escopo `metrics:read`:** o aplicativo (painel admin) recebeu permissão para ler métricas;
@@ -91,7 +93,8 @@ Com poucos pedidos de teste, não dá para ver um gráfico. Por isso, no ambient
 
 ## Pendências
 
-- `payments-overview` (billing) e `total-overview` (ordering): só no contrato, sem código ainda.
+- `payments-overview` (billing): só no contrato, sem código ainda.
+- ~~`total-overview` (ordering)~~ — feito no [doc 03](./03-totais-de-clientes-e-carrinhos.md).
 - O serviço e o banco de relatórios do caminho 2.
 - Os 16 testes de integração do authorization server continuam falhando pelo `jwk.privateKey` nulo, como antes deste módulo.
 
@@ -118,7 +121,7 @@ Com poucos pedidos de teste, não dá para ver um gráfico. Por isso, no ambient
 
 - `MetricsController` (ordering, `infrastructure.adapters.in.web.metrics`): o endpoint e o período padrão.
 - `MetricsQueryService` (ordering, `core.application.metrics`): de meses para datas.
-- `ForObtainingMetricJdbcImpl` (ordering, `infrastructure.adapters.out.metrics`): a consulta e as regras do número.
+- `ForObtainingMetricJdbcImpl` (ordering, `infrastructure.adapters.out.persistence.metrics`): a consulta e as regras do número.
 - `SecurityAnnotations.CanReadMetrics` (ordering): escopo + papel.
 - `db/testdata/afterMigrate__reports.sql` (ordering): os 600 pedidos.
 - `application-development-env.yaml` e `afterMigrate.sql` (authorization-server): o escopo `metrics:read`.

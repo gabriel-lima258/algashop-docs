@@ -26,7 +26,7 @@ O tipo do relatório é decidido pela **pergunta**, não pela tela.
 | Tipo | Pergunta | Quem usa | Janela de tempo | Com que frequência | No AlgaShop |
 |---|---|---|---|---|---|
 | **Operacional** | O que está acontecendo **agora**? | atendente, operador | hoje, este instante | o tempo todo | lista de pedidos aguardando pagamento; pedido travado na saga |
-| **Tático** | Como foi um **período fechado**? | gerente | uma semana, um mês | todo fim de período | vendas por mês; pagamentos do mês por meio de pagamento |
+| **Tático** | Como foi um **período fechado**? | gerente | uma semana, um mês | todo fim de período | vendas por mês; pagamentos do mês por meio de pagamento; clientes e carrinhos ativos |
 | **Estratégico** | Para **onde** estamos indo? | diretoria, dono | meses, anos | de vez em quando | produtos mais vendidos; vendas crescendo ou caindo |
 
 Um jeito fácil de lembrar:
@@ -100,5 +100,5 @@ O preço é que o relatório fica **um pouco atrasado**: ele mostra o que já ch
 
 ## Onde ver
 
-- [Primeira métrica: vendas por mês](./02-primeira-metrica-vendas-por-mes.md): o caminho 1 no ordering.
+- [Primeira métrica: vendas por mês](./02-primeira-metrica-vendas-por-mes.md) e [Totais de clientes e carrinhos](./03-totais-de-clientes-e-carrinhos.md): o caminho 1 no ordering.
 - [Mensageria](../06-mensageria/03-kafka-na-pratica.md): o Kafka que o projeto já usa é uma ferramenta de streaming.
