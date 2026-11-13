@@ -1022,6 +1022,7 @@ Até aqui o sistema aprendeu a **fazer**. Agora o negócio quer **entender** o q
 | CDC por log como captura (conceito) | O **E** do ETL lê o registro de transações (WAL) em vez de consultar as tabelas: vê inserir, alterar e apagar, na ordem e quase na hora, sem tocar no serviço; por consulta × por trigger × por log; CDC (cópia de linhas) × evento de integração (contrato de negócio) |
 | Kafka Connect (conceito) | O ETL por configuração: conectores criados por JSON na API REST, plugins (Debezium, Confluent Hub), source × sink com o tópico no meio, tasks (`tasks.max`; 1 para CDC), workers standalone × distribuído, configs/offsets/status em tópicos internos, converters (JSON com schema embutido) e transforms (SMTs) |
 | Kafka Connect no Docker | `quay.io/debezium/connect:3.7.0.Final` no `docker-compose.tools.yml`: modo distribuído (`GROUP_ID`), tópicos internos `algashop_connect_*` com réplica 3, API REST na 8086 do host, Kafka UI ligado ao worker; 17 plugins conferidos e o contrato da API em OpenAPI |
+| Serviço insights e bancos preparados | Submódulo `insights` (Spring Boot 4, JDBC, Flyway, porta 8086); `wal_level=logical` no Postgres dos serviços (o banco preparado do CDC); reporting database num Postgres separado (5434); Kafka Connect vai para a 8087 |
 
 > [`01-relatorios-e-metricas-conceito.md`](../08-relatorios/01-relatorios-e-metricas-conceito.md)
 
@@ -1077,7 +1078,7 @@ Até aqui o sistema aprendeu a **fazer**. Agora o negócio quer **entender** o q
 - Workflow coreografado pedido → fatura → pagamento → pedido pago entre ordering e billing, com `OrderPaid` publicado para o catálogo
 - Saga coreografada completa entre ordering, billing e catálogo na Fase 43 — removida do código na Fase 44 para a orquestração; ficaram as operações de trabalho (fatura, estorno, reserva) e os eventos de produto no carrinho
 - Serviço `notifications` iniciado na Fase 45: contratos, esqueleto em portas e validação do HTML do template com jsoup, render com Thymeleaf, envio por SMTP e as APIs de cadastro de templates e de envio, protegidas por JWT e escopo, registrado no Eureka e roteado pelo gateway-admin, consumindo o `SendEmail` pelo Kafka com retry e DLT e recebendo do ordering, pela outbox, o e-mail de cada pedido realizado (idempotência ainda não existe)
-- Módulo de relatórios iniciado na Fase 46: os três tipos de relatório e as primeiras métricas respondidas por cada serviço dono do dado (vendas e totais no ordering, pagamentos no billing); o banco de relatórios por streaming ainda não existe
+- Módulo de relatórios iniciado na Fase 46: os três tipos de relatório e as primeiras métricas respondidas por cada serviço dono do dado (vendas e totais no ordering, pagamentos no billing); o serviço insights e o reporting database preparados para os estratégicos; o banco de relatórios por streaming ainda não existe
 
 **Próximos passos naturais:**
 - **Outbox no billing** — hoje `InvoiceIssued` e `InvoicePaid` saem after-commit; falha no Kafka depois do commit é só logada e o workflow trava em silêncio

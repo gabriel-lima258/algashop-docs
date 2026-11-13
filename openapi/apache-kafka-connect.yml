@@ -9,7 +9,7 @@ info:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0
 servers:
-  - url: http://localhost:8086
+  - url: http://localhost:8087
     description: AlgaShop Kafka Connect worker on the host (inside the Docker network it is http://algashop-kafka-connect:8083)
 tags:
   - name: Connectors

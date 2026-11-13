@@ -14,6 +14,7 @@ Este repositório é o caderno do projeto: cada documento registra um conceito a
 | **`algashop-billing`** | 8082 | PostgreSQL | Integração com gateway de pagamento, resiliência por idempotência, Testcontainers; métrica de pagamentos por mês e forma de pagamento |
 | **`product-catalog`** | 8083 | MongoDB (replica set) + Redis | Modelagem documental e desnormalização, eventos de domínio, concorrência atômica, transação multi-coleção, cache server-side, REST Docs |
 | **`notifications`** | 8084 | PostgreSQL | E-mail por templates: o ordering decide *quando*, ele decide *como*; HTML do template validado na entrada (jsoup) renderizado com Thymeleaf e enviado por SMTP; APIs de cadastro de templates e de envio protegidas por JWT e escopo, registrado no Eureka e exposto pelo gateway-admin; consome `SendEmail` pelo Kafka com retry e DLT, publicado pelo ordering via outbox a cada pedido — em construção |
+| **`insights`** | 8086 | PostgreSQL próprio (5434, reporting database) | Relatórios estratégicos sobre a cópia dos dados feita por CDC (Debezium + Kafka Connect); só lê o banco de relatórios — em construção |
 | **`billing-scheduler`** | — | — | Jobs agendados, cancelamento de faturas expiradas |
 | **`authorization-server`** | 9000 | PostgreSQL | OAuth 2.1 e OIDC, gestão de usuários, PKCE para cliente público, sessão em banco |
 | **`service-registry`** | 8761 | — | Eureka Server: registro e descoberta de serviços, dashboard das instâncias |
@@ -179,6 +180,7 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | 06 | [CDC: capturar as mudanças](./08-relatorios/06-cdc-captura-de-mudancas.md) | Capturar o que mudou, não como está: CDC por consulta, por trigger e por log; por que o log (WAL) vê tudo sem tocar no serviço — e por que CDC não é evento de integração |
 | 07 | [Kafka Connect](./08-relatorios/07-kafka-connect.md) | Mover dados entre bancos e Kafka por configuração: conector (o quê), task (quem faz), worker (onde roda), source × sink, tópicos internos de configs/offsets/status, converter (bytes) × transform (ajuste) |
 | 08 | [Kafka Connect no Docker com Debezium](./08-relatorios/08-kafka-connect-no-docker-com-debezium.md) | O worker como container: imagem do Debezium com os plugins de CDC, `GROUP_ID` e os tópicos internos replicados em 3, 8083 na rede × 8086 no host, o Kafka UI enxergando o Connect — e a memória no limite |
+| 09 | [Serviço insights e bancos preparados](./08-relatorios/09-servico-insights-e-bancos-preparados.md) | O banco preparado (`wal_level=logical` e slots), o reporting database num Postgres separado (5434) e o serviço insights que só lê — e as portas reorganizadas |
 
 ### Artefatos
 
@@ -335,6 +337,8 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | Entender worker, conector e task no Kafka Connect | [Kafka Connect](./08-relatorios/07-kafka-connect.md) |
 | Diferenciar converter de transform | [Kafka Connect](./08-relatorios/07-kafka-connect.md) |
 | Subir o Kafka Connect no Docker e conferir plugins e tópicos internos | [Kafka Connect no Docker com Debezium](./08-relatorios/08-kafka-connect-no-docker-com-debezium.md) |
+| Preparar o Postgres para CDC (`wal_level=logical`) | [Serviço insights e bancos preparados](./08-relatorios/09-servico-insights-e-bancos-preparados.md) |
+| Separar o banco de relatórios do banco dos serviços | [Serviço insights e bancos preparados](./08-relatorios/09-servico-insights-e-bancos-preparados.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |

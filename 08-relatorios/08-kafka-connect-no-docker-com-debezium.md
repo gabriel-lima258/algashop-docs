@@ -1,8 +1,8 @@
 # Kafka Connect no Docker com a imagem do Debezium
 
-> **Em uma frase:** o Kafka Connect do AlgaShop roda como mais um container no `docker-compose.tools.yml`, com a imagem do **Debezium**, que já traz os plugins de CDC. Ele roda em modo distribuído, guarda o próprio estado em três tópicos replicados nos 3 brokers e expõe a API REST na porta **8086** do host.
+> **Em uma frase:** o Kafka Connect do AlgaShop roda como mais um container no `docker-compose.tools.yml`, com a imagem do **Debezium**, que já traz os plugins de CDC. Ele roda em modo distribuído, guarda o próprio estado em três tópicos replicados nos 3 brokers e expõe a API REST na porta **8087** do host.
 
-⬅️ Anterior: [Kafka Connect](./07-kafka-connect.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Kafka Connect](./07-kafka-connect.md) · ➡️ Próximo: [Serviço insights e bancos preparados](./09-servico-insights-e-bancos-preparados.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
@@ -28,7 +28,7 @@ Para o AlgaShop importam três: o **Postgres** (ler o ordering), o **MongoDB** (
 
 ```mermaid
 flowchart LR
-    H[host :8086] -->|API REST| C[algashop-kafka-connect :8083]
+    H[host :8087] -->|API REST| C[algashop-kafka-connect :8083]
     UI[Kafka UI :9084] -->|algashop-kafka-connect:8083| C
     C -->|listeners internos 9081/9082/9083| K[(3 brokers)]
     K --- T[algashop_connect_configs / offsets / statuses]
@@ -49,7 +49,7 @@ flowchart LR
 ### Porta do host × porta na rede do Docker
 
 - **Dentro do Docker**, o worker escuta na **8083**, e os outros containers o chamam pelo nome: o Kafka UI usa `http://algashop-kafka-connect:8083`.
-- **No host**, a API REST fica na **8086** (`8086:8083`). A 8085 já é a da segunda instância do notifications ([doc 08 do módulo 07](../07-notificacoes/08-eureka-e-gateway-admin.md)), e as duas brigariam pela porta.
+- **No host**, a API REST fica na **8087** (`8087:8083`). A 8085 é a da segunda instância do notifications ([doc 08 do módulo 07](../07-notificacoes/08-eureka-e-gateway-admin.md)) e a 8086 é a do serviço insights ([doc 09](./09-servico-insights-e-bancos-preparados.md)). O Connect começou na 8086 e mudou quando o insights chegou.
 
 ### O Kafka UI enxerga o Connect
 
@@ -57,7 +57,7 @@ O Kafka UI ganhou duas variáveis (`KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME` e `...
 
 ### A API REST e o contrato
 
-Tudo no Kafka Connect se faz pela API REST: criar, ver, pausar e apagar conectores. O contrato está em [`openapi/apache-kafka-connect.yml`](../openapi/apache-kafka-connect.yml), com `servers` apontando para a 8086. As chamadas mais úteis:
+Tudo no Kafka Connect se faz pela API REST: criar, ver, pausar e apagar conectores. O contrato está em [`openapi/apache-kafka-connect.yml`](../openapi/apache-kafka-connect.yml), com `servers` apontando para a 8087. As chamadas mais úteis:
 
 | Chamada | Para quê |
 |---|---|
@@ -70,7 +70,7 @@ Tudo no Kafka Connect se faz pela API REST: criar, ver, pausar e apagar conector
 ## Como aplicar
 
 1. Suba os brokers, o Kafka UI e o Connect: `docker compose -f docker-compose.tools.yml up -d algashop-kafka-1 algashop-kafka-2 algashop-kafka-3 algashop-kafka-ui algashop-kafka-connect`.
-2. Espere a API responder: `GET http://localhost:8086/`.
+2. Espere a API responder: `GET http://localhost:8087/`.
 3. Confira os plugins (`/connector-plugins`) e se os tópicos internos estão com réplica 3.
 4. Abra o Kafka UI e veja o worker no menu Kafka Connect.
 
@@ -79,7 +79,7 @@ Tudo no Kafka Connect se faz pela API REST: criar, ver, pausar e apagar conector
 - A imagem do Debezium = Kafka Connect + plugins de CDC já na pasta.
 - `GROUP_ID` liga o modo distribuído; os três tópicos internos guardam o estado.
 - Réplica 3 nos tópicos internos, porque são 3 brokers.
-- 8083 dentro do Docker (pelo nome); 8086 no host.
+- 8083 dentro do Docker (pelo nome); 8087 no host.
 - Tudo se faz pela API REST; o contrato está no OpenAPI.
 
 ## Cuidados
@@ -92,7 +92,7 @@ Tudo no Kafka Connect se faz pela API REST: criar, ver, pausar e apagar conector
 
 ## Pendências
 
-- Preparar o Postgres para o CDC (`wal_level=logical`): é o "banco preparado" do [doc 06](./06-cdc-captura-de-mudancas.md).
+- ~~Preparar o Postgres para o CDC (`wal_level=logical`)~~ — feito no [doc 09](./09-servico-insights-e-bancos-preparados.md).
 - O primeiro conector source (Postgres do ordering) e o JSON dele guardado no repositório.
 - O banco de relatórios e o conector sink (JDBC).
 - Avaliar o limite de memória do container.
@@ -103,7 +103,7 @@ Conferido em 13/11/2026, com os 3 brokers no ar:
 
 | Verificação | Resultado |
 |---|---|
-| `GET /` (8086) | 200: `{"version":"4.3.1", ...}`; o worker roda o Kafka Connect 4.3.1 |
+| `GET /` (na 8086 da época; hoje 8087) | 200: `{"version":"4.3.1", ...}`; o worker roda o Kafka Connect 4.3.1 |
 | `GET /connector-plugins` | 17 plugins: os sources do Debezium 3.7.0 (Postgres, MongoDB...), os sinks JDBC e MongoDB e os 3 Mirror do Kafka |
 | `GET /connectors` | `[]` (nenhum conector ainda) |
 | Tópicos internos | `configs` (1 partição), `offsets` (25), `statuses` (5); todos com **ReplicationFactor 3** e `cleanup.policy=compact` |
