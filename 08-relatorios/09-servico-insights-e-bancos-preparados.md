@@ -2,7 +2,7 @@
 
 > **Em uma frase:** nasce o **insights**, o microsserviço dos relatórios estratégicos, com um **Postgres só dele** (o reporting database, na 5434). E o Postgres dos serviços passa a escrever o WAL em modo **lógico**, para que o Debezium consiga ler as mudanças.
 
-⬅️ Anterior: [Kafka Connect no Docker com Debezium](./08-kafka-connect-no-docker-com-debezium.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Kafka Connect no Docker com Debezium](./08-kafka-connect-no-docker-com-debezium.md) · ➡️ Próximo: [Extraindo pedidos com Debezium](./10-extraindo-pedidos-com-debezium.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
@@ -113,7 +113,7 @@ O Connect saiu da 8086 para o insights ficar com a porta do curso.
 
 - Subir e testar o insights depois de recriar o ambiente (ver Testes).
 - As primeiras migrations do banco de relatórios.
-- O conector source do Postgres (Debezium) e o sink JDBC para a 5434.
+- ~~O conector source do Postgres (Debezium)~~ — feito no [doc 10](./10-extraindo-pedidos-com-debezium.md); falta o sink JDBC para a 5434.
 - Eureka, segurança (resource server) e rota no gateway-admin para o insights.
 
 ## Testes

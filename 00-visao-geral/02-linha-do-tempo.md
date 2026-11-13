@@ -1023,6 +1023,7 @@ Até aqui o sistema aprendeu a **fazer**. Agora o negócio quer **entender** o q
 | Kafka Connect (conceito) | O ETL por configuração: conectores criados por JSON na API REST, plugins (Debezium, Confluent Hub), source × sink com o tópico no meio, tasks (`tasks.max`; 1 para CDC), workers standalone × distribuído, configs/offsets/status em tópicos internos, converters (JSON com schema embutido) e transforms (SMTs) |
 | Kafka Connect no Docker | `quay.io/debezium/connect:3.7.0.Final` no `docker-compose.tools.yml`: modo distribuído (`GROUP_ID`), tópicos internos `algashop_connect_*` com réplica 3, API REST na 8086 do host, Kafka UI ligado ao worker; 17 plugins conferidos e o contrato da API em OpenAPI |
 | Serviço insights e bancos preparados | Submódulo `insights` (Spring Boot 4, JDBC, Flyway, porta 8086); `wal_level=logical` no Postgres dos serviços (o banco preparado do CDC); reporting database num Postgres separado (5434); Kafka Connect vai para a 8087 |
+| Extraindo pedidos com Debezium | Conector `cdc.source.ordering.order` (pgoutput, publication filtrada, slot, snapshot inicial) publicando `public.order` em `cdc.ordering.public.order`, só com 12 colunas sem dado pessoal; validate × POST × PUT; `op` r/c/u/d |
 
 > [`01-relatorios-e-metricas-conceito.md`](../08-relatorios/01-relatorios-e-metricas-conceito.md)
 

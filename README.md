@@ -181,6 +181,7 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | 07 | [Kafka Connect](./08-relatorios/07-kafka-connect.md) | Mover dados entre bancos e Kafka por configuração: conector (o quê), task (quem faz), worker (onde roda), source × sink, tópicos internos de configs/offsets/status, converter (bytes) × transform (ajuste) |
 | 08 | [Kafka Connect no Docker com Debezium](./08-relatorios/08-kafka-connect-no-docker-com-debezium.md) | O worker como container: imagem do Debezium com os plugins de CDC, `GROUP_ID` e os tópicos internos replicados em 3, 8083 na rede × 8086 no host, o Kafka UI enxergando o Connect — e a memória no limite |
 | 09 | [Serviço insights e bancos preparados](./08-relatorios/09-servico-insights-e-bancos-preparados.md) | O banco preparado (`wal_level=logical` e slots), o reporting database num Postgres separado (5434) e o serviço insights que só lê — e as portas reorganizadas |
+| 10 | [Extraindo pedidos com Debezium](./08-relatorios/10-extraindo-pedidos-com-debezium.md) | O primeiro conector source: publication e slot, snapshot (`op=r`) e depois o WAL (`c/u/d`), só as 12 colunas do relatório; validate × POST × PUT; anatomia da mensagem — e o `before` vazio e o decimal em bytes |
 
 ### Artefatos
 
@@ -339,6 +340,8 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | Subir o Kafka Connect no Docker e conferir plugins e tópicos internos | [Kafka Connect no Docker com Debezium](./08-relatorios/08-kafka-connect-no-docker-com-debezium.md) |
 | Preparar o Postgres para CDC (`wal_level=logical`) | [Serviço insights e bancos preparados](./08-relatorios/09-servico-insights-e-bancos-preparados.md) |
 | Separar o banco de relatórios do banco dos serviços | [Serviço insights e bancos preparados](./08-relatorios/09-servico-insights-e-bancos-preparados.md) |
+| Validar, criar e atualizar um conector (validate, POST, PUT) | [Extraindo pedidos com Debezium](./08-relatorios/10-extraindo-pedidos-com-debezium.md) |
+| Ler uma mensagem do Debezium (`before`, `after`, `op`, `source`) | [Extraindo pedidos com Debezium](./08-relatorios/10-extraindo-pedidos-com-debezium.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
