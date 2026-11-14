@@ -84,14 +84,14 @@ O Kafka entrega **pelo menos uma vez**. Se o sink cair depois de gravar e antes 
 
 ## Cuidados
 
-- **Apagar no ordering não apaga no relatório (ainda).** O source manda o delete como tombstone ([doc 11](./11-simplificando-e-renomeando-com-transforms.md#1-unwrap-só-o-after)), mas o sink só apaga com `delete.enabled: true` (que exige `primary.key.mode: record_key`, já configurado). Hoje, um pedido apagado continua no relatório. Decida se o relatório quer manter o histórico ou espelhar o delete.
+- ~~**Apagar no ordering não apaga no relatório.**~~ Resolvido no [doc 14](./14-deletes-tombstones-e-tipos-de-dados.md): o unwrap manda o delete como tombstone e o sink apaga com `delete.enabled: true`.
 - **Senha no arquivo e superusuário:** igual ao source; serve para estudo.
 - **Arquivos novos em stage vazios.** O JSON do sink e a `V001` do insights foram adicionados ao git antes de receber o conteúdo. Foi preciso dar `git add` de novo (já feito).
 - **Os dados de teste entraram.** O teste com o conector temporário gravou os pedidos no banco de relatórios antes do seu sink. Como é upsert pela mesma chave, o resultado é o mesmo; não há duplicata.
 
 ## Pendências
 
-- Decidir o delete (`delete.enabled`).
+- ~~Decidir o delete (`delete.enabled`)~~ — feito no [doc 14](./14-deletes-tombstones-e-tipos-de-dados.md) (tombstone + `delete.enabled`).
 - Os conectores dos itens do pedido e dos produtos, e as tabelas deles no insights.
 - O primeiro relatório estratégico no insights, lendo essa tabela.
 

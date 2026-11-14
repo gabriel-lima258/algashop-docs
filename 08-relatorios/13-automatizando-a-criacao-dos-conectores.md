@@ -2,7 +2,7 @@
 
 > **Em uma frase:** os conectores deixam de ser criados à mão pela API. Um script (`apply-connectors.sh`) aplica todos os JSON de `etc/kafka-connect` com **PUT**, que cria ou atualiza, e um container de uma execução só (`algashop-kafka-connect-init`) roda esse script quando o compose sobe. Os arquivos do repositório viram a fonte da verdade.
 
-⬅️ Anterior: [Carregando pedidos no reporting database](./12-carregando-pedidos-no-reporting-database.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Carregando pedidos no reporting database](./12-carregando-pedidos-no-reporting-database.md) · ➡️ Próximo: [Deletes, tombstones e tipos de dados](./14-deletes-tombstones-e-tipos-de-dados.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 

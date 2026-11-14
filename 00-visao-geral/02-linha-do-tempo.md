@@ -1027,6 +1027,7 @@ Até aqui o sistema aprendeu a **fazer**. Agora o negócio quer **entender** o q
 | Transforms no conector | `unwrap` (ExtractNewRecordState) entrega só a linha; `rename` (ReplaceField$Value) troca `shipping_address_*` por `shipping_*`; a ordem da cadeia importa; `decimal.handling.mode=precise` para o sink ler o `numeric` exato |
 | Sink no reporting database | `cdc.sink.insights.order` (JDBC sink, upsert por `record_key`, `schema.evolution: none`) gravando na tabela `order` criada pela `V001` do insights; `quote.identifiers: true` resolve o `order` reservado; 606 pedidos copiados com lag 0 |
 | Conectores automatizados | `apply-connectors.sh` aplica os JSON planos com PUT `/config` (sources antes de sinks, restart só do que falhou); `algashop-kafka-connect-init` (curl, pasta `ro`) roda no `compose up`; a corrida com o Flyway pede rodar o init de novo |
+| Deletes, tombstones e tipos | `delete.tombstone.handling.mode=tombstone` no unwrap + `delete.enabled` no sink: pedido apagado some do relatório; `field.exclude.list` protege contra nomes antigos; Decimal → `numeric`, Uuid → `uuid`, ZonedTimestamp → `timestamptz` conferidos |
 
 > [`01-relatorios-e-metricas-conceito.md`](../08-relatorios/01-relatorios-e-metricas-conceito.md)
 
