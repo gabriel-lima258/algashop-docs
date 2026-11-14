@@ -2,7 +2,7 @@
 
 > **Em uma frase:** os clientes do ordering ganham o mesmo caminho dos pedidos: um source (`cdc.source.ordering.customer`), um sink (`cdc.sink.insights.customer`) e uma tabela `customer` no insights. A decisão central é **quais colunas** vão para o relatório. Ela nasce das perguntas do negócio e tem que ser igual em dois lugares: na lista do conector e na migration.
 
-⬅️ Anterior: [Deletes, tombstones e tipos de dados](./14-deletes-tombstones-e-tipos-de-dados.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Deletes, tombstones e tipos de dados](./14-deletes-tombstones-e-tipos-de-dados.md) · ➡️ Próximo: [Replicando os itens dos pedidos](./16-replicando-os-itens-dos-pedidos.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 

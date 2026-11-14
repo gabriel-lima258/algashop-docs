@@ -187,6 +187,7 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | 13 | [Automatizando a criação dos conectores](./08-relatorios/13-automatizando-a-criacao-dos-conectores.md) | Script + container init aplicam os JSON com PUT (idempotente), sources antes de sinks, restart só do que falhou — e a corrida com as tabelas que ainda não existem |
 | 14 | [Deletes, tombstones e tipos de dados](./08-relatorios/14-deletes-tombstones-e-tipos-de-dados.md) | O delete vira tombstone no `unwrap` e `DELETE` no sink (`delete.enabled` + `record_key`); `field.exclude.list` para nomes antigos; como Decimal, Uuid e ZonedTimestamp chegam ao banco — e o tombstone com schema |
 | 15 | [Replicando os clientes](./08-relatorios/15-replicando-os-clientes.md) | Desafio: colunas escolhidas pelas perguntas (sem dado pessoal), a mesma lista no conector e na V002, dois conectores no mesmo `topic.prefix` (`custom.metric.tags`) — e a DLQ no sink de pedidos |
+| 16 | [Replicando os itens dos pedidos](./08-relatorios/16-replicando-os-itens-dos-pedidos.md) | Desafio: o item pode chegar antes do pedido; sem FK no destino, a consulta de órfãos como monitor e o `join` que deixa o item sozinho fora das vendas até o pedido chegar; stop/resume de um sink |
 
 ### Artefatos
 
@@ -357,6 +358,8 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | Mapear os tipos do CDC para as colunas de destino | [Deletes, tombstones e tipos de dados](./08-relatorios/14-deletes-tombstones-e-tipos-de-dados.md) |
 | Escolher quais colunas replicar para o relatório | [Replicando os clientes](./08-relatorios/15-replicando-os-clientes.md) |
 | Rodar dois conectores do Postgres no mesmo prefixo (métricas) | [Replicando os clientes](./08-relatorios/15-replicando-os-clientes.md) |
+| Lidar com o filho que chega antes do pai no banco de relatórios | [Replicando os itens dos pedidos](./08-relatorios/16-replicando-os-itens-dos-pedidos.md) |
+| Pausar e retomar um conector (stop/resume) | [Replicando os itens dos pedidos](./08-relatorios/16-replicando-os-itens-dos-pedidos.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
