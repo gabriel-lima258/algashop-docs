@@ -1024,6 +1024,7 @@ Até aqui o sistema aprendeu a **fazer**. Agora o negócio quer **entender** o q
 | Kafka Connect no Docker | `quay.io/debezium/connect:3.7.0.Final` no `docker-compose.tools.yml`: modo distribuído (`GROUP_ID`), tópicos internos `algashop_connect_*` com réplica 3, API REST na 8086 do host, Kafka UI ligado ao worker; 17 plugins conferidos e o contrato da API em OpenAPI |
 | Serviço insights e bancos preparados | Submódulo `insights` (Spring Boot 4, JDBC, Flyway, porta 8086); `wal_level=logical` no Postgres dos serviços (o banco preparado do CDC); reporting database num Postgres separado (5434); Kafka Connect vai para a 8087 |
 | Extraindo pedidos com Debezium | Conector `cdc.source.ordering.order` (pgoutput, publication filtrada, slot, snapshot inicial) publicando `public.order` em `cdc.ordering.public.order`, só com 12 colunas sem dado pessoal; validate × POST × PUT; `op` r/c/u/d |
+| Transforms no conector | `unwrap` (ExtractNewRecordState) entrega só a linha; `rename` (ReplaceField$Value) troca `shipping_address_*` por `shipping_*`; a ordem da cadeia importa; `decimal.handling.mode=precise` para o sink ler o `numeric` exato |
 
 > [`01-relatorios-e-metricas-conceito.md`](../08-relatorios/01-relatorios-e-metricas-conceito.md)
 

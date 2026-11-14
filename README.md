@@ -182,6 +182,7 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | 08 | [Kafka Connect no Docker com Debezium](./08-relatorios/08-kafka-connect-no-docker-com-debezium.md) | O worker como container: imagem do Debezium com os plugins de CDC, `GROUP_ID` e os tópicos internos replicados em 3, 8083 na rede × 8086 no host, o Kafka UI enxergando o Connect — e a memória no limite |
 | 09 | [Serviço insights e bancos preparados](./08-relatorios/09-servico-insights-e-bancos-preparados.md) | O banco preparado (`wal_level=logical` e slots), o reporting database num Postgres separado (5434) e o serviço insights que só lê — e as portas reorganizadas |
 | 10 | [Extraindo pedidos com Debezium](./08-relatorios/10-extraindo-pedidos-com-debezium.md) | O primeiro conector source: publication e slot, snapshot (`op=r`) e depois o WAL (`c/u/d`), só as 12 colunas do relatório; validate × POST × PUT; anatomia da mensagem — e o `before` vazio e o decimal em bytes |
+| 11 | [Simplificando e renomeando com transforms](./08-relatorios/11-simplificando-e-renomeando-com-transforms.md) | `unwrap` tira o envelope (o delete vira tombstone), `ReplaceField` renomeia depois do unwrap, e dinheiro viaja `precise` (nunca `double`) |
 
 ### Artefatos
 
@@ -342,6 +343,8 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | Separar o banco de relatórios do banco dos serviços | [Serviço insights e bancos preparados](./08-relatorios/09-servico-insights-e-bancos-preparados.md) |
 | Validar, criar e atualizar um conector (validate, POST, PUT) | [Extraindo pedidos com Debezium](./08-relatorios/10-extraindo-pedidos-com-debezium.md) |
 | Ler uma mensagem do Debezium (`before`, `after`, `op`, `source`) | [Extraindo pedidos com Debezium](./08-relatorios/10-extraindo-pedidos-com-debezium.md) |
+| Achatar a mensagem do Debezium e renomear campos | [Simplificando e renomeando com transforms](./08-relatorios/11-simplificando-e-renomeando-com-transforms.md) |
+| Escolher como o dinheiro viaja no CDC (`decimal.handling.mode`) | [Simplificando e renomeando com transforms](./08-relatorios/11-simplificando-e-renomeando-com-transforms.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |

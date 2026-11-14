@@ -2,7 +2,7 @@
 
 > **Em uma frase:** um JSON enviado ao Kafka Connect cria o conector `cdc.source.ordering.order`. Ele tira uma foto inicial da tabela `order` do ordering e depois segue o WAL, publicando cada mudança no tópico `cdc.ordering.public.order`, só com as 12 colunas que o relatório precisa. É o **E** do ETL funcionando.
 
-⬅️ Anterior: [Serviço insights e bancos preparados](./09-servico-insights-e-bancos-preparados.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Serviço insights e bancos preparados](./09-servico-insights-e-bancos-preparados.md) · ➡️ Próximo: [Simplificando e renomeando com transforms](./11-simplificando-e-renomeando-com-transforms.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
@@ -140,7 +140,7 @@ O JSON leva o **schema embutido**: cada mensagem descreve os próprios campos e 
 
 - O sink JDBC para o reporting database (5434), que vai gravar a cópia dos pedidos.
 - Os conectores dos itens do pedido e dos produtos (product-catalog, no MongoDB).
-- Decidir o `decimal.handling.mode`.
+- ~~Decidir o `decimal.handling.mode`~~ — `precise`, no [doc 11](./11-simplificando-e-renomeando-com-transforms.md).
 
 ## Testes
 
