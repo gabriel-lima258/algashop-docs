@@ -2,7 +2,7 @@
 
 > **Em uma frase:** agora um pedido apagado no ordering também some do relatório. O `unwrap` entrega o delete como um **tombstone** (a chave com o valor nulo), e o sink, com `delete.enabled`, transforma esse tombstone num `delete` no banco de relatórios. No caminho, cada tipo do Postgres de origem chega certo ao destino: dinheiro exato, uuid nativo e data com fuso.
 
-⬅️ Anterior: [Automatizando a criação dos conectores](./13-automatizando-a-criacao-dos-conectores.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Automatizando a criação dos conectores](./13-automatizando-a-criacao-dos-conectores.md) · ➡️ Próximo: [Replicando os clientes](./15-replicando-os-clientes.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
