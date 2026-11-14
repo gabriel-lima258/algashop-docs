@@ -183,6 +183,7 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | 09 | [Serviço insights e bancos preparados](./08-relatorios/09-servico-insights-e-bancos-preparados.md) | O banco preparado (`wal_level=logical` e slots), o reporting database num Postgres separado (5434) e o serviço insights que só lê — e as portas reorganizadas |
 | 10 | [Extraindo pedidos com Debezium](./08-relatorios/10-extraindo-pedidos-com-debezium.md) | O primeiro conector source: publication e slot, snapshot (`op=r`) e depois o WAL (`c/u/d`), só as 12 colunas do relatório; validate × POST × PUT; anatomia da mensagem — e o `before` vazio e o decimal em bytes |
 | 11 | [Simplificando e renomeando com transforms](./08-relatorios/11-simplificando-e-renomeando-com-transforms.md) | `unwrap` tira o envelope (o delete vira tombstone), `ReplaceField` renomeia depois do unwrap, e dinheiro viaja `precise` (nunca `double`) |
+| 12 | [Carregando pedidos no reporting database](./08-relatorios/12-carregando-pedidos-no-reporting-database.md) | O sink JDBC: upsert pela chave, tabela criada pelo Flyway do insights (`schema.evolution: none`) — e o `order` reservado que pede `quote.identifiers` |
 
 ### Artefatos
 
@@ -345,6 +346,8 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | Ler uma mensagem do Debezium (`before`, `after`, `op`, `source`) | [Extraindo pedidos com Debezium](./08-relatorios/10-extraindo-pedidos-com-debezium.md) |
 | Achatar a mensagem do Debezium e renomear campos | [Simplificando e renomeando com transforms](./08-relatorios/11-simplificando-e-renomeando-com-transforms.md) |
 | Escolher como o dinheiro viaja no CDC (`decimal.handling.mode`) | [Simplificando e renomeando com transforms](./08-relatorios/11-simplificando-e-renomeando-com-transforms.md) |
+| Gravar a cópia no banco de relatórios com um sink JDBC | [Carregando pedidos no reporting database](./08-relatorios/12-carregando-pedidos-no-reporting-database.md) |
+| Resolver "Could not find table" no sink (palavra reservada) | [Carregando pedidos no reporting database](./08-relatorios/12-carregando-pedidos-no-reporting-database.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |

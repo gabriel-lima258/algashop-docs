@@ -1025,6 +1025,7 @@ Até aqui o sistema aprendeu a **fazer**. Agora o negócio quer **entender** o q
 | Serviço insights e bancos preparados | Submódulo `insights` (Spring Boot 4, JDBC, Flyway, porta 8086); `wal_level=logical` no Postgres dos serviços (o banco preparado do CDC); reporting database num Postgres separado (5434); Kafka Connect vai para a 8087 |
 | Extraindo pedidos com Debezium | Conector `cdc.source.ordering.order` (pgoutput, publication filtrada, slot, snapshot inicial) publicando `public.order` em `cdc.ordering.public.order`, só com 12 colunas sem dado pessoal; validate × POST × PUT; `op` r/c/u/d |
 | Transforms no conector | `unwrap` (ExtractNewRecordState) entrega só a linha; `rename` (ReplaceField$Value) troca `shipping_address_*` por `shipping_*`; a ordem da cadeia importa; `decimal.handling.mode=precise` para o sink ler o `numeric` exato |
+| Sink no reporting database | `cdc.sink.insights.order` (JDBC sink, upsert por `record_key`, `schema.evolution: none`) gravando na tabela `order` criada pela `V001` do insights; `quote.identifiers: true` resolve o `order` reservado; 606 pedidos copiados com lag 0 |
 
 > [`01-relatorios-e-metricas-conceito.md`](../08-relatorios/01-relatorios-e-metricas-conceito.md)
 

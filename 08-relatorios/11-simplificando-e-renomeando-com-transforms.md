@@ -2,7 +2,7 @@
 
 > **Em uma frase:** dois transforms em cadeia mudam a mensagem do Debezium antes de ela chegar ao tópico. O `unwrap` tira o envelope e deixa só a linha como ela está. O `rename` troca nomes de colunas internos do ordering por nomes do relatório. E o `decimal.handling.mode` decide como o dinheiro viaja.
 
-⬅️ Anterior: [Extraindo pedidos com Debezium](./10-extraindo-pedidos-com-debezium.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Extraindo pedidos com Debezium](./10-extraindo-pedidos-com-debezium.md) · ➡️ Próximo: [Carregando pedidos no reporting database](./12-carregando-pedidos-no-reporting-database.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
@@ -140,7 +140,7 @@ O teste com `string` foi feito pelo PUT, só para ver o número. O arquivo do co
 
 ## Pendências
 
-- O sink JDBC para o reporting database (5434), com o apagar por tombstone ligado.
+- ~~O sink JDBC para o reporting database (5434)~~ — feito no [doc 12](./12-carregando-pedidos-no-reporting-database.md); falta decidir o apagar por tombstone.
 - Decidir se o relatório precisa de `op` ou da hora da mudança (`add.fields`).
 - Os conectores dos itens e dos produtos.
 
