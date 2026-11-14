@@ -100,7 +100,7 @@ Junto com o desafio, o sink de pedidos ganhou três linhas da aula de falhas nos
 - A mensagem com problema vai para o tópico `dlt.cdc.sink.insights.order`. É a mesma ideia da DLT da [mensageria](../06-mensageria/07-resiliencia-no-consumer.md).
 - `context.headers`: a mensagem na DLT leva nos headers o motivo do erro, o tópico, a partição e o offset de origem.
 
-O preço: com `all`, os erros não param o conector. Por isso alguém precisa **olhar a DLT**, ou o relatório perde linhas em silêncio. O sink de clientes ficou sem essa configuração.
+O preço: com `all`, os erros não param o conector. Por isso alguém precisa **olhar a DLT**, ou o relatório perde linhas em silêncio. Depois do desafio, os sinks de clientes e de itens ganharam a mesma DLQ ([doc 16](./16-replicando-os-itens-dos-pedidos.md#os-três-sinks-com-dlq)).
 
 ## Como aplicar
 

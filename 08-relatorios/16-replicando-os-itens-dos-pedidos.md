@@ -100,6 +100,28 @@ Para ver o item chegar antes do pedido sem depender da sorte, o teste para o sin
 
 É a independência do tópico no meio, do [doc 07](./07-kafka-connect.md#source-e-sink-os-dois-sentidos): um lado parado não perde nada do outro.
 
+### Os três sinks com DLQ
+
+Depois do desafio, os sinks de clientes e de itens ganharam as mesmas três linhas que o sink de pedidos já tinha ([doc 15](./15-replicando-os-clientes.md#o-sink-de-pedidos-ganhou-uma-dlq)):
+
+| Sink | DLQ |
+|---|---|
+| `cdc.sink.insights.order` | `dlt.cdc.sink.insights.order` |
+| `cdc.sink.insights.customer` | `dlt.cdc.sink.insights.customer` |
+| `cdc.sink.insights.order_item` | `dlt.cdc.sink.insights.order_item` |
+
+```json
+"errors.tolerance": "all",
+"errors.deadletterqueue.topic.name": "dlt.cdc.sink.insights.order_item",
+"errors.deadletterqueue.context.headers.enable": "true"
+```
+
+**O que ela protege.** Uma mensagem que o sink não consegue **ler** (um valor que não é JSON, um schema que não converte) não derruba mais a task. Ela vai para a DLT com o motivo nos headers (`__connect.errors.exception.class.name`, `...exception.message`, o tópico e o offset de origem), e o sink segue para a próxima.
+
+**O que ela não troca.** O DLQ do Connect cobre os erros de **conversão e de transform**. A regra do desafio continua valendo: o item que chega antes do pedido não é erro (não há FK), então ele nunca vai para a DLT. Ele é gravado e espera o pedido.
+
+**O preço.** O erro não aparece mais no status: o conector fica `RUNNING`. Alguém precisa olhar as DLTs; uma mensagem lá é uma linha que **faltou** no relatório.
+
 ## Como aplicar
 
 1. Tabelas que dependem uma da outra, mas chegam por conectores diferentes: **sem FK no destino**.
@@ -121,6 +143,7 @@ Para ver o item chegar antes do pedido sem depender da sorte, o teste para o sin
 - **Órfão que não some é sintoma.** Ele indica um sink de pedidos parado, `FAILED` ou atrasado. Monitore a consulta.
 - **Contagens em momentos diferentes não batem.** Durante a cópia, o insights pode ter itens de pedidos que ainda não chegaram. Compare as contagens depois que os sinks terminarem.
 - **Remover no ordering gera tombstones nos dois tópicos.** O item e o pedido somem do insights cada um no seu tempo. Durante um instante, pode haver pedido sem itens (e, do outro lado, item sem pedido).
+- **A mensagem do teste da DLQ ficou no tópico de itens.** O registro `isto nao e json` (chave `teste-dlq`) continua em `cdc.ordering.public.order_item` até a retenção apagá-lo. Se um sink novo ler o tópico desde o começo, ele vai de novo para a DLT, sem quebrar nada.
 - **Os arquivos entraram vazios no stage.** Os dois JSON e a V003 foram adicionados antes do conteúdo; foi preciso dar `git add` de novo.
 
 ## Pendências
@@ -144,6 +167,8 @@ Para ver o item chegar antes do pedido sem depender da sorte, o teste para o sin
 | `resume` (202) | o pedido chegou; 607 = 607; itens sem pedido = **0** |
 | Limpeza (apagar o pedido e os itens de teste no ordering) | os tombstones os tiraram do insights: 606 pedidos, 1.206 itens, 22 clientes, nos dois lados |
 | Vendas por produto (`join` + pago e não cancelado) | ok; o primeiro é o `StellarMatrix Tower Server`, com 158 unidades e 1.580.000,00 |
+| DLQ nos sinks de clientes e de itens (pelo init) | os 6 PUT com 200; os 3 sinks com `errors.tolerance=all` e a sua DLT; `RUNNING` |
+| Mensagem que não é JSON (`isto nao e json`) publicada em `cdc.ordering.public.order_item` | foi para `dlt.cdc.sink.insights.order_item` (`DataException`, offset 1210, réplica 3); o sink seguiu `RUNNING`; um update real depois dela foi gravado (lag 0) |
 | Ecommerce (John Doe compra 2 produtos) e restart do ordering | **não rodados** (sem o front no ar) |
 
 O pedido de teste foi uma **cópia** de um pedido do seed, com o id `9999999999101`, e os itens foram cópias dos itens dele, com ids de teste. Nenhum dado real foi alterado.

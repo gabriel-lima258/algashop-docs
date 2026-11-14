@@ -1030,6 +1030,7 @@ Até aqui o sistema aprendeu a **fazer**. Agora o negócio quer **entender** o q
 | Deletes, tombstones e tipos | `delete.tombstone.handling.mode=tombstone` no unwrap + `delete.enabled` no sink: pedido apagado some do relatório; `field.exclude.list` protege contra nomes antigos; Decimal → `numeric`, Uuid → `uuid`, ZonedTimestamp → `timestamptz` conferidos |
 | Replicando os clientes (desafio) | `cdc.source.ordering.customer` + `cdc.sink.insights.customer` + V002: 9 de 23 colunas, escolhidas pelas perguntas e sem dado pessoal; slot, publication e `custom.metric.tags` próprios; 22 = 22 clientes; DLQ (`errors.tolerance`) no sink de pedidos |
 | Replicando os itens (desafio) | `cdc.source.ordering.order_item` + sink + V003 sem FK para `order` (o item pode chegar antes do pedido), índices em `order_id` e `product_id`; órfãos monitorados por `left join`; 1.206 = 1.206; stop/resume do sink de pedidos mostrou 2 órfãos que viraram 0 |
+| DLQ nos três sinks | `errors.tolerance=all` + `dlt.cdc.sink.insights.{order,customer,order_item}` com headers de contexto; uma mensagem que não é JSON foi para a DLT e o sink seguiu `RUNNING` |
 
 > [`01-relatorios-e-metricas-conceito.md`](../08-relatorios/01-relatorios-e-metricas-conceito.md)
 
