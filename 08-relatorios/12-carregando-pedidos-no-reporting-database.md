@@ -2,7 +2,7 @@
 
 > **Em uma frase:** o conector `cdc.sink.insights.order` lê o tópico `cdc.ordering.public.order` e grava cada pedido na tabela `order` do banco de relatórios (5434), com upsert pela chave. É o **L** do ETL, e fecha o caminho: o pedido muda no ordering e aparece, segundos depois, no banco do insights.
 
-⬅️ Anterior: [Simplificando e renomeando com transforms](./11-simplificando-e-renomeando-com-transforms.md) · ➡️ Próximo: — · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
+⬅️ Anterior: [Simplificando e renomeando com transforms](./11-simplificando-e-renomeando-com-transforms.md) · ➡️ Próximo: [Automatizando a criação dos conectores](./13-automatizando-a-criacao-dos-conectores.md) · 🧭 Trilha: [README](../README.md#trilha-de-leitura)
 
 ---
 
@@ -109,7 +109,7 @@ O Kafka entrega **pelo menos uma vez**. Se o sink cair depois de gravar e antes 
 
 ## Dados de teste
 
-- **Criar:** `POST http://localhost:8087/connectors` com `etc/kafka-connect/cdc.sink.insights.order.json`.
+- **Criar ou atualizar:** `PUT http://localhost:8087/connectors/cdc.sink.insights.order/config` com `etc/kafka-connect/cdc.sink.insights.order.json` (formato plano; ver o [doc 13](./13-automatizando-a-criacao-dos-conectores.md)).
 - **Atualizar:** `PUT http://localhost:8087/connectors/cdc.sink.insights.order/config` (propriedades planas).
 - **Reiniciar a task que falhou:** `POST http://localhost:8087/connectors/cdc.sink.insights.order/restart?includeTasks=true&onlyFailed=true`.
 - **Conferir:** `psql -h localhost -p 5434 -U postgres -d insights -c 'select count(*) from "order"'`.

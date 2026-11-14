@@ -184,6 +184,7 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | 10 | [Extraindo pedidos com Debezium](./08-relatorios/10-extraindo-pedidos-com-debezium.md) | O primeiro conector source: publication e slot, snapshot (`op=r`) e depois o WAL (`c/u/d`), só as 12 colunas do relatório; validate × POST × PUT; anatomia da mensagem — e o `before` vazio e o decimal em bytes |
 | 11 | [Simplificando e renomeando com transforms](./08-relatorios/11-simplificando-e-renomeando-com-transforms.md) | `unwrap` tira o envelope (o delete vira tombstone), `ReplaceField` renomeia depois do unwrap, e dinheiro viaja `precise` (nunca `double`) |
 | 12 | [Carregando pedidos no reporting database](./08-relatorios/12-carregando-pedidos-no-reporting-database.md) | O sink JDBC: upsert pela chave, tabela criada pelo Flyway do insights (`schema.evolution: none`) — e o `order` reservado que pede `quote.identifiers` |
+| 13 | [Automatizando a criação dos conectores](./08-relatorios/13-automatizando-a-criacao-dos-conectores.md) | Script + container init aplicam os JSON com PUT (idempotente), sources antes de sinks, restart só do que falhou — e a corrida com as tabelas que ainda não existem |
 
 ### Artefatos
 
@@ -348,6 +349,8 @@ Relatórios e streaming de dados entre microsserviços. Está em construção: o
 | Escolher como o dinheiro viaja no CDC (`decimal.handling.mode`) | [Simplificando e renomeando com transforms](./08-relatorios/11-simplificando-e-renomeando-com-transforms.md) |
 | Gravar a cópia no banco de relatórios com um sink JDBC | [Carregando pedidos no reporting database](./08-relatorios/12-carregando-pedidos-no-reporting-database.md) |
 | Resolver "Could not find table" no sink (palavra reservada) | [Carregando pedidos no reporting database](./08-relatorios/12-carregando-pedidos-no-reporting-database.md) |
+| Recriar os conectores automaticamente ao subir o ambiente | [Automatizando a criação dos conectores](./08-relatorios/13-automatizando-a-criacao-dos-conectores.md) |
+| Escolher entre POST e PUT para criar conectores | [Automatizando a criação dos conectores](./08-relatorios/13-automatizando-a-criacao-dos-conectores.md) |
 | Rever um bug, uma pendência ou os testes de uma etapa da mensageria | [Diário de bordo](./06-mensageria/99-diario-de-bordo.md) |
 | Trocar a tela de login padrão do Spring Security | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |
 | Descobrir por que o login devolve 403 (ou nunca funciona) | [Telas e formulários de login](./05-seguranca/06-telas-e-formularios-de-login.md) |

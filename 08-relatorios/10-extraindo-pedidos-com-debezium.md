@@ -75,7 +75,7 @@ A API REST tem três jeitos de mandar uma configuração:
 | `POST /connectors` | `{"name": ..., "config": {...}}` | **criar**. Se o nome já existe, responde 409 |
 | `PUT /connectors/{nome}/config` | as propriedades, planas; o nome vai na URL | **atualizar** um conector que existe (e, se não existir, cria) |
 
-O arquivo do repositório está no formato do **POST**. Para o PUT, use o mesmo conteúdo sem o `config` em volta e com o nome na URL.
+O arquivo do repositório começou no formato do POST. Hoje ele está no formato **plano do PUT**, porque a criação foi automatizada com PUT, que é idempotente ([doc 13](./13-automatizando-a-criacao-dos-conectores.md)).
 
 **O validate na prática.** Com uma configuração incompleta (só classe, host, porta, usuário, senha e tabela), ele respondeu 3 erros:
 
@@ -157,7 +157,7 @@ O JSON leva o **schema embutido**: cada mensagem descreve os próprios campos e 
 
 ## Dados de teste
 
-**Criar** (`POST http://localhost:8087/connectors`): o conteúdo de `etc/kafka-connect/cdc.source.ordering.order.json`.
+**Criar ou atualizar** (`PUT http://localhost:8087/connectors/cdc.source.ordering.order/config`): o conteúdo de `etc/kafka-connect/cdc.source.ordering.order.json` (formato plano). Para o POST, envolva as propriedades em `{"name": ..., "config": {...}}`.
 
 **Atualizar** (`PUT http://localhost:8087/connectors/cdc.source.ordering.order/config`): as mesmas propriedades, sem o `config` em volta.
 

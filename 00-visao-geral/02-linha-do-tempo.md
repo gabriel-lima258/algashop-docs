@@ -1026,6 +1026,7 @@ Até aqui o sistema aprendeu a **fazer**. Agora o negócio quer **entender** o q
 | Extraindo pedidos com Debezium | Conector `cdc.source.ordering.order` (pgoutput, publication filtrada, slot, snapshot inicial) publicando `public.order` em `cdc.ordering.public.order`, só com 12 colunas sem dado pessoal; validate × POST × PUT; `op` r/c/u/d |
 | Transforms no conector | `unwrap` (ExtractNewRecordState) entrega só a linha; `rename` (ReplaceField$Value) troca `shipping_address_*` por `shipping_*`; a ordem da cadeia importa; `decimal.handling.mode=precise` para o sink ler o `numeric` exato |
 | Sink no reporting database | `cdc.sink.insights.order` (JDBC sink, upsert por `record_key`, `schema.evolution: none`) gravando na tabela `order` criada pela `V001` do insights; `quote.identifiers: true` resolve o `order` reservado; 606 pedidos copiados com lag 0 |
+| Conectores automatizados | `apply-connectors.sh` aplica os JSON planos com PUT `/config` (sources antes de sinks, restart só do que falhou); `algashop-kafka-connect-init` (curl, pasta `ro`) roda no `compose up`; a corrida com o Flyway pede rodar o init de novo |
 
 > [`01-relatorios-e-metricas-conceito.md`](../08-relatorios/01-relatorios-e-metricas-conceito.md)
 
